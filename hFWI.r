@@ -543,4 +543,5 @@ test_hfwi <- function()
              'FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI', 'DSR',
              'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR')]
   write.table(r, file='out.csv', sep=',', row.names=FALSE)
+  return(r)
 }
