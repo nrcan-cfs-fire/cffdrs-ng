@@ -388,7 +388,7 @@ isSequentialHours <- function(df)
   dc <- merge(dc, sunlight, by=c('DATE', 'LAT', 'LONG'))
   dc[, TEMP_K := TEMP + 273.15]
   for_dc <- merge(daily[, c('DATE', 'DDC_INC')],
-                  proportion(dc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'TEMP_K', 'DATE'), by=c('DATE'))
+                  proportion_sunlight(dc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'TEMP_K', 'DATE'), by=c('DATE'))
   for_dc[, DC_INC := DDC_INC * TEMP_K_FRACTION]
   dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DC_INC', 'TEMP_K_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
   dc$DC_INC <- nafill(dc$DC_INC, fill=0)
