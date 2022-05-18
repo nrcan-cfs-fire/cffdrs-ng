@@ -366,7 +366,7 @@ isSequentialHours <- function(df)
   # rely on this being called with a single station, so location doesn't change
   sunlight <- getSunlight(unique(w$DATE), w$LAT[[1]], w$LONG[[1]])
   
-  # divide DDMC_DEC proportionally among hours with rain from 1200 -> 1200
+  # divide DDC_DEC proportionally among hours with rain from 1200 -> 1200
   # split along 1200 -> 1200 line
   # BUT rain at 12 is from 1100 to 1200, so split at 13
   # AND split the increase to the sunlight hours of the day it's for
@@ -374,7 +374,7 @@ isSequentialHours <- function(df)
   daily[, c('DDC_START', 'DDC_INC', 'DDC_DEC') := 
           .dcCalcPieces(data.table::shift(DC, 1, dc_old), TEMP, RH, PREC, LAT, MON)]
   
-  # NOTE: include the 1.5mm that gets deducted because the daily dmc calculation subtracts it
+  # NOTE: include the 2.8mm that gets deducted because the daily dc calculation subtracts it
   #     so if we just divide proportional to all rain that will apply the reduction proportionally too
   
   prec <- proportion(w, 'PREC', 'FOR_DATE')[, c('TIMESTAMP', 'PREC_FRACTION')]
@@ -383,14 +383,15 @@ isSequentialHours <- function(df)
   # decrease is total decrease * fraction of rain for the day
   dc <- merge(w, daily[, c('ID', 'DATE', 'DC')], by=c('ID', 'DATE'), all=TRUE, all.y=FALSE)
   setnames(dc, 'DC', 'DDC')
+  dc[, VPD := vpd(TEMP, RH)]
   dc$DDC <- nafill(dc$DDC, fill=dc_old)
   dc <- merge(dc, prec, by=c('TIMESTAMP'))
   dc <- merge(dc, sunlight, by=c('DATE', 'LAT', 'LONG'))
-  dc[, TEMP_K := TEMP + 273.15]
+  # need to figure out the drying hours and then what the fractional VPD for each of them is
   for_dc <- merge(daily[, c('DATE', 'DDC_INC')],
-                  proportion_sunlight(dc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'TEMP_K', 'DATE'), by=c('DATE'))
-  for_dc[, DC_INC := DDC_INC * TEMP_K_FRACTION]
-  dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DC_INC', 'TEMP_K_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
+                  proportion_sunlight(dc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'VPD', 'DATE'), by=c('DATE'))
+  for_dc[, DC_INC := DDC_INC * VPD_FRACTION]
+  dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DDC_INC', 'DC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
   dc$DC_INC <- nafill(dc$DC_INC, fill=0)
   dc <- merge(dc, daily[, c('FOR_DATE', 'DDC_DEC')], c('FOR_DATE'))
   dc[, DC_DEC := PREC_FRACTION * DDC_DEC]
