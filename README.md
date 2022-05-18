@@ -11,8 +11,8 @@ PERCEIVED GOALS
 
 take hourly weather and produce hourly fwi indices
 - determine wetting and drying portions for DC and DMC
-- subdivide wetting based on vapour pressure
-- subdivide drying based on solar radiation(?) during sunlight hours(?)
+- subdivide wetting based on rain proportion
+- subdivide drying based on vapour pressure during sunlight hours(?)
 
 
 
