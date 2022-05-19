@@ -175,8 +175,7 @@ DC_DEFAULT <- 15
 vpd <- function(temperature, relative_humidity)
 {
   # calculate vapour pressure deficit
-  # https://physics.stackexchange.com/questions/4343/how-can-i-calculate-vapor-pressure-deficit-from-temperature-and-relative-humidit
-  vapour_pressure_saturation <- 0.6108 * exp(17.27 * temperature / (temperature + 237.3))
+  vapour_pressure_saturation <- 0.61078 * exp(17.269 * temperature / (temperature + 237.3))
   vapour_pressure_actual <- relative_humidity / 100 * vapour_pressure_saturation
   vapour_pressure_deficit <- vapour_pressure_actual - vapour_pressure_saturation
   return(vapour_pressure_deficit)
@@ -226,6 +225,7 @@ getSunlight <- function(dates, latitude, longitude)
   # figure out sun hours so we can use them as when things would be drying
   tz <- tz_lookup_coords(latitude, longitude, method='accurate')
   times <- suncalc::getSunlightTimes(date(dates), latitude, longitude, tz=tz)
+  print(times)
   names(times) <- toupper(names(times))
   times$LONG <- times$LON
   times$DATE <- as.character(times$DATE)
@@ -233,6 +233,53 @@ getSunlight <- function(dates, latitude, longitude)
   times$SUNSET <- toDecimal(times$SUNSET)
   times <- data.table(times[, c('DATE', 'LAT', 'LONG', 'SUNRISE', 'SUNSET')])
   times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
+  sun <- function(lat, lon, d, timezone, DST)
+  {
+    dechour <- 12.0
+    jd <- yday(d)
+    fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
+    
+    eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
+    
+    decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
+    timeoffset <- eqtime+4*lon-60*timezone
+    
+    tst <- (hour(d)-DST)*60.0+timeoffset
+    hourangle <- tst/4-180
+    zenith <- acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) )
+    solrad <- 0.95*cos(zenith)
+    if(solrad<0)
+    {
+      solrad <- 0.0
+    }
+    #printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
+    
+    zenith <- 90.833*pi/180.0;
+    
+    halfday <- 180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) )
+    sunrise <- (720.0-4.0*(lon+halfday)-eqtime)/60+timezone+DST
+    sunset <- (720.0-4.0*(lon-halfday)-eqtime)/60+timezone+DST
+    return(c(solrad, sunrise, sunset))
+  }
+  r <- NULL
+  for (n in 1:length(dates))
+  {
+    d <- dates[[n]]
+    print(d)
+    tzo <- tz_offset(d, tz)
+    DST <- ifelse(tzo$is_dst, 1, 0)
+    timezone <- tzo$utc_offset_h - DST
+    DST <- 0
+    r <- rbind(r, c(d, sun(lat, lon, d, timezone, DST)))
+  }
+  r <- data.table(r)
+  colnames(r) <- c("DATE", "solrad", "sunrise", "sunset")
+  r <- merge(times, r, on=c("DATE"))
+  print(r)
+  r <- r[, c("DATE", "LAT", "LONG", "sunrise", "sunset")]
+  colnames(r) <- toupper(colnames(r))
+  # times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
+  times[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
   return(times)
 }
 
@@ -342,7 +389,7 @@ isSequentialHours <- function(df)
   dmc <- merge(dmc, sunlight, by=c('DATE', 'LAT', 'LONG'))
   # need to figure out the drying hours and then what the fractional VPD for each of them is
   for_dmc <- merge(daily[, c('DATE', 'DDMC_INC')],
-                   proportion_sunlight(dmc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'VPD', 'DATE'), by=c('DATE'))
+                   proportion_sunlight(dmc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
   for_dmc[, DMC_INC := DDMC_INC * VPD_FRACTION]
   dmc <- merge(dmc, for_dmc[, c('TIMESTAMP', 'DDMC_INC', 'DMC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
   dmc$DMC_INC <- nafill(dmc$DMC_INC, fill=0)
@@ -389,7 +436,7 @@ isSequentialHours <- function(df)
   dc <- merge(dc, sunlight, by=c('DATE', 'LAT', 'LONG'))
   # need to figure out the drying hours and then what the fractional VPD for each of them is
   for_dc <- merge(daily[, c('DATE', 'DDC_INC')],
-                  proportion_sunlight(dc[HR >= floor(SUNRISE) & HR < ceiling(SUNSET), ], 'VPD', 'DATE'), by=c('DATE'))
+                  proportion_sunlight(dc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
   for_dc[, DC_INC := DDC_INC * VPD_FRACTION]
   dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DDC_INC', 'DC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
   dc$DC_INC <- nafill(dc$DC_INC, fill=0)
