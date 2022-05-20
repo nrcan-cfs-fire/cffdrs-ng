@@ -183,8 +183,8 @@ void main(int argc, char *argv[]){
          gfwi=grassFWI( gsi, grassfuelload);
 //         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
 //          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
-         fprintf(out,"%d,%d,%d,%d,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
-          oyear,omon,oday,h,
+         fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.5f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+          oyear,omon,oday,h,solar,sunrise,sunset,
           atemp[h] + DBL_EPSILON,
           arh[h] + DBL_EPSILON,
           aws[h] + DBL_EPSILON,
@@ -307,7 +307,7 @@ bmw
   zenith=acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) );
   solrad=0.95*cos(zenith);
   if(solrad<0)solrad=0.0;
-  //printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
+  printf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
 
   zenith=90.833*pi/180.0;
 

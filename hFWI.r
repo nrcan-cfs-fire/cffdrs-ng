@@ -220,67 +220,90 @@ toDaily <- function(w, all=FALSE)
   return(merged)
 }
 
-getSunlight <- function(dates, latitude, longitude)
+julian <- function(mon, day)
+{
+  month <- c(0,31,59,90,120,151,181,212,242,273,304,334,365)
+  return(month[mon]+day)
+  
+}
+sun <- function(lat, lon, d, timezone, DST, verbose=FALSE)
+{
+  # print(timezone)
+  dechour <- 12.0
+  hr <- hour(d)
+  # print(d)
+  # jd <- yday(d)
+  jd <- julian(month(d), day(d))
+  fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
+  
+  eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
+  
+  decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
+  timeoffset <- eqtime+4*lon-60*timezone
+  
+  tst <- (as.numeric(hr)-DST)*60.0+timeoffset
+  hourangle <- tst/4-180
+  zenith <- acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) )
+  # print(zenith)
+  solrad <- 0.95*cos(zenith)
+  # print(solrad)
+  if(solrad<0)
+  {
+    solrad <- 0.0
+  }
+  if (verbose)
+  {
+    print(sprintf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
+  }
+  zenith <- 90.833*pi/180.0;
+  
+  halfday <- 180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) )
+  sunrise <- (720.0-4.0*(lon+halfday)-eqtime)/60+timezone+DST
+  sunset <- (720.0-4.0*(lon-halfday)-eqtime)/60+timezone+DST
+  return(c(solrad, sunrise, sunset))
+}
+
+getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
 {
   # figure out sun hours so we can use them as when things would be drying
   tz <- tz_lookup_coords(latitude, longitude, method='accurate')
-  times <- suncalc::getSunlightTimes(date(dates), latitude, longitude, tz=tz)
-  print(times)
-  names(times) <- toupper(names(times))
-  times$LONG <- times$LON
-  times$DATE <- as.character(times$DATE)
-  times$SUNRISE <- toDecimal(times$SUNRISE)
-  times$SUNSET <- toDecimal(times$SUNSET)
-  times <- data.table(times[, c('DATE', 'LAT', 'LONG', 'SUNRISE', 'SUNSET')])
-  times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
-  sun <- function(lat, lon, d, timezone, DST)
-  {
-    dechour <- 12.0
-    jd <- yday(d)
-    fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
-    
-    eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
-    
-    decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
-    timeoffset <- eqtime+4*lon-60*timezone
-    
-    tst <- (hour(d)-DST)*60.0+timeoffset
-    hourangle <- tst/4-180
-    zenith <- acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) )
-    solrad <- 0.95*cos(zenith)
-    if(solrad<0)
-    {
-      solrad <- 0.0
-    }
-    #printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
-    
-    zenith <- 90.833*pi/180.0;
-    
-    halfday <- 180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) )
-    sunrise <- (720.0-4.0*(lon+halfday)-eqtime)/60+timezone+DST
-    sunset <- (720.0-4.0*(lon-halfday)-eqtime)/60+timezone+DST
-    return(c(solrad, sunrise, sunset))
-  }
+  # times <- suncalc::getSunlightTimes(date(dates), latitude, longitude, tz=tz)
+  # print(times)
+  # names(times) <- toupper(names(times))
+  # times$LONG <- times$LON
+  # times$DATE <- as.character(times$DATE)
+  # times$SUNRISE <- toDecimal(times$SUNRISE)
+  # times$SUNSET <- toDecimal(times$SUNSET)
+  # times <- data.table(times[, c('DATE', 'LAT', 'LONG', 'SUNRISE', 'SUNSET')])
+  # times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
   r <- NULL
   for (n in 1:length(dates))
   {
     d <- dates[[n]]
-    print(d)
+    # print(d)
     tzo <- tz_offset(d, tz)
     DST <- ifelse(tzo$is_dst, 1, 0)
+    # timezone <- tzo$utc_offset_h
     timezone <- tzo$utc_offset_h - DST
     DST <- 0
-    r <- rbind(r, c(d, sun(lat, lon, d, timezone, DST)))
+    # print(timezone)
+    r <- rbind(r, c(d, lat, lon,  sun(lat, lon, d, timezone, DST, verbose)))
   }
   r <- data.table(r)
-  colnames(r) <- c("DATE", "solrad", "sunrise", "sunset")
-  r <- merge(times, r, on=c("DATE"))
+  colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
+  # r <- merge(times[, -c("SUNLIGHT_HOURS", "SUNRISE", "SUNSET")], r, on=c("DATE"))
+  # r <- r[, c("DATE", "LAT", "LONG", "solrad", "sunrise", "sunset")]
+  # colnames(r) <- toupper(colnames(r))
   print(r)
-  r <- r[, c("DATE", "LAT", "LONG", "sunrise", "sunset")]
-  colnames(r) <- toupper(colnames(r))
   # times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
-  times[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
-  return(times)
+  r$DATE <- as_datetime(r$DATE)
+  r$LAT <- as.numeric(r$LAT)
+  r$LONG <- as.numeric(r$LONG)
+  r$SOLRAD <- as.numeric(r$SOLRAD)
+  r$SUNRISE <- as.numeric(r$SUNRISE)
+  r$SUNSET <- as.numeric(r$SUNSET)
+  r[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  return(r)
 }
 
 proportion <- function(df, field, by)
@@ -346,12 +369,14 @@ isSequentialHours <- function(df)
 { 
   # do the old fwi calculation method on the daily values
   daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=dmc_old, dc=DC_DEFAULT))
-  w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+  # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+  w$FOR_DATE <- w$DATE
   daily$FOR_DATE <- daily$DATE
   
   
   # rely on this being called with a single station, so location doesn't change
-  sunlight <- getSunlight(unique(w$DATE), w$LAT[[1]], w$LONG[[1]])
+  sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+  sunlight$DATE <- as.character(sunlight$DATE)
   
   # divide DDMC_DEC proportionally among hours with rain from 1200 -> 1200
   # split along 1200 -> 1200 line
@@ -406,12 +431,14 @@ isSequentialHours <- function(df)
 {
   # do the old fwi calculation method on the daily values
   daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=DMC_DEFAULT, dc=dc_old))
-  w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+  # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+  w$FOR_DATE <- w$DATE
   daily$FOR_DATE <- daily$DATE
   
   
   # rely on this being called with a single station, so location doesn't change
-  sunlight <- getSunlight(unique(w$DATE), w$LAT[[1]], w$LONG[[1]])
+  sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+  sunlight$DATE <- as.character(sunlight$DATE)
   
   # divide DDC_DEC proportionally among hours with rain from 1200 -> 1200
   # split along 1200 -> 1200 line
@@ -460,6 +487,16 @@ isSequentialHours <- function(df)
     stop('Expected a single ID value for input weather')
   }
   r <- copy(w)
+  # rely on this being called with a single station, so location doesn't change
+  sunlight <- getSunlight(as_datetime(unique(w$TIMESTAMP)), w$LAT[[1]], w$LONG[[1]], TRUE)
+  setnames(sunlight, c("DATE"), c("TIMESTAMP"))
+  sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
+  r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
+  print(r[(nrow(r)-10):nrow(r),])
+  maxsolprop <- 0.85
+  r[, MIN_RH := min(RH), by=c("DATE")]
+  r[, SOLRAD := SOLRAD * max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
+  print(r[(nrow(r)-10):nrow(r),])
   
   r$FFMC <- .hffmc(w, ffmc_old)
   r$DMC <- .hdmc(w, dmc_old)
