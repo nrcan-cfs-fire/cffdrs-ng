@@ -15,8 +15,12 @@ bmw/2021
 
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 #include <stdlib.h>
 #include <string.h>
+
+//    gcc -o ngfwi NG_FWI.c -lm
+//    ./ngfwi -6 0 85 6 15 ../data/BAK2018_hourly.csv test.csv
 
 float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc);
 float hourly_DMC (float Temp, float rh, float ws, float rain, int mon, float lastdmc, float DryFrac, float rain24,float DELTA,float tnoon,float rhnoon);
@@ -177,8 +181,23 @@ void main(int argc, char *argv[]){
          gfmc=59.5*(250-mcgmc)/(147.2772277+mcgmc);
          gsi=grassISI(aws[h],mcgmc, percent_cured);
          gfwi=grassFWI( gsi, grassfuelload);
-         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
-          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
+//         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
+//          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
+         fprintf(out,"%d,%d,%d,%d,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+          oyear,omon,oday,h,
+          atemp[h] + DBL_EPSILON,
+          arh[h] + DBL_EPSILON,
+          aws[h] + DBL_EPSILON,
+          arain[h] + DBL_EPSILON,
+          ffmc + DBL_EPSILON,
+          dmc + DBL_EPSILON,
+          dc + DBL_EPSILON,
+          isi + DBL_EPSILON,
+          bui + DBL_EPSILON,
+          fwi + DBL_EPSILON,
+          gfmc + DBL_EPSILON,
+          gsi + DBL_EPSILON,
+          gfwi + DBL_EPSILON);
 
          printf("%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f,     %5.2f, %5.2f, %5.2f, %5.1f, %5.1f, %5.1f | %5.1f, %5.1f, %5.1f  %5.2f\n",
           oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc, gsi, gfwi, mcgmc);
