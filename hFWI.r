@@ -287,7 +287,7 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
     timezone <- tzo$utc_offset_h - DST
     DST <- 0
     # print(timezone)
-    r <- rbind(r, c(d, lat, lon,  sun(lat, lon, d, timezone, DST, verbose)))
+    r <- rbind(r, c(d, latitude, longitude,  sun(latitude, longitude, d, timezone, DST, verbose)))
   }
   r <- data.table(r)
   colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
@@ -476,6 +476,91 @@ isSequentialHours <- function(df)
   return(dc$DC)
 }
 
+
+# MARK II of the model (2016) wth new solar rad model specific to grass
+# 
+# Temp is temperature in C
+# RH is realtive humidty in %
+# wind is average wind speed in km/h
+# rain is rainfall in mm
+# solrad is kW/m2  (radiaiton reaching fuel)
+# mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
+# time - time between obs in HOURS
+# 
+# 
+# DRF of 1/16.1 comes from reducting the standard response time curve
+# at 26.7C, 20%RH, 2 km/h to 0.85hr.
+# 
+# 
+# 
+# bmw
+hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
+{
+  drf <- 0.389633
+  mo <- lastmc;
+  
+  # fuel temperature/humidity
+  tf <- temp+17.9*solrad*exp(-0.034*wind);   #fuel temp from CEVW
+  
+  if(tf>temp)
+  {
+    rhf <- rh*6.107*10.0^(7.5*temp/(temp+237.0) )/(6.107*10.0^(7.5*tf/(tf+237.0) ))
+  }
+  else
+  {
+    rhf <- rh
+  }
+  if(rain!=0)
+  {
+    # /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
+    # /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
+    mo <- mo+ rain/0.3*100.0   #/* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
+    if(mo>250.0)
+    {
+      mo <- 250.0
+    }
+  }
+  ed <- 1.62*rhf^0.532+(13.7*exp( (rhf-100)/13.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));   #/*GRASS EMC*/
+  moed <- mo-ed;
+  ew <- 1.42*rhf^0.512+(12.0*exp((rhf-100)/18.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));     #/*GRASS EMC*/
+  moew <- mo-ew;
+  if (moed==0 || (moew>=0 && moed<0))
+  {
+    xm <- mo
+    if(moed==0)
+    {
+      e <- ed
+    }
+    if(moew>=0)
+    {
+      e <- ew
+    }
+  }
+  else
+  {
+    if( moed>0)
+    {
+      a1 <- rhf/100
+      e <- ed
+      moe <- moed
+    }
+    else
+    {
+      a1 <- (100.0-rhf)/100.0
+      e <- ew
+      moe <- moew
+    }
+    xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(wind)*(1-a1^8)))
+    xkd <- xkd*drf*exp(0.0365*tf)
+    
+    # //   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
+    
+    xm <- e+moe*exp(-1.0*log(10.0)*xkd*time)
+  }
+  
+  return(xm)
+}
+
 .stnHFWI <- function(w, ffmc_old, dmc_old, dc_old)
 {
   if (!isSequentialHours(w))
@@ -509,6 +594,18 @@ isSequentialHours <- function(df)
   # taken from package code
   r[, DSR := 0.0272 * (FWI ^ 1.77)]
   
+  lastmcgmc <- 101-ffmc_old # approximation for a start up
+  mcgmc <- NULL
+  for (n in 1:nrow(r))
+  {
+    row <- r[n,]
+    print(row)
+    cur_mcgmc <- hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0)
+    mcgmc <- c(mcgmc, cur_mcgmc)
+    lastmcgmc <- cur_mcgmc
+  }
+  r$MCGMC <- mcgmc
+  r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
   return(r)
 }
 

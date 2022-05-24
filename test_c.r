@@ -82,5 +82,6 @@ result[, ISI := sprintf("%0.1f", round(ISI, 1))]
 result[, BUI := sprintf("%0.1f", round(BUI, 1))]
 result[, FWI := sprintf("%0.1f", round(FWI, 1))]
 result[, DSR := sprintf("%0.1f", round(DSR, 1))]
+result[, GFMC := sprintf("%0.1f", round(GFMC, 1))]
 # write.csv(result[, -c("lat", "long", "DSR")], "./result.csv", row.names=FALSE, quote=FALSE)
-write.csv(result[, c("yr", "mon", "day", "hr", "SOLRAD", "SUNRISE", "SUNSET", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI")], "./result.csv", row.names=FALSE, quote=FALSE)
+write.csv(result[, c("yr", "mon", "day", "hr", "SOLRAD", "SUNRISE", "SUNSET", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "GFMC")], "./result.csv", row.names=FALSE, quote=FALSE)
