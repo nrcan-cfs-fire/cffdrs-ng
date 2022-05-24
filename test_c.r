@@ -9,7 +9,7 @@ bak <- as.data.table(read.csv(csv_bak_hourly, header=FALSE, col.names=c("lat", "
 
 
 row <- bak[1,]
-lat <- row$lat
+latitude <- row$lat
 longitude <- row$long
 tz <- tz_lookup_coords(latitude, longitude, method='accurate')
 dates <- bak[, make_datetime(yr, mon, day, hr, tz=tz)]
@@ -82,6 +82,9 @@ result[, ISI := sprintf("%0.1f", round(ISI, 1))]
 result[, BUI := sprintf("%0.1f", round(BUI, 1))]
 result[, FWI := sprintf("%0.1f", round(FWI, 1))]
 result[, DSR := sprintf("%0.1f", round(DSR, 1))]
+result[, MCGMC := sprintf("%0.1f", round(MCGMC, 1))]
 result[, GFMC := sprintf("%0.1f", round(GFMC, 1))]
+result[, GSI := sprintf("%0.1f", round(GSI, 1))]
 # write.csv(result[, -c("lat", "long", "DSR")], "./result.csv", row.names=FALSE, quote=FALSE)
-write.csv(result[, c("yr", "mon", "day", "hr", "SOLRAD", "SUNRISE", "SUNSET", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "GFMC")], "./result.csv", row.names=FALSE, quote=FALSE)
+write.csv(result[, c("yr", "mon", "day", "hr", "SOLRAD", "SUNRISE", "SUNSET", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI")], "./result.csv", row.names=FALSE, quote=FALSE)
+

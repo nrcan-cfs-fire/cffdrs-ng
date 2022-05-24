@@ -183,7 +183,7 @@ void main(int argc, char *argv[]){
          gfwi=grassFWI( gsi, grassfuelload);
 //         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
 //          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
-         fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.5f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+         fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.5f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
           oyear,omon,oday,h,solar,sunrise,sunset,
           atemp[h] + DBL_EPSILON,
           arh[h] + DBL_EPSILON,
@@ -195,6 +195,7 @@ void main(int argc, char *argv[]){
           isi + DBL_EPSILON,
           bui + DBL_EPSILON,
           fwi + DBL_EPSILON,
+          mcgmc + DBL_EPSILON,
           gfmc + DBL_EPSILON,
           gsi + DBL_EPSILON,
           gfwi + DBL_EPSILON);

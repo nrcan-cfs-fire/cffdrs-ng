@@ -505,9 +505,7 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
   if(tf>temp)
   {
     rhf <- rh*6.107*10.0^(7.5*temp/(temp+237.0) )/(6.107*10.0^(7.5*tf/(tf+237.0) ))
-  }
-  else
-  {
+  } else {
     rhf <- rh
   }
   if(rain!=0)
@@ -535,17 +533,13 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
     {
       e <- ew
     }
-  }
-  else
-  {
+  } else {
     if( moed>0)
     {
       a1 <- rhf/100
       e <- ed
       moe <- moed
-    }
-    else
-    {
+    } else {
       a1 <- (100.0-rhf)/100.0
       e <- ew
       moe <- moew
@@ -561,7 +555,40 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
   return(xm)
 }
 
-.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old)
+
+grassISI <- Vectorize(function(wind, mc, cur)
+{
+  # print(wind)
+  # print(mc)
+  if(wind<5)
+  {
+    fw <- ( 0.054 +0.209*wind)*16.67
+  } else {
+    fw <- (1.1 + 0.715*(wind-5.0)*0.844)*16.67
+  }
+  
+  if(mc<12)
+  {
+    fm <- exp(-0.108*mc)
+  } else if(mc<20.0 && wind<10.0) {
+    fm <- 0.684-0.0342*mc
+  } else if(mc<23.9 && wind>=10.0) {
+    fm <- 0.547-0.0228*mc
+  } else {
+    fm <- 0
+  }
+  
+  if(cur>20)
+  {
+    cf <- 1.034/(1+104*exp(-0.1*(cur-20)))
+  } else {
+    cf <- 0.0
+  }
+  GSI <- 1.11* fw *fm * cf
+  return(GSI)
+})
+
+.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, percent_cured)
 {
   if (!isSequentialHours(w))
   {
@@ -606,10 +633,11 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
   }
   r$MCGMC <- mcgmc
   r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
+  r[, GSI := grassISI(WS, MCGMC, percent_cured)]
   return(r)
 }
 
-hFWI <- function(weatherstream, ffmc_old=85, dmc_old=6, dc_old=15)
+hFWI <- function(weatherstream, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
 {
   wx <- copy(weatherstream)
   old_names <- colnames(wx)
@@ -651,7 +679,7 @@ hFWI <- function(weatherstream, ffmc_old=85, dmc_old=6, dc_old=15)
   for (stn in unique(wx$ID))
   {
     w <- wx[ID == stn]
-    r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
+    r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old, percent_cured)
     results <- rbind(results, r)
   }
   
