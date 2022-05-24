@@ -588,6 +588,19 @@ grassISI <- Vectorize(function(wind, mc, cur)
   return(GSI)
 })
 
+
+grassFWI <- Vectorize(function(gsi, load)
+{
+  ros<- gsi/1.11;  #  this just converts back to ROS in m/min
+  Fint <- 300.0*load * ros;
+  if (Fint>100) {
+    GFWI <- ( log(Fint/60.0) ) / 0.14
+  } else {
+    GFWI <- Fint/25.0
+  }
+  return(GFWI);
+})
+
 .stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, percent_cured)
 {
   if (!isSequentialHours(w))
@@ -606,6 +619,7 @@ grassISI <- Vectorize(function(wind, mc, cur)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
   print(r[(nrow(r)-10):nrow(r),])
   maxsolprop <- 0.85
+  grassfuelload <- 0.35
   r[, MIN_RH := min(RH), by=c("DATE")]
   r[, SOLRAD := SOLRAD * max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
   print(r[(nrow(r)-10):nrow(r),])
@@ -634,6 +648,7 @@ grassISI <- Vectorize(function(wind, mc, cur)
   r$MCGMC <- mcgmc
   r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
   r[, GSI := grassISI(WS, MCGMC, percent_cured)]
+  r[, GFWI := grassFWI(GSI, grassfuelload)]
   return(r)
 }
 
