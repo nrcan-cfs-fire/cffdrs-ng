@@ -73,16 +73,16 @@ DC_DEFAULT <- 15
   #Eq. 16 - The log drying rate
   rk <- 1.894 * (temp + 1.1) * (100 - rh) * ell01[mon] * 1e-04
   #Adjust the day length  and thus the drying r, based on latitude and month
-  if (lat.adjust) {
-    rk <- ifelse(lat <= 30 & lat > 10, 1.894 * (temp + 1.1) * 
-                   (100 - rh) * ell02[mon] * 1e-04, rk)
-    rk <- ifelse(lat <= -10 & lat > -30, 1.894 * (temp + 1.1) * 
-                   (100 - rh) * ell03[mon] * 1e-04, rk)
-    rk <- ifelse(lat <= -30 & lat >= -90, 1.894 * (temp + 1.1) * 
-                   (100 - rh) * ell04[mon] * 1e-04, rk)
-    rk <- ifelse(lat <= 10 & lat > -10, 1.894 * (temp + 1.1) * 
-                   (100 - rh) * 9 * 1e-04, rk)
-  }
+  # if (lat.adjust) {
+  #   rk <- ifelse(lat <= 30 & lat > 10, 1.894 * (temp + 1.1) * 
+  #                  (100 - rh) * ell02[mon] * 1e-04, rk)
+  #   rk <- ifelse(lat <= -10 & lat > -30, 1.894 * (temp + 1.1) * 
+  #                  (100 - rh) * ell03[mon] * 1e-04, rk)
+  #   rk <- ifelse(lat <= -30 & lat >= -90, 1.894 * (temp + 1.1) * 
+  #                  (100 - rh) * ell04[mon] * 1e-04, rk)
+  #   rk <- ifelse(lat <= 10 & lat > -10, 1.894 * (temp + 1.1) * 
+  #                  (100 - rh) * 9 * 1e-04, rk)
+  # }
   ra <- prec
   #Eq. 11 - Net rain amount
   rw <- 0.92 * ra - 1.27
@@ -176,8 +176,9 @@ vpd <- function(temperature, relative_humidity)
 {
   # calculate vapour pressure deficit
   vapour_pressure_saturation <- 0.61078 * exp(17.269 * temperature / (temperature + 237.3))
-  vapour_pressure_actual <- relative_humidity / 100 * vapour_pressure_saturation
-  vapour_pressure_deficit <- vapour_pressure_actual - vapour_pressure_saturation
+  # vapour_pressure_actual <- relative_humidity / 100 * vapour_pressure_saturation
+  # vapour_pressure_deficit <- vapour_pressure_actual - vapour_pressure_saturation
+  vapour_pressure_deficit <- vapour_pressure_saturation * (1.0 - relative_humidity / 100.0)
   return(vapour_pressure_deficit)
 }
 
@@ -195,7 +196,8 @@ toDaily <- function(w, all=FALSE)
   # set DATE field in case there's only a TIMESTAMP
   wx[, DATE := as.character(as.Date(TIMESTAMP))]
   # use toDecimal() so we only need TIMESTAMP field and we can deal with minutes or even seconds
-  wx[, FOR_DATE := ifelse(toDecimal(TIMESTAMP) <= 12, as.character(DATE), as.character(as.Date(DATE) + 1))]
+  # wx[, FOR_DATE := ifelse(toDecimal(TIMESTAMP) <= 12, as.character(DATE), as.character(as.Date(DATE) + 1))]
+  wx[, FOR_DATE := DATE]
   precip <- wx[, list(PREC = sum(PREC, na.rm=TRUE)), by=c('FOR_DATE')]
   setnames(precip, 'FOR_DATE', 'DATE')
   merged <- merge(wx[toDecimal(TIMESTAMP) == 12, -c('FOR_DATE', 'PREC')], precip, by=c('DATE'), all=all)
@@ -345,9 +347,9 @@ isSequentialHours <- function(df)
 .hffmc <- function(w, ffmc_old)
 {
   # get daily values but still get for days we don't have noon for because we want PREC total
-  daily <- toDaily(w, all=TRUE)
-  w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
-  daily$FOR_DATE <- daily$DATE
+  # daily <- toDaily(w, all=TRUE)
+  # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+  # daily$FOR_DATE <- daily$DATE
   
   # FFMC uses the hourly FFMC calculation, but reduces the overall rain received by
   # 0.5mm. This is done by figuring out what fraction of the period's rain occurs in
@@ -356,8 +358,11 @@ isSequentialHours <- function(df)
   # want to take 0.5 mm off of the total but proportional to amounts per hour
   # CHECK: does this make more sense than just removing the first 0.5mm?
   # figure out what fraction of the total rain to be counted 1mm is
-  daily[, FFMC_MULTIPLIER := ifelse(0.5 >= PREC, 0, (PREC - 0.5) / PREC)]
-  for_ffmc <- merge(w, daily[, c('FOR_DATE', 'FFMC_MULTIPLIER')], by=c('FOR_DATE'))
+  # daily[, FFMC_MULTIPLIER := ifelse(0.5 >= PREC, 0, (PREC - 0.5) / PREC)]
+  # for_ffmc <- merge(w, daily[, c('FOR_DATE', 'FFMC_MULTIPLIER')], by=c('FOR_DATE'))
+  for_ffmc <- copy(w)
+  for_ffmc[, SUM_PREC := sum(PREC), by=c("DATE")]
+  for_ffmc[, FFMC_MULTIPLIER := ifelse(0.5 >= SUM_PREC, 0, (SUM_PREC - 0.5) / SUM_PREC)]
   for_ffmc[, PREC := PREC * FFMC_MULTIPLIER]
   
   for_ffmc$FFMC <- hffmc(for_ffmc, ffmc_old=ffmc_old, hourlyFWI=FALSE)
@@ -617,12 +622,10 @@ grassFWI <- Vectorize(function(gsi, load)
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
   sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
-  print(r[(nrow(r)-10):nrow(r),])
+  # print(r[(nrow(r)-10):nrow(r),])
   maxsolprop <- 0.85
   grassfuelload <- 0.35
-  r[, MIN_RH := min(RH), by=c("DATE")]
-  r[, SOLRAD := SOLRAD * max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
-  print(r[(nrow(r)-10):nrow(r),])
+  # print(r[(nrow(r)-10):nrow(r),])
   
   r$FFMC <- .hffmc(w, ffmc_old)
   r$DMC <- .hdmc(w, dmc_old)
@@ -635,12 +638,19 @@ grassFWI <- Vectorize(function(gsi, load)
   # taken from package code
   r[, DSR := 0.0272 * (FWI ^ 1.77)]
   
+  r[, MIN_RH := min(RH), by=c("DATE")]
+  # r[, SOLPROP := max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
+  # r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * RH), 1)]
+  r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * MIN_RH), 1)]
+  r[, SOLPROP := ifelse(SOLPROP < 0, 0, maxsolprop * SOLPROP)]
+  r[, SOLRAD := SOLRAD * SOLPROP]
+  
   lastmcgmc <- 101-ffmc_old # approximation for a start up
   mcgmc <- NULL
   for (n in 1:nrow(r))
   {
     row <- r[n,]
-    print(row)
+    # print(row)
     cur_mcgmc <- hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0)
     mcgmc <- c(mcgmc, cur_mcgmc)
     lastmcgmc <- cur_mcgmc

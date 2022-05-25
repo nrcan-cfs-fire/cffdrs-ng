@@ -153,6 +153,7 @@ void main(int argc, char *argv[]){
              if(h>=sunrise && h<=sunset)dmcDryFrac=1/(sunset-sunrise);  /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dmcDryFrac=0.0;
          }
+         // for each hour, calculate a full day of drying at those conditions, and then use fraction of that
          dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],mon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12+DSTadjust],arh[12+DSTadjust] );
 
          if(Wdc24>0){
@@ -173,7 +174,16 @@ void main(int argc, char *argv[]){
 
 /* grass */
          if(minRH>=100) minRH=99.5;
-         if(minRH>30) solprop=maxsolprop*(1.27-0.0111*rh);
+         // right now this is:
+         // if minimum RH for the calendar date is > 30 then calculate solar prop based on 2300 rh
+         // should probably be:
+         // if minimum RH for the calendar date is >30 then calculate solar prop based on rh for the hour
+         // or
+         // if rh > 30 then calculate solar prop based on rh for the hour
+         // or 
+         // if minimum RH for the calendar date is >30 then calculate solar prop based on min rh for the day
+         //if(minRH>30) solprop=maxsolprop*(1.27-0.0111*rh);
+         if(minRH>30) solprop=maxsolprop*(1.27-0.0111*minRH);
          else solprop=maxsolprop;
          if (solprop<0)solprop=0;
          solar=solar*solprop;   /*  just reducing solar radiation a little off of full value */
@@ -183,11 +193,13 @@ void main(int argc, char *argv[]){
          gfwi=grassFWI( gsi, grassfuelload);
 //         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
 //          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
-         fprintf(out,"%d,%d,%d,%d,%.5f,%.3f,%.3f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+         fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.3f,%.3f,%.1f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
           oyear,omon,oday,h,
+          solprop + DBL_EPSILON,
           solar + DBL_EPSILON,
           sunrise + DBL_EPSILON,
           sunset + DBL_EPSILON,
+          minRH + DBL_EPSILON,
           atemp[h] + DBL_EPSILON,
           arh[h] + DBL_EPSILON,
           aws[h] + DBL_EPSILON,
