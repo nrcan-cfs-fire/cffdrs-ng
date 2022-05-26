@@ -72,7 +72,7 @@ result[, MIN_RH := sprintf("%0.1f", round(MIN_RH, 1))]
 result[, temp := sprintf("%0.1f", round(temp, 1))]
 result[, rh := sprintf("%0.0f", round(rh, 0))]
 result[, ws := sprintf("%0.1f", round(ws, 1))]
-result[, prec := sprintf("%0.1f", round(prec, 1))]
+result[, prec := sprintf("%0.2f", round(prec, 2))]
 result[, SOLPROP := sprintf("%0.5f", round(SOLPROP, 5))]
 result[, SOLRAD := sprintf("%0.5f", round(SOLRAD, 5))]
 result[, SUNRISE := sprintf("%0.3f", round(SUNRISE, 5))]
@@ -89,5 +89,6 @@ result[, GFMC := sprintf("%0.1f", round(GFMC, 1))]
 result[, GSI := sprintf("%0.1f", round(GSI, 1))]
 result[, GFWI := sprintf("%0.1f", round(GFWI, 1))]
 # write.csv(result[, -c("lat", "long", "DSR")], "./result.csv", row.names=FALSE, quote=FALSE)
-write.csv(result[, c("yr", "mon", "day", "hr", "SOLPROP", "SOLRAD", "SUNRISE", "SUNSET", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], "./result.csv", row.names=FALSE, quote=FALSE)
+# write.csv(result[, c("yr", "mon", "day", "hr", "SOLPROP", "SOLRAD", "SUNRISE", "SUNSET", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], "./result.csv", row.names=FALSE, quote=FALSE)
+write.csv(result[, c("yr", "mon", "day", "hr", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], "./result.csv", row.names=FALSE, quote=FALSE)
 

@@ -193,12 +193,13 @@ void main(int argc, char *argv[]){
          gfwi=grassFWI( gsi, grassfuelload);
 //         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
 //          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
-         fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.3f,%.3f,%.1f,%.1f,%.0f,%.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+         // fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.3f,%.3f,%.1f,%.1f,%.0f,%.1f,%0.2f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+         fprintf(out,"%d,%d,%d,%d,%.1f,%.1f,%.0f,%.1f,%0.2f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
           oyear,omon,oday,h,
-          solprop + DBL_EPSILON,
-          solar + DBL_EPSILON,
-          sunrise + DBL_EPSILON,
-          sunset + DBL_EPSILON,
+          // solprop + DBL_EPSILON,
+          // solar + DBL_EPSILON,
+          // sunrise + DBL_EPSILON,
+          // sunset + DBL_EPSILON,
           minRH + DBL_EPSILON,
           atemp[h] + DBL_EPSILON,
           arh[h] + DBL_EPSILON,

@@ -20,6 +20,13 @@ FFMC_DEFAULT <- 85
 DMC_DEFAULT <- 6
 DC_DEFAULT <- 15
 
+ISIcalc <- function(ws, ffmc)
+{
+  fm <- 147.2773 * (101.0 - ffmc)/(59.5 + ffmc)
+  sf <- 19.115 * exp(-0.1386 * fm) * (1.0 + fm^5.31 / 4.93e07)
+  isi <- sf * exp(0.05039 * ws)
+  return(isi)
+}
 
 .dmcCalcPieces <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust=TRUE) {
   #############################################################################
@@ -520,56 +527,130 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
     }
     return(result)
 }
+# 
+# .hdc <- function(w, dc_old)
+# {
+#   # do the old fwi calculation method on the daily values
+#   daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=DMC_DEFAULT, dc=dc_old))
+#   # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+#   w$FOR_DATE <- w$DATE
+#   daily$FOR_DATE <- daily$DATE
+#   
+#   
+#   # rely on this being called with a single station, so location doesn't change
+#   sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+#   sunlight$DATE <- as.character(sunlight$DATE)
+#   
+#   # divide DDC_DEC proportionally among hours with rain from 1200 -> 1200
+#   # split along 1200 -> 1200 line
+#   # BUT rain at 12 is from 1100 to 1200, so split at 13
+#   # AND split the increase to the sunlight hours of the day it's for
+#   
+#   daily[, c('DDC_START', 'DDC_INC', 'DDC_DEC') := 
+#           .dcCalcPieces(data.table::shift(DC, 1, dc_old), TEMP, RH, PREC, LAT, MON)]
+#   
+#   # NOTE: include the 2.8mm that gets deducted because the daily dc calculation subtracts it
+#   #     so if we just divide proportional to all rain that will apply the reduction proportionally too
+#   
+#   prec <- proportion(w, 'PREC', 'FOR_DATE')[, c('TIMESTAMP', 'PREC_FRACTION')]
+#   # do precip calculation based on FWI FOR_DATE and VPD calculation based on calendar day
+#   
+#   # decrease is total decrease * fraction of rain for the day
+#   dc <- merge(w, daily[, c('ID', 'DATE', 'DC')], by=c('ID', 'DATE'), all=TRUE, all.y=FALSE)
+#   setnames(dc, 'DC', 'DDC')
+#   dc[, VPD := vpd(TEMP, RH)]
+#   dc$DDC <- nafill(dc$DDC, fill=dc_old)
+#   dc <- merge(dc, prec, by=c('TIMESTAMP'))
+#   dc <- merge(dc, sunlight, by=c('DATE', 'LAT', 'LONG'))
+#   # need to figure out the drying hours and then what the fractional VPD for each of them is
+#   for_dc <- merge(daily[, c('DATE', 'DDC_INC')],
+#                   proportion_sunlight(dc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
+#   for_dc[, DC_INC := DDC_INC * VPD_FRACTION]
+#   dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DDC_INC', 'DC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
+#   dc$DC_INC <- nafill(dc$DC_INC, fill=0)
+#   dc <- merge(dc, daily[, c('FOR_DATE', 'DDC_DEC')], c('FOR_DATE'))
+#   dc[, DC_DEC := PREC_FRACTION * DDC_DEC]
+#   # just do sum from start of period to now for hourly values
+#   dc[, DC := dc_old + cumsum(DC_INC) - cumsum(DC_DEC)]
+#   dc[, DC := ifelse(DC < 0, 0, DC)]
+#   dc <- dc[, c('TIMESTAMP', 'DC')]
+#   return(dc$DC)
+# }
 
-.hdc <- function(w, dc_old)
+
+hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24, temp12)
 {
-  # do the old fwi calculation method on the daily values
-  daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=DMC_DEFAULT, dc=dc_old))
-  # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
-  w$FOR_DATE <- w$DATE
-  daily$FOR_DATE <- daily$DATE
+  fl <- c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6)
   
-  
+  if(rain > 0 && DELTArain24 < 0.0) {
+    # (weight it by Rainhour/rain24 )
+    lastdc <- lastdc + DELTArain24 * (rain / rain24)
+  }
+  # total dry for the DAY
+  DELTAdry24 <- (0.36 * (temp12 + 2.8) + fl[mon]) / 2.0
+  if (DELTAdry24 < 0.0) {
+    #;    /* the fix for winter negative DC change...shoulders*/
+    DELTAdry24 = 0.0
+  }
+  #/* dry frac is VPD weighted value for the hour */
+  dc <- lastdc + DELTAdry24*dryfrac;
+  if(dc < 0) {
+    dc <- 0
+  }
+  return(dc)
+}
+
+.hdc <- function(w, dc_old, DSTadjust=0)
+{
   # rely on this being called with a single station, so location doesn't change
   sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
   sunlight$DATE <- as.character(sunlight$DATE)
+  dc <- copy(w)
+  dc <- merge(dc, sunlight, by=c("DATE", "LAT", "LONG"))
+  dc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
+  dc[, RAIN24 := sum(PREC), by=c("DATE")]
+  dc[, MINRH := min(RH), by=c("DATE")]
+  dc[, VPD24 := sum(VPD), by=c("DATE")]
+  dc[, DRYFRAC := ifelse(HR >= SUNRISE & HR <= SUNSET, ifelse(VPD24 == 0,  1 / (SUNSET - SUNRISE), VPD / VPD24), 0.0)]
+  # #>>>
+  # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
+  # dc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
+  # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
+  # #<<<
+  lastdc <- dc_old
   
-  # divide DDC_DEC proportionally among hours with rain from 1200 -> 1200
-  # split along 1200 -> 1200 line
-  # BUT rain at 12 is from 1100 to 1200, so split at 13
-  # AND split the increase to the sunlight hours of the day it's for
-  
-  daily[, c('DDC_START', 'DDC_INC', 'DDC_DEC') := 
-          .dcCalcPieces(data.table::shift(DC, 1, dc_old), TEMP, RH, PREC, LAT, MON)]
-  
-  # NOTE: include the 2.8mm that gets deducted because the daily dc calculation subtracts it
-  #     so if we just divide proportional to all rain that will apply the reduction proportionally too
-  
-  prec <- proportion(w, 'PREC', 'FOR_DATE')[, c('TIMESTAMP', 'PREC_FRACTION')]
-  # do precip calculation based on FWI FOR_DATE and VPD calculation based on calendar day
-  
-  # decrease is total decrease * fraction of rain for the day
-  dc <- merge(w, daily[, c('ID', 'DATE', 'DC')], by=c('ID', 'DATE'), all=TRUE, all.y=FALSE)
-  setnames(dc, 'DC', 'DDC')
-  dc[, VPD := vpd(TEMP, RH)]
-  dc$DDC <- nafill(dc$DDC, fill=dc_old)
-  dc <- merge(dc, prec, by=c('TIMESTAMP'))
-  dc <- merge(dc, sunlight, by=c('DATE', 'LAT', 'LONG'))
-  # need to figure out the drying hours and then what the fractional VPD for each of them is
-  for_dc <- merge(daily[, c('DATE', 'DDC_INC')],
-                  proportion_sunlight(dc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
-  for_dc[, DC_INC := DDC_INC * VPD_FRACTION]
-  dc <- merge(dc, for_dc[, c('TIMESTAMP', 'DDC_INC', 'DC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
-  dc$DC_INC <- nafill(dc$DC_INC, fill=0)
-  dc <- merge(dc, daily[, c('FOR_DATE', 'DDC_DEC')], c('FOR_DATE'))
-  dc[, DC_DEC := PREC_FRACTION * DDC_DEC]
-  # just do sum from start of period to now for hourly values
-  dc[, DC := dc_old + cumsum(DC_INC) - cumsum(DC_DEC)]
-  dc[, DC := ifelse(DC < 0, 0, DC)]
-  dc <- dc[, c('TIMESTAMP', 'DC')]
-  return(dc$DC)
+  dates <- unique(w$DATE)
+  result <- NULL
+  for (n in 1:length(dates))
+  {
+    d <- dates[[n]]
+    for_date <- dc[DATE == d]
+    noon <- for_date[HR == (12 + DSTadjust)]
+    tnoon <- noon$TEMP
+    # print(for_date)
+    rain24 <- noon$RAIN24
+    
+    if(rain24 > 2.8) {
+      rw <- 0.83 * rain24 - 1.27;
+      smi <- 800 * exp(-lastdc / 400);
+      # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
+      DELTA_DCrain24 <- -400.0 * log(1.0 + 3.937 * rw / smi)
+    } else {
+      DELTA_DCrain24 <- 0.0
+    }
+    
+    for (h in unique(for_date$HR))
+    {
+      r <- for_date[HR == h]
+      # print(r)
+      lastdc <- hourly_DC(r$TEMP, r$RH, r$WS, r$PREC, lastdc, r$MON, r$RAIN24, r$DRYFRAC, DELTA_DCrain24, tnoon)
+      stopifnot(noon$MON == r$MON)
+      # print(lastdc)
+      result <- c(result, lastdc)
+    }
+  }
+  return(result)
 }
-
 
 # MARK II of the model (2016) wth new solar rad model specific to grass
 # 
@@ -721,7 +802,7 @@ grassFWI <- Vectorize(function(gsi, load)
   r$DC <- .hdc(w, dc_old)
   
   # FIX: what is fbpMod doing? this is the default value for it
-  r[, ISI := cffdrs:::.ISIcalc(FFMC, WS, fbpMod = FALSE)]
+  r[, ISI := ISIcalc(WS, FFMC)]
   r[, BUI := cffdrs:::.buiCalc(DMC, DC)]
   r[, FWI := cffdrs:::.fwiCalc(ISI, BUI)]
   # taken from package code
