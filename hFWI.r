@@ -369,67 +369,156 @@ isSequentialHours <- function(df)
   for_ffmc <- for_ffmc[, c('TIMESTAMP', 'FFMC')]
   return(for_ffmc$FFMC)
 }
+# 
+# .hdmc <- function(w, dmc_old)
+# { 
+#   # do the old fwi calculation method on the daily values
+#   daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=dmc_old, dc=DC_DEFAULT))
+#   # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
+#   w$FOR_DATE <- w$DATE
+#   daily$FOR_DATE <- daily$DATE
+#   
+#   
+#   # rely on this being called with a single station, so location doesn't change
+#   sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+#   sunlight$DATE <- as.character(sunlight$DATE)
+#   
+#   # divide DDMC_DEC proportionally among hours with rain from 1200 -> 1200
+#   # split along 1200 -> 1200 line
+#   # BUT rain at 12 is from 1100 to 1200, so split at 13
+#   # AND split the increase to the sunlight hours of the day it's for
+#   
+#   daily[, c('DDMC_START', 'DDMC_INC', 'DDMC_DEC') := 
+#           .dmcCalcPieces(data.table::shift(DMC, 1, dmc_old), TEMP, RH, PREC, LAT, MON)]
+# 
+#   # NOTE: include the 1.5mm that gets deducted because the daily dmc calculation subtracts it
+#   #     so if we just divide proportional to all rain that will apply the reduction proportionally too
+#   
+#   prec <- proportion(w, 'PREC', 'FOR_DATE')[, c('TIMESTAMP', 'PREC_FRACTION')]
+#   # do precip calculation based on FWI FOR_DATE and VPD calculation based on calendar day
+#   
+#   # Vapour Pressure Deficit is used to divide drying over the daylight hours for
+#   # DMC and DC. The fraction of total VPD occurring within each hour is calculated
+#   # for hours where the sun is up - sum(VPD_FRACTION) should equal 1.0 for every
+#   # day, but the VPD used to calculate that sum is based off of the drying day and
+#   # not the calendar day, so the VPD_FRACTION should peak at 1200 and then start
+#   # over.
+#   
+#   # DMC is supposed to be the same calculation as the regular DMC, but with the
+#   # increase and decrease spread out along the hours based on VPD for increase
+#   # and PRECIP for decrease.
+#   # Note that the PRECIP isn't decreased before passing to DMC calculation because
+#   # the calculation does the reduction, unlinke with the hourly FFMC calculation.
+#   
+#   # decrease is total decrease * fraction of rain for the day
+#   dmc <- merge(w, daily[, c('ID', 'DATE', 'DMC')], by=c('ID', 'DATE'), all=TRUE, all.y=FALSE)
+#   setnames(dmc, 'DMC', 'DDMC')
+#   dmc[, VPD := vpd(TEMP, RH)]
+#   dmc$DDMC <- nafill(dmc$DDMC, fill=dmc_old)
+#   dmc <- merge(dmc, prec, by=c('TIMESTAMP'))
+#   dmc <- merge(dmc, sunlight, by=c('DATE', 'LAT', 'LONG'))
+#   # need to figure out the drying hours and then what the fractional VPD for each of them is
+#   for_dmc <- merge(daily[, c('DATE', 'DDMC_INC')],
+#                    proportion_sunlight(dmc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
+#   for_dmc[, DMC_INC := DDMC_INC * VPD_FRACTION]
+#   dmc <- merge(dmc, for_dmc[, c('TIMESTAMP', 'DDMC_INC', 'DMC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
+#   dmc$DMC_INC <- nafill(dmc$DMC_INC, fill=0)
+#   dmc <- merge(dmc, daily[, c('FOR_DATE', 'DDMC_DEC')], c('FOR_DATE'))
+#   dmc[, DMC_DEC := PREC_FRACTION * DDMC_DEC]
+#   # just do sum from start of period to now for hourly values
+#   dmc[, DMC := dmc_old + cumsum(DMC_INC) - cumsum(DMC_DEC)]
+#   dmc[, DMC := ifelse(DMC < 0, 0, DMC)]
+#   dmc <- dmc[, c('TIMESTAMP', 'DMC')]
+#   return(dmc$DMC)
+# }
 
-.hdmc <- function(w, dmc_old)
-{ 
-  # do the old fwi calculation method on the daily values
-  daily <- fwi(toDaily(w, all=TRUE), init=data.frame(ffmc=FFMC_DEFAULT, dmc=dmc_old, dc=DC_DEFAULT))
-  # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
-  w$FOR_DATE <- w$DATE
-  daily$FOR_DATE <- daily$DATE
-  
-  
-  # rely on this being called with a single station, so location doesn't change
-  sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
-  sunlight$DATE <- as.character(sunlight$DATE)
-  
-  # divide DDMC_DEC proportionally among hours with rain from 1200 -> 1200
-  # split along 1200 -> 1200 line
-  # BUT rain at 12 is from 1100 to 1200, so split at 13
-  # AND split the increase to the sunlight hours of the day it's for
-  
-  daily[, c('DDMC_START', 'DDMC_INC', 'DDMC_DEC') := 
-          .dmcCalcPieces(data.table::shift(DMC, 1, dmc_old), TEMP, RH, PREC, LAT, MON)]
 
-  # NOTE: include the 1.5mm that gets deducted because the daily dmc calculation subtracts it
-  #     so if we just divide proportional to all rain that will apply the reduction proportionally too
+hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCrain, tnoon, rhnoon)
+{
+  el <- c(6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6)
   
-  prec <- proportion(w, 'PREC', 'FOR_DATE')[, c('TIMESTAMP', 'PREC_FRACTION')]
-  # do precip calculation based on FWI FOR_DATE and VPD calculation based on calendar day
+  # wetting FROM rain
+  if(rain>0 && DELTA_MCrain>0.0) {
+    # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
+    mc <- 20.0+280.0/exp(0.023*lastdmc)
+    #  the MC increase by the rain in this hour...  total * rain_hour/rain24
+    mc <- mc + DELTA_MCrain*(rain/rain24)
+    lastdmc <- 43.43*(5.6348-log(mc-20))
+      
+  }
   
-  # Vapour Pressure Deficit is used to divide drying over the daylight hours for
-  # DMC and DC. The fraction of total VPD occurring within each hour is calculated
-  # for hours where the sun is up - sum(VPD_FRACTION) should equal 1.0 for every
-  # day, but the VPD used to calculate that sum is based off of the drying day and
-  # not the calendar day, so the VPD_FRACTION should peak at 1200 and then start
-  # over.
+  # drying all day long too
+  if(tnoon < -1.1)
+  {
+    tnoon <- -1.1
+  }
   
-  # DMC is supposed to be the same calculation as the regular DMC, but with the
-  # increase and decrease spread out along the hours based on VPD for increase
-  # and PRECIP for decrease.
-  # Note that the PRECIP isn't decreased before passing to DMC calculation because
-  # the calculation does the reduction, unlinke with the hourly FFMC calculation.
+  # full day of drying in old FWI/DMC
+  DELTA_dry <- 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001
+    
+  # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
   
-  # decrease is total decrease * fraction of rain for the day
-  dmc <- merge(w, daily[, c('ID', 'DATE', 'DMC')], by=c('ID', 'DATE'), all=TRUE, all.y=FALSE)
-  setnames(dmc, 'DMC', 'DDMC')
-  dmc[, VPD := vpd(TEMP, RH)]
-  dmc$DDMC <- nafill(dmc$DDMC, fill=dmc_old)
-  dmc <- merge(dmc, prec, by=c('TIMESTAMP'))
-  dmc <- merge(dmc, sunlight, by=c('DATE', 'LAT', 'LONG'))
-  # need to figure out the drying hours and then what the fractional VPD for each of them is
-  for_dmc <- merge(daily[, c('DATE', 'DDMC_INC')],
-                   proportion_sunlight(dmc[HR >= SUNRISE & HR <= SUNSET, ], 'VPD', 'DATE'), by=c('DATE'))
-  for_dmc[, DMC_INC := DDMC_INC * VPD_FRACTION]
-  dmc <- merge(dmc, for_dmc[, c('TIMESTAMP', 'DDMC_INC', 'DMC_INC', 'VPD_FRACTION')], by=c('TIMESTAMP'), all=TRUE)
-  dmc$DMC_INC <- nafill(dmc$DMC_INC, fill=0)
-  dmc <- merge(dmc, daily[, c('FOR_DATE', 'DDMC_DEC')], c('FOR_DATE'))
-  dmc[, DMC_DEC := PREC_FRACTION * DDMC_DEC]
-  # just do sum from start of period to now for hourly values
-  dmc[, DMC := dmc_old + cumsum(DMC_INC) - cumsum(DMC_DEC)]
-  dmc[, DMC := ifelse(DMC < 0, 0, DMC)]
-  dmc <- dmc[, c('TIMESTAMP', 'DMC')]
-  return(dmc$DMC)
+  dmc <- lastdmc + (DELTA_dry*DryFrac)
+  
+  return(dmc)
+}
+
+
+.hdmc <- function(w, dmc_old, DSTadjust=0)
+{
+    # rely on this being called with a single station, so location doesn't change
+    sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+    sunlight$DATE <- as.character(sunlight$DATE)
+    dmc <- copy(w)
+    dmc <- merge(dmc, sunlight, by=c("DATE", "LAT", "LONG"))
+    dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
+    dmc[, RAIN24 := sum(PREC), by=c("DATE")]
+    dmc[, MINRH := min(RH), by=c("DATE")]
+    dmc[, VPD24 := sum(VPD), by=c("DATE")]
+    dmc[, DRYFRAC := ifelse(HR >= SUNRISE & HR <= SUNSET, ifelse(VPD24 == 0,  1 / (SUNSET - SUNRISE), VPD / VPD24), 0.0)]
+    # #>>>
+    # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
+    # dmc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
+    # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
+    # #<<<
+    lastdmc <- dmc_old
+    
+    dates <- unique(w$DATE)
+    result <- NULL
+    for (n in 1:length(dates))
+    {
+      d <- dates[[n]]
+      for_date <- dmc[DATE == d]
+      noon <- for_date[HR == (12 + DSTadjust)]
+      tnoon <- noon$TEMP
+      rhnoon <- noon$RH
+      # print(for_date)
+      rain24 <- for_date$RAIN24[[1]]
+      if(rain24>1.5)
+      {
+        reff <- (0.92*rain24-1.27)
+        if(lastdmc<=33) {
+          b <- 100.0/(0.5+0.3* lastdmc)
+        } else if(lastdmc<=65) {
+          b <- 14.0-1.3*log(lastdmc)
+        } else {
+          b <- 6.2*log(lastdmc)-17.2
+        }
+        # This is the change in MC (moisturecontent)  from FULL DAY's rain
+        DELTA_mcdmcrain24 <- 1000.0*reff/(48.77+b*reff)
+      } else {
+        DELTA_mcdmcrain24 <- 0.0
+      }
+      for (h in unique(for_date$HR))
+      {
+        r <- for_date[HR == h]
+        # print(r)
+        lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon)
+        # print(lastdmc)
+        result <- c(result, lastdmc)
+      }
+    }
+    return(result)
 }
 
 .hdc <- function(w, dc_old)
