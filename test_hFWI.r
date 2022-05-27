@@ -36,10 +36,10 @@ toDaily <- function(w, all=FALSE)
   return(merged)
 }
 
-test_hfwi <- function()
+test_hfwi <- function(df=test_hffmc)
 {
   # set up as if we had called hFWI
-  weatherstream <- data.table(test_hffmc)
+  weatherstream <- data.table(df)
   
   r <- hFWI(weatherstream, FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT)
   
@@ -75,4 +75,16 @@ test_hfwi <- function()
              'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR')]
   write.table(r, file='out.csv', sep=',', row.names=FALSE)
   return(r)
+}
+
+plot_comparison <- function(r)
+{
+  print(ggplot(r) + geom_line(aes(TIMESTAMP, DMC)) + geom_point(aes(TIMESTAMP, DDMC), data=r[hour(TIMESTAMP) == 16]))
+  print(ggplot(r) + geom_line(aes(TIMESTAMP, DC)) + geom_point(aes(TIMESTAMP, DDC), data=r[hour(TIMESTAMP) == 16]))
+}
+
+plot_test <- function(df=test_hffmc)
+{
+  r <- test_hfwi(df)
+  plot_comparison(r)
 }
