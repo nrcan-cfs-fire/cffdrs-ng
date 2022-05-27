@@ -337,11 +337,23 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
 
 .hdmc <- function(w, dmc_old, DSTadjust=0)
 {
-    # rely on this being called with a single station, so location doesn't change
-    sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
-    sunlight$DATE <- as.character(sunlight$DATE)
     dmc <- copy(w)
-    dmc <- merge(dmc, sunlight, by=c("DATE", "LAT", "LONG"))
+    if (!("SUNSET" %in% colnames(w)) || !("SUNRISE" %in% colnames(w)))
+    {
+      # make sure if one column exists we remove it
+      if ("SUNSET" %in% colnames(w))
+      {
+        dmc <- dmc[, -c("SUNSET")]
+      }
+      if ("SUNRISE" %in% colnames(w))
+      {
+        dmc <- dmc[, -c("SUNRISE")]
+      }
+      # rely on this being called with a single station, so location doesn't change
+      sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+      sunlight$DATE <- as.character(sunlight$DATE)
+      dmc <- merge(dmc, sunlight, by=c("DATE", "LAT", "LONG"))
+    }
     dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
     dmc[, RAIN24 := sum(PREC), by=c("DATE")]
     dmc[, MINRH := min(RH), by=c("DATE")]
@@ -416,11 +428,23 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
 
 .hdc <- function(w, dc_old, DSTadjust=0)
 {
-  # rely on this being called with a single station, so location doesn't change
-  sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
-  sunlight$DATE <- as.character(sunlight$DATE)
   dc <- copy(w)
-  dc <- merge(dc, sunlight, by=c("DATE", "LAT", "LONG"))
+  if (!("SUNSET" %in% colnames(w)) || !("SUNRISE" %in% colnames(w)))
+  {
+    # make sure if one column exists we remove it
+    if ("SUNSET" %in% colnames(w))
+    {
+      dc <- dc[, -c("SUNSET")]
+    }
+    if ("SUNRISE" %in% colnames(w))
+    {
+      dc <- dc[, -c("SUNRISE")]
+    }
+    # rely on this being called with a single station, so location doesn't change
+    sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
+    sunlight$DATE <- as.character(sunlight$DATE)
+    dc <- merge(dc, sunlight, by=c("DATE", "LAT", "LONG"))
+  }
   dc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
   dc[, RAIN24 := sum(PREC), by=c("DATE")]
   dc[, MINRH := min(RH), by=c("DATE")]
@@ -611,9 +635,9 @@ grassFWI <- Vectorize(function(gsi, load)
   grassfuelload <- 0.35
   # print(r[(nrow(r)-10):nrow(r),])
   
-  r$FFMC <- .hffmc(w, ffmc_old)
-  r$DMC <- .hdmc(w, dmc_old)
-  r$DC <- .hdc(w, dc_old)
+  r$FFMC <- .hffmc(r, ffmc_old)
+  r$DMC <- .hdmc(r, dmc_old)
+  r$DC <- .hdc(r, dc_old)
   
   # FIX: what is fbpMod doing? this is the default value for it
   r[, ISI := ISIcalc(WS, FFMC)]
