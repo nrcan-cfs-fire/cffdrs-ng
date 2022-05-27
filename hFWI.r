@@ -7,10 +7,6 @@ library(rvest)
 # FIX: don't want to be dependent on this but need to look up time zone for now
 library(lutz)
 
-#~ library('devtools')
-#~ devtools::install_github('datastorm-open/suncalc')
-library(suncalc)
-
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
 DEFAULT_LONGITUDE <- -120.0
@@ -240,15 +236,6 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
 {
   # figure out sun hours so we can use them as when things would be drying
   tz <- tz_lookup_coords(latitude, longitude, method='accurate')
-  # times <- suncalc::getSunlightTimes(date(dates), latitude, longitude, tz=tz)
-  # print(times)
-  # names(times) <- toupper(names(times))
-  # times$LONG <- times$LON
-  # times$DATE <- as.character(times$DATE)
-  # times$SUNRISE <- toDecimal(times$SUNRISE)
-  # times$SUNSET <- toDecimal(times$SUNSET)
-  # times <- data.table(times[, c('DATE', 'LAT', 'LONG', 'SUNRISE', 'SUNSET')])
-  # times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
   r <- NULL
   for (n in 1:length(dates))
   {
@@ -264,11 +251,7 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
   }
   r <- data.table(r)
   colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
-  # r <- merge(times[, -c("SUNLIGHT_HOURS", "SUNRISE", "SUNSET")], r, on=c("DATE"))
-  # r <- r[, c("DATE", "LAT", "LONG", "solrad", "sunrise", "sunset")]
-  # colnames(r) <- toupper(colnames(r))
   print(r)
-  # times[, SUNLIGHT_HOURS := ceiling(SUNSET) - floor(SUNRISE)]
   r$DATE <- as_datetime(r$DATE)
   r$LAT <- as.numeric(r$LAT)
   r$LONG <- as.numeric(r$LONG)
