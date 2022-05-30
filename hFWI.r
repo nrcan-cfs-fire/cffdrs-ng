@@ -515,6 +515,15 @@ grassFWI <- Vectorize(function(gsi, load)
 hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
 {
   wx <- copy(weatherstream)
+  stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
+  stopifnot(all(wx$WS >= 0))
+  stopifnot(all(wx$PREC >= 0))
+  stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
+  stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
+  stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
+  stopifnot(dmc_old >= 0)
+  stopifnot(dc_old >= 0)
+  stopifnot(percent_cured >= 0 & percent_cured <= 100)
   old_names <- colnames(wx)
   # add a bunch of dummy columns if they don't exist
   colnames(wx) <- toupper(colnames(wx))
@@ -589,3 +598,4 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   # should have gotten rid of all the fields we added to make the processing work
   return(results)
 }
+
