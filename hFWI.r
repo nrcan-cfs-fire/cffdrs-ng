@@ -230,7 +230,7 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
     sunset <- (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone+DST
     for_datetime <- as_datetime(d)
     hrs <- unique(hour(dates[d == date(dates)]))
-    for (hr in hrs)
+    for_hour <- function(hr)
     {
       # for_time <- as_datetime(for_datetime + hours(hr))
       # for_time <- for_datetime + hours(hr)
@@ -250,9 +250,9 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
       # {
       #   print(sprintf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
       # }
-      r <- rbind(r, c(for_time, latitude, longitude,  solrad, sunrise, sunset))
+      return(c(for_time, latitude, longitude,  solrad, sunrise, sunset))
     }
-    
+    r <- rbind(r, do.call(rbind, lapply(hrs, for_hour)))
   }
   r <- data.table(r)
   colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
