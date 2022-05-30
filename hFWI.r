@@ -490,16 +490,24 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
     } else {
       DELTA_DCrain24 <- 0.0
     }
-    
-    for (h in unique(for_date$HR))
+    hrs <- unique(for_date$HR)
+    minhr <- min(hrs)
+    fctDC <- function(lastdc, h)
     {
-      r <- for_date[HR == h]
+      # r <- for_date[HR == h]
+      # HACK: should always be sequential and start at minhrs hrs?
+      r <- for_date[h + 1 - minhr]
       # print(r)
       lastdc <- hourly_DC(r$TEMP, r$RH, r$WS, r$PREC, lastdc, r$MON, r$RAIN24, r$DRYFRAC, DELTA_DCrain24, tnoon)
       stopifnot(noon$MON == r$MON)
-      # print(lastdc)
-      result <- c(result, lastdc)
+      return(lastdc)
     }
+    values <- Reduce(fctDC, hrs, init=lastdc, accumulate=TRUE)
+    # get rid of init value
+    values <- values[2:length(values)]
+    lastdc <- values[length(values)]
+    result <- c(result, values)
+    stopifnot(length(hrs) == length(values))
   }
   return(result)
 }
