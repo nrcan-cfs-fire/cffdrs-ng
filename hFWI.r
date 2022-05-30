@@ -16,6 +16,13 @@ FFMC_DEFAULT <- 85
 DMC_DEFAULT <- 6
 DC_DEFAULT <- 15
 
+reduce_by_row <- function(fct, df, init)
+{
+  result <- Reduce(fct, seq(1, nrow(df)), init, accumulate=TRUE)
+  # get rid of init value
+  return(result[2:length(result)])
+}
+
 ISIcalc <- function(ws, ffmc)
 {
   fm <- 147.2773 * (101.0 - ffmc)/(59.5 + ffmc)
@@ -496,13 +503,13 @@ grassFWI <- Vectorize(function(gsi, load)
   r[, SOLRAD := SOLRAD * SOLPROP]
   
   lastmcgmc <- 101-ffmc_old # approximation for a start up
-  mcgmc <- Reduce(function(lastmcgmc, n){
+  r$MCGMC <- reduce_by_row(
+    function(lastmcgmc, n){
       row <- r[n,]
-      # print(row)
-      cur_mcgmc <- hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0)
-      return(cur_mcgmc)
-  }, seq(1, nrow(r)), lastmcgmc, accumulate=TRUE)
-  r$MCGMC <- mcgmc[2:length(mcgmc)]
+      return(hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0))
+      },
+    r,
+    lastmcgmc)
   r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
   r[, GSI := grassISI(WS, MCGMC, percent_cured)]
   r[, GFWI := grassFWI(GSI, grassfuelload)]
