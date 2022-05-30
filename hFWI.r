@@ -196,21 +196,14 @@ julian <- function(mon, day)
   
 }
 
-getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
+getSunlight <- function(dates, timezone, latitude, longitude, verbose=FALSE)
 {
-  # figure out sun hours so we can use them as when things would be drying
-  tz <- tz_lookup_coords(latitude, longitude, method='accurate')
   r <- NULL
   by_date <- unique(date(dates))
   for (n in 1:length(by_date))
   {
     d <- by_date[[n]]
     # print(d)
-    tzo <- tz_offset(d, tz)
-    DST <- ifelse(tzo$is_dst, 1, 0)
-    # timezone <- tzo$utc_offset_h
-    timezone <- tzo$utc_offset_h - DST
-    DST <- 0
     # print(timezone)
     # print(timezone)
     dechour <- 12.0
@@ -226,8 +219,8 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
     zenith <- 90.833*pi/180.0;
     
     halfday <- 180.0/pi*acos( cos(zenith)/(cos(latitude*pi/180.0)*cos(decl))-tan(latitude*pi/180.0)*tan(decl) )
-    sunrise <- (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone+DST
-    sunset <- (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone+DST
+    sunrise <- (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone
+    sunset <- (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone
     for_datetime <- as_datetime(d)
     hrs <- unique(hour(dates[d == date(dates)]))
     for_hour <- function(hr)
@@ -236,7 +229,7 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
       # for_time <- for_datetime + hours(hr)
       # hours() is really slow
       for_time <- for_datetime + hr * 3600
-      tst <- (as.numeric(hr)-DST)*60.0+timeoffset
+      tst <- as.numeric(hr)*60.0+timeoffset
       hourangle <- tst/4-180
       zenith <- acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )
       # print(zenith)
@@ -248,7 +241,7 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
       }
       # if (verbose)
       # {
-      #   print(sprintf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
+      #   print(sprintf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
       # }
       return(c(for_time, latitude, longitude,  solrad, sunrise, sunset))
     }
@@ -340,25 +333,11 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
 }
 
 
-.hdmc <- function(w, dmc_old, DSTadjust=0)
+.hdmc <- function(w, dmc_old)
 {
     dmc <- copy(w)
-    if (!("SUNSET" %in% colnames(w)) || !("SUNRISE" %in% colnames(w)))
-    {
-      # make sure if one column exists we remove it
-      if ("SUNSET" %in% colnames(w))
-      {
-        dmc <- dmc[, -c("SUNSET")]
-      }
-      if ("SUNRISE" %in% colnames(w))
-      {
-        dmc <- dmc[, -c("SUNRISE")]
-      }
-      # rely on this being called with a single station, so location doesn't change
-      sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
-      sunlight$DATE <- as.character(sunlight$DATE)
-      dmc <- merge(dmc, sunlight, by=c("DATE", "LAT", "LONG"))
-    }
+    stopifnot("SUNSET" %in% colnames(w))
+    stopifnot("SUNRISE" %in% colnames(w))
     dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
     dmc[, RAIN24 := sum(PREC), by=c("DATE")]
     dmc[, MINRH := min(RH), by=c("DATE")]
@@ -377,7 +356,7 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
     {
       d <- dates[[n]]
       for_date <- dmc[DATE == d]
-      noon <- for_date[HR == (12 + DSTadjust)]
+      noon <- for_date[HR == 12]
       tnoon <- noon$TEMP
       rhnoon <- noon$RH
       # print(for_date)
@@ -440,25 +419,11 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
   return(dc)
 }
 
-.hdc <- function(w, dc_old, DSTadjust=0)
+.hdc <- function(w, dc_old)
 {
   dc <- copy(w)
-  if (!("SUNSET" %in% colnames(w)) || !("SUNRISE" %in% colnames(w)))
-  {
-    # make sure if one column exists we remove it
-    if ("SUNSET" %in% colnames(w))
-    {
-      dc <- dc[, -c("SUNSET")]
-    }
-    if ("SUNRISE" %in% colnames(w))
-    {
-      dc <- dc[, -c("SUNRISE")]
-    }
-    # rely on this being called with a single station, so location doesn't change
-    sunlight <- getSunlight(as_datetime(unique(w$DATE)), w$LAT[[1]], w$LONG[[1]])
-    sunlight$DATE <- as.character(sunlight$DATE)
-    dc <- merge(dc, sunlight, by=c("DATE", "LAT", "LONG"))
-  }
+  stopifnot("SUNSET" %in% colnames(w))
+  stopifnot("SUNRISE" %in% colnames(w))
   dc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
   dc[, RAIN24 := sum(PREC), by=c("DATE")]
   dc[, MINRH := min(RH), by=c("DATE")]
@@ -477,7 +442,7 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
   {
     d <- dates[[n]]
     for_date <- dc[DATE == d]
-    noon <- for_date[HR == (12 + DSTadjust)]
+    noon <- for_date[HR == 12]
     tnoon <- noon$TEMP
     # print(for_date)
     rain24 <- noon$RAIN24
@@ -636,7 +601,7 @@ grassFWI <- Vectorize(function(gsi, load)
   return(GFWI);
 })
 
-.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, percent_cured)
+.stnHFWI <- function(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
 {
   if (!isSequentialHours(w))
   {
@@ -651,7 +616,7 @@ grassFWI <- Vectorize(function(gsi, load)
   dates <- as_datetime(unique(w$TIMESTAMP))
   latitude <- w$LAT[[1]]
   longitude <- w$LONG[[1]]
-  sunlight <- getSunlight(dates, latitude, longitude, TRUE)
+  sunlight <- getSunlight(dates, timezone, latitude, longitude, TRUE)
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
   sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
@@ -698,7 +663,7 @@ grassFWI <- Vectorize(function(gsi, load)
   return(r)
 }
 
-hFWI <- function(weatherstream, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
+hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
 {
   wx <- copy(weatherstream)
   old_names <- colnames(wx)
@@ -740,7 +705,7 @@ hFWI <- function(weatherstream, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured
   for (stn in unique(wx$ID))
   {
     w <- wx[ID == stn]
-    r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old, percent_cured)
+    r <- .stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
     results <- rbind(results, r)
   }
   

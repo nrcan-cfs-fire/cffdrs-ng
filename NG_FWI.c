@@ -20,7 +20,7 @@ bmw/2021
 #include <string.h>
 
 //    gcc -o ngfwi NG_FWI.c -lm
-//    ./ngfwi -6 0 85 6 15 ../data/BAK2018_hourly.csv test.csv
+//    ./ngfwi -6 85 6 15 ../data/BAK2018_hourly.csv test.csv
 
 float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc);
 float hourly_DMC (float Temp, float rh, float ws, float rain, int mon, float lastdmc, float DryFrac, float rain24,float DELTA,float tnoon,float rhnoon);
@@ -34,13 +34,13 @@ float grassFWI (float gsi, float grassload);
 float DMCdryingweight (float T,float RH,float ws);
 float DCdryingweight (float T,float RH,float ws);
 
-float sun(float lat,float lon, int mon,int day,int hour, int timezone,int DST, float *sunrise, float *sunset);
+float sun(float lat,float lon, int mon,int day,int hour, int timezone, float *sunrise, float *sunset);
 int julian(int mon, int day);
 
 void main(int argc, char *argv[]){
   FILE *inp, *out;
   int err, year, mon, day, hour,h, oyear,omon,oday,ohour;
-  int TZadjust,DSTadjust;
+  int TZadjust;
 
   float grassfuelload=0.35,  maxsolprop=0.85, percent_cured=100.0;
 
@@ -50,35 +50,33 @@ void main(int argc, char *argv[]){
   float DELTA_mcdmcrain24, DELTA_DCrain24, solprop;
   char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
 
-   if(argc!=8){
-       printf("Command line:   NGFWI  <local GMToffset> <DST> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n\n");
+   if(argc!=7){
+       printf("Command line:   NGFWI  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n\n");
        printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
-       printf("<DST> is binary ....0=standard time   1=daylight savings time  (i.e. DST=1 hour forward) \n");
        printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
+       printf("All times should be local standard time\n");
        printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humitiy(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
        exit(1);
    }
 
-   inp=fopen(argv[6],"r");
+   inp=fopen(argv[5],"r");
    printf("Openning input file >>> %s   \n",argv[6]);
    if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[6]);exit(1);}
-   out=fopen(argv[7],"w");
+   out=fopen(argv[6],"w");
 
   /*  CSV headers */
    fprintf(out,"year,mon,day,hour,temp,rh,wind,rain,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi\n");
 
    TZadjust=atoi(argv[1]);
-   DSTadjust=atoi(argv[2]);
    if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   LOCal time zone adjustment must be vaguely in CAnada so between -9 and -2 \n"); exit(1);}
-   if(DSTadjust <0 || DSTadjust> 1 ){ printf(" *****   Daylight saving time ajustment  is 0= standard   and LOCal time zone adjustment must be vaguely in CAnada so between -9 and -2 \n"); exit(1);}
-   lastffmc=atof(argv[3]);
+   lastffmc=atof(argv[2]);
    if(lastffmc>101 || lastffmc<0){ printf(" /n/n *****   FFMC must be between 0 and 101 \n"); exit(1);}
-   lastdmc=atof(argv[4]);
+   lastdmc=atof(argv[3]);
    if(lastdmc<0){ printf(" /n/n *****  starting DMC must be >=0  \n"); exit(1);}
-   lastdc=atof(argv[5]);
+   lastdc=atof(argv[4]);
    if(lastdc<0){ printf(" /n/n *****   starting DC must be >=0\n"); exit(1);}
 
-   printf("TZ=%d    DST=%d  start ffmc=%f  dmc=%f\n",TZadjust,DSTadjust,lastffmc,lastdmc);
+   printf("TZ=%d    start ffmc=%f  dmc=%f\n",TZadjust,lastffmc,lastdmc);
    lastmcgmc=101-lastffmc;  /* approximation for a start up*/
 
    for(hour=0;hour<24;hour++){
@@ -101,7 +99,7 @@ void main(int argc, char *argv[]){
      }  /* end the while to read thru a day */
 
 
-     solar=sun(lat,lon,omon,oday,12,TZadjust,DSTadjust,&sunrise,&sunset );
+     solar=sun(lat,lon,omon,oday,12,TZadjust,&sunrise,&sunset );
      daylength=sunset-sunrise;
 
      printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",lat,lon,oyear,omon,oday,sunrise,sunset);
@@ -140,7 +138,7 @@ void main(int argc, char *argv[]){
 
      /* now go through the loop again ,  calcuate houlry values AND output*/
      for(h=0; h<24; h++){
-         solar=sun(lat,lon,omon,oday,h,TZadjust,DSTadjust,&sunrise,&sunset );
+         solar=sun(lat,lon,omon,oday,h,TZadjust,&sunrise,&sunset );
 
          ffmc=hourly_ffmc(atemp[h],arh[h],aws[h],(arain[h]*ffmcRF),lastffmc);
 
@@ -154,7 +152,7 @@ void main(int argc, char *argv[]){
              else dmcDryFrac=0.0;
          }
          // for each hour, calculate a full day of drying at those conditions, and then use fraction of that
-         dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],omon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12+DSTadjust],arh[12+DSTadjust] );
+         dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],omon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12],arh[12] );
 
          if(Wdc24>0){
              if(h>=sunrise && h<=sunset) dcDryFrac = DCdryingweight(atemp[h],arh[h],aws[h])/Wdc24;
@@ -166,7 +164,7 @@ void main(int argc, char *argv[]){
              else dcDryFrac=0.0;
          }
 
-         dc=hourly_DC(atemp[h],arh[h],aws[h],arain[h],lastdc,omon, rain24,dcDryFrac,DELTA_DCrain24,atemp[12+DSTadjust] );
+         dc=hourly_DC(atemp[h],arh[h],aws[h],arain[h],lastdc,omon, rain24,dcDryFrac,DELTA_DCrain24,atemp[12] );
 
          isi=ISIcalc(aws[h],ffmc);
          bui=BUIcalc(dmc,dc);
@@ -280,7 +278,7 @@ float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc)
 }
 
 
-float sun(float lat,float lon, int mon,int day,int hour,int timezone, int DST, float *sunrise, float *sunset)
+float sun(float lat,float lon, int mon,int day,int hour,int timezone, float *sunrise, float *sunset)
 /*
 
 this routine approximately calcualtes sunrise and sunset and daylength
@@ -319,19 +317,19 @@ bmw
     - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear);
   timeoffset=eqtime+4*lon-60*timezone;
 
-  tst=(float)(hour-DST)*60.0+timeoffset;
+  tst=(float)hour*60.0+timeoffset;
   hourangle=tst/4-180;
   zenith=acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) );
   solrad=0.95*cos(zenith);
   if(solrad<0)solrad=0.0;
-  printf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
+  printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
 
   zenith=90.833*pi/180.0;
 
 
   halfday=180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) );
-  *sunrise=(720.0-4.0*(lon+halfday)-eqtime)/60+timezone+DST;
-  *sunset=(720.0-4.0*(lon-halfday)-eqtime)/60+timezone+DST;
+  *sunrise=(720.0-4.0*(lon+halfday)-eqtime)/60+timezone;
+  *sunset=(720.0-4.0*(lon-halfday)-eqtime)/60+timezone;
   return solrad;
 
 }

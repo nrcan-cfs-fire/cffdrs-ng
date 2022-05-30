@@ -36,7 +36,7 @@ save_csv <- function(df, file)
   write.csv(result[, c("yr", "mon", "day", "hr", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], file, row.names=FALSE, quote=FALSE)
 }
 
-result <- hFWI(bak)
+result <- hFWI(bak, timezone=-6)
 save_csv(result, "./result.csv")
 
 df <- data.table(test_hffmc)
@@ -46,5 +46,5 @@ setnames(df, c("yr", "hr", "prec"), c("year", "hour", "rain"))
 write.table(df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "ws", "rain")], "./input_hffmc.csv", row.names=FALSE, col.names=FALSE, sep=",")
 df <- as.data.table(read.csv("./input_hffmc.csv", header=FALSE, col.names=c("lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec")))
 
-result_hffmc <- hFWI(df)
+result_hffmc <- hFWI(df, timezone=-6)
 save_csv(result_hffmc, "./result_hffmc.csv")
