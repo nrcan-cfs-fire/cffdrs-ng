@@ -195,51 +195,16 @@ julian <- function(mon, day)
   return(month[mon]+day)
   
 }
-sun <- function(lat, lon, d, timezone, DST, verbose=FALSE)
-{
-  # print(timezone)
-  dechour <- 12.0
-  hr <- hour(d)
-  # print(d)
-  # jd <- yday(d)
-  jd <- julian(month(d), day(d))
-  fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
-  
-  eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
-  
-  decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
-  timeoffset <- eqtime+4*lon-60*timezone
-  
-  tst <- (as.numeric(hr)-DST)*60.0+timeoffset
-  hourangle <- tst/4-180
-  zenith <- acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) )
-  # print(zenith)
-  solrad <- 0.95*cos(zenith)
-  # print(solrad)
-  if(solrad<0)
-  {
-    solrad <- 0.0
-  }
-  if (verbose)
-  {
-    print(sprintf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
-  }
-  zenith <- 90.833*pi/180.0;
-  
-  halfday <- 180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) )
-  sunrise <- (720.0-4.0*(lon+halfday)-eqtime)/60+timezone+DST
-  sunset <- (720.0-4.0*(lon-halfday)-eqtime)/60+timezone+DST
-  return(c(solrad, sunrise, sunset))
-}
 
 getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
 {
   # figure out sun hours so we can use them as when things would be drying
   tz <- tz_lookup_coords(latitude, longitude, method='accurate')
   r <- NULL
-  for (n in 1:length(dates))
+  by_date <- unique(date(dates))
+  for (n in 1:length(by_date))
   {
-    d <- dates[[n]]
+    d <- by_date[[n]]
     # print(d)
     tzo <- tz_offset(d, tz)
     DST <- ifelse(tzo$is_dst, 1, 0)
@@ -247,11 +212,51 @@ getSunlight <- function(dates, latitude, longitude, verbose=FALSE)
     timezone <- tzo$utc_offset_h - DST
     DST <- 0
     # print(timezone)
-    r <- rbind(r, c(d, latitude, longitude,  sun(latitude, longitude, d, timezone, DST, verbose)))
+    # print(timezone)
+    dechour <- 12.0
+    # print(d)
+    # jd <- yday(d)
+    jd <- julian(month(d), day(d))
+    fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
+    
+    eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
+    
+    decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
+    timeoffset <- eqtime+4*longitude-60*timezone
+    zenith <- 90.833*pi/180.0;
+    
+    halfday <- 180.0/pi*acos( cos(zenith)/(cos(latitude*pi/180.0)*cos(decl))-tan(latitude*pi/180.0)*tan(decl) )
+    sunrise <- (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone+DST
+    sunset <- (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone+DST
+    for_datetime <- as_datetime(d)
+    hrs <- unique(hour(dates[d == date(dates)]))
+    for (hr in hrs)
+    {
+      # for_time <- as_datetime(for_datetime + hours(hr))
+      # for_time <- for_datetime + hours(hr)
+      # hours() is really slow
+      for_time <- for_datetime + hr * 3600
+      tst <- (as.numeric(hr)-DST)*60.0+timeoffset
+      hourangle <- tst/4-180
+      zenith <- acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )
+      # print(zenith)
+      solrad <- 0.95*cos(zenith)
+      # print(solrad)
+      if(solrad<0)
+      {
+        solrad <- 0.0
+      }
+      # if (verbose)
+      # {
+      #   print(sprintf(" SOLAR: %d  %d DST=%d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,DST,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
+      # }
+      r <- rbind(r, c(for_time, latitude, longitude,  solrad, sunrise, sunset))
+    }
+    
   }
   r <- data.table(r)
   colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
-  print(r)
+  # print(r)
   r$DATE <- as_datetime(r$DATE)
   r$LAT <- as.numeric(r$LAT)
   r$LONG <- as.numeric(r$LONG)
@@ -626,7 +631,10 @@ grassFWI <- Vectorize(function(gsi, load)
   }
   r <- copy(w)
   # rely on this being called with a single station, so location doesn't change
-  sunlight <- getSunlight(as_datetime(unique(w$TIMESTAMP)), w$LAT[[1]], w$LONG[[1]], TRUE)
+  dates <- as_datetime(unique(w$TIMESTAMP))
+  latitude <- w$LAT[[1]]
+  longitude <- w$LONG[[1]]
+  sunlight <- getSunlight(dates, latitude, longitude, TRUE)
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
   sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
@@ -635,8 +643,11 @@ grassFWI <- Vectorize(function(gsi, load)
   grassfuelload <- 0.35
   # print(r[(nrow(r)-10):nrow(r),])
   
+  # print("FFMC")
   r$FFMC <- .hffmc(r, ffmc_old)
+  # print("DMC")
   r$DMC <- .hdmc(r, dmc_old)
+  # print("DC")
   r$DC <- .hdc(r, dc_old)
   
   # FIX: what is fbpMod doing? this is the default value for it
