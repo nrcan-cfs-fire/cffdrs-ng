@@ -54,66 +54,30 @@ julian <- function(mon, day)
 
 getSunlight <- function(dates, timezone, latitude, longitude, verbose=FALSE)
 {
-  r <- NULL
-  by_date <- unique(date(dates))
-  for (n in 1:length(by_date))
-  {
-    d <- by_date[[n]]
-    # print(d)
-    # print(timezone)
-    # print(timezone)
-    dechour <- 12.0
-    # print(d)
-    # jd <- yday(d)
-    jd <- julian(month(d), day(d))
-    fracyear <- 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0);
-    
-    eqtime <- 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )
-    
-    decl <- 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)
-    timeoffset <- eqtime+4*longitude-60*timezone
-    zenith <- 90.833*pi/180.0;
-    
-    halfday <- 180.0/pi*acos( cos(zenith)/(cos(latitude*pi/180.0)*cos(decl))-tan(latitude*pi/180.0)*tan(decl) )
-    sunrise <- (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone
-    sunset <- (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone
-    for_datetime <- as_datetime(d)
-    hrs <- unique(hour(dates[d == date(dates)]))
-    for_hour <- function(hr)
-    {
-      # for_time <- as_datetime(for_datetime + hours(hr))
-      # for_time <- for_datetime + hours(hr)
-      # hours() is really slow
-      for_time <- for_datetime + hr * 3600
-      tst <- as.numeric(hr)*60.0+timeoffset
-      hourangle <- tst/4-180
-      zenith <- acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )
-      # print(zenith)
-      solrad <- 0.95*cos(zenith)
-      # print(solrad)
-      if(solrad<0)
-      {
-        solrad <- 0.0
-      }
-      # if (verbose)
-      # {
-      #   print(sprintf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hr,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad))
-      # }
-      return(c(for_time, latitude, longitude,  solrad, sunrise, sunset))
-    }
-    r <- rbind(r, do.call(rbind, lapply(hrs, for_hour)))
-  }
-  r <- data.table(r)
-  colnames(r) <- c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")
-  # print(r)
-  r$DATE <- as_datetime(r$DATE)
-  r$LAT <- as.numeric(r$LAT)
-  r$LONG <- as.numeric(r$LONG)
-  r$SOLRAD <- as.numeric(r$SOLRAD)
-  r$SUNRISE <- as.numeric(r$SUNRISE)
-  r$SUNSET <- as.numeric(r$SUNSET)
-  r[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
-  return(r)
+  df <- data.table(DATE=dates)
+  df[, d := as_date(DATE)]
+  dechour <- 12.0
+  df[, jd := julian(month(d), day(d))]
+  df[, fracyear := 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0)]
+  df[, eqtime := 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )]
+  df[, decl := 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)]
+  df[, timeoffset := eqtime+4*longitude-60*timezone]
+  df[, zenith := 90.833*pi/180.0]
+  df[, halfday := 180.0/pi*acos( cos(zenith)/(cos(latitude*pi/180.0)*cos(decl))-tan(latitude*pi/180.0)*tan(decl) )]
+  df[, sunrise := (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone]
+  df[, sunset := (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone]
+  df[, hr := hour(DATE)]
+  df[, tst := as.numeric(hr)*60.0+timeoffset]
+  df[, hourangle := tst/4-180]
+  df[, zenith := acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )]
+  df[, solrad := 0.95*cos(zenith)]
+  df[, solrad := ifelse(solrad < 0, 0, solrad)]
+  colnames(df) <- toupper(colnames(df))
+  df[, LAT := latitude]
+  df[, LONG := longitude]
+  result <- df[, c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")]
+  result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  return(result)
 }
 
 isSequential <- function(data)
