@@ -431,6 +431,14 @@ grassFWI <- Vectorize(function(gsi, load)
   {
     stop('Expected a single ID value for input weather')
   }
+  if (length(na.omit(unique(w$LAT))) != 1)
+  {
+    stop('Expected a single LAT value for input weather')
+  }
+  if (length(na.omit(unique(w$LONG))) != 1)
+  {
+    stop('Expected a single LONG value for input weather')
+  }
   r <- copy(w)
   # rely on this being called with a single station, so location doesn't change
   dates <- as_datetime(unique(w$TIMESTAMP))
