@@ -60,8 +60,8 @@ void main(int argc, char *argv[]){
    }
 
    inp=fopen(argv[5],"r");
-   printf("Openning input file >>> %s   \n",argv[6]);
-   if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[6]);exit(1);}
+   printf("Openning input file >>> %s   \n",argv[5]);
+   if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[5]);exit(1);}
    out=fopen(argv[6],"w");
 
   /*  CSV headers */
