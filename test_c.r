@@ -11,29 +11,25 @@ bak <- as.data.table(read.csv(csv_bak_hourly, header=FALSE, col.names=c("lat", "
 save_csv <- function(df, file)
 {
   result <- copy(df)
-  result[, MIN_RH := sprintf("%0.1f", round(MIN_RH, 1))]
-  result[, temp := sprintf("%0.1f", round(temp, 1))]
-  result[, rh := sprintf("%0.0f", round(rh, 0))]
-  result[, ws := sprintf("%0.1f", round(ws, 1))]
-  result[, prec := sprintf("%0.2f", round(prec, 2))]
-  result[, SOLPROP := sprintf("%0.5f", round(SOLPROP, 5))]
-  result[, SOLRAD := sprintf("%0.5f", round(SOLRAD, 5))]
-  result[, SUNRISE := sprintf("%0.3f", round(SUNRISE, 5))]
-  result[, SUNSET := sprintf("%0.3f", round(SUNSET, 5))]
-  result[, FFMC := sprintf("%0.1f", round(FFMC, 1))]
-  result[, DMC := sprintf("%0.1f", round(DMC, 1))]
-  result[, DC := sprintf("%0.1f", round(DC, 1))]
-  result[, ISI := sprintf("%0.1f", round(ISI, 1))]
-  result[, BUI := sprintf("%0.1f", round(BUI, 1))]
-  result[, FWI := sprintf("%0.1f", round(FWI, 1))]
-  result[, DSR := sprintf("%0.1f", round(DSR, 1))]
-  result[, MCGMC := sprintf("%0.1f", round(MCGMC, 1))]
-  result[, GFMC := sprintf("%0.1f", round(GFMC, 1))]
-  result[, GSI := sprintf("%0.1f", round(GSI, 1))]
-  result[, GFWI := sprintf("%0.1f", round(GFWI, 1))]
-  # write.csv(result[, -c("lat", "long", "DSR")], "./result.csv", row.names=FALSE, quote=FALSE)
-  # write.csv(result[, c("yr", "mon", "day", "hr", "SOLPROP", "SOLRAD", "SUNRISE", "SUNSET", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], "./result.csv", row.names=FALSE, quote=FALSE)
-  write.csv(result[, c("yr", "mon", "day", "hr", "MIN_RH", "temp", "rh", "ws", "prec", "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "MCGMC", "GFMC", "GSI", "GFWI")], file, row.names=FALSE, quote=FALSE)
+  setnames(result, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))
+  colnames(result) <- tolower(colnames(result))
+  result[, mon := sprintf("%2d", mon)]
+  result[, day := sprintf("%2d", day)]
+  result[, hour := sprintf("%2d", hour)]
+  result[, temp := sprintf("%5.1f", round(temp, 1))]
+  result[, rh := sprintf("%3.0f", round(rh, 0))]
+  result[, wind := sprintf("%5.1f", round(wind, 1))]
+  result[, rain := sprintf("%5.1f", round(rain, 2))]
+  result[, ffmc := sprintf("%6.1f", round(ffmc, 1))]
+  result[, dmc := sprintf("%6.1f", round(dmc, 1))]
+  result[, dc := sprintf("%6.1f", round(dc, 1))]
+  result[, isi := sprintf("%6.1f", round(isi, 1))]
+  result[, bui := sprintf("%6.1f", round(bui, 1))]
+  result[, fwi := sprintf("%6.1f", round(fwi, 1))]
+  result[, gfmc := sprintf("%6.1f", round(gfmc, 1))]
+  result[, gsi := sprintf("%6.1f", round(gsi, 1))]
+  result[, gfwi := sprintf("%6.1f", round(gfwi, 1))]
+  write.csv(result[, c("year", "mon", "day", "hour", "temp", "rh", "wind", "rain", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi")], file, row.names=FALSE, quote=FALSE)
 }
 
 result <- hFWI(bak, timezone=-6)
