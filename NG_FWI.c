@@ -19,8 +19,8 @@ bmw/2021
 #include <stdlib.h>
 #include <string.h>
 
-//    gcc -o ngfwi NG_FWI.c -lm
-//    ./ngfwi -6 85 6 15 ../data/BAK2018_hourly.csv test.csv
+/*    gcc -o ngfwi NG_FWI.c -lm -std=c90 */
+/*    ./ngfwi -6 85 6 15 ../data/BAK2018_hourly.csv test.csv */
 
 float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc);
 float hourly_DMC (float Temp, float rh, float ws, float rain, int mon, float lastdmc, float DryFrac, float rain24,float DELTA,float tnoon,float rhnoon);
@@ -95,7 +95,7 @@ void main(int argc, char *argv[]){
          aws[hour]=ws;
          arain[hour]=rain;
          err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
-  //       printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err);
+         /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err); */
      }  /* end the while to read thru a day */
 
 
@@ -125,7 +125,7 @@ void main(int argc, char *argv[]){
      }
      else DELTA_mcdmcrain24=0.0;
 
-    // printf("  %02d-%02d: dDELTAmcdmc=%f   rain24=%f b=%f  lastdmc=%f  rain24=%f \n",mon,day,DELTA_mcdmcrain24, rain24,b,lastdmc,rain24);
+     /* printf("  %02d-%02d: dDELTAmcdmc=%f   rain24=%f b=%f  lastdmc=%f  rain24=%f \n",mon,day,DELTA_mcdmcrain24, rain24,b,lastdmc,rain24); */
 
     if(rain24>2.8){
         rw = 0.83*rain24 - 1.27;
@@ -151,7 +151,7 @@ void main(int argc, char *argv[]){
              if(h>=sunrise && h<=sunset)dmcDryFrac=1/(sunset-sunrise);  /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dmcDryFrac=0.0;
          }
-         // for each hour, calculate a full day of drying at those conditions, and then use fraction of that
+         /* for each hour, calculate a full day of drying at those conditions, and then use fraction of that */
          dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],omon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12],arh[12] );
 
          if(Wdc24>0){
@@ -172,15 +172,17 @@ void main(int argc, char *argv[]){
 
 /* grass */
          if(minRH>=100) minRH=99.5;
-         // right now this is:
-         // if minimum RH for the calendar date is > 30 then calculate solar prop based on 2300 rh
-         // should probably be:
-         // if minimum RH for the calendar date is >30 then calculate solar prop based on rh for the hour
-         // or
-         // if rh > 30 then calculate solar prop based on rh for the hour
-         // or 
-         // if minimum RH for the calendar date is >30 then calculate solar prop based on min rh for the day
-         //if(minRH>30) solprop=maxsolprop*(1.27-0.0111*rh);
+         /*
+         right now this is:
+         if minimum RH for the calendar date is > 30 then calculate solar prop based on 2300 rh
+         should probably be:
+         if minimum RH for the calendar date is >30 then calculate solar prop based on rh for the hour
+         or
+         if rh > 30 then calculate solar prop based on rh for the hour
+         or
+         if minimum RH for the calendar date is >30 then calculate solar prop based on min rh for the day
+         if(minRH>30) solprop=maxsolprop*(1.27-0.0111*rh);
+         */
          if(minRH>30) solprop=maxsolprop*(1.27-0.0111*minRH);
          else solprop=maxsolprop;
          if (solprop<0)solprop=0;
@@ -189,15 +191,19 @@ void main(int argc, char *argv[]){
          gfmc=59.5*(250-mcgmc)/(147.2772277+mcgmc);
          gsi=grassISI(aws[h],mcgmc, percent_cured);
          gfwi=grassFWI( gsi, grassfuelload);
-//         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
-//          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
-         // fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.3f,%.3f,%.1f,%.1f,%.0f,%.1f,%0.2f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
+         /*
+         fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
+          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
+          */
+         /* fprintf(out,"%d,%d,%d,%d,%.5f,%.5f,%.3f,%.3f,%.1f,%.1f,%.0f,%.1f,%0.2f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",*/
          fprintf(out,"%d,%d,%d,%d,%.1f,%.1f,%.0f,%.1f,%0.2f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f,%0.1f\n",
           oyear,omon,oday,h,
-          // solprop + DBL_EPSILON,
-          // solar + DBL_EPSILON,
-          // sunrise + DBL_EPSILON,
-          // sunset + DBL_EPSILON,
+          /*
+          solprop + DBL_EPSILON,
+          solar + DBL_EPSILON,
+          sunrise + DBL_EPSILON,
+          sunset + DBL_EPSILON,
+          */
           minRH + DBL_EPSILON,
           atemp[h] + DBL_EPSILON,
           arh[h] + DBL_EPSILON,
@@ -221,7 +227,7 @@ void main(int argc, char *argv[]){
      oyear=year;omon=mon;oday=day;ohour=hour;olat=lat;olon=lon;
    }  /* end the main while(err>0)  */
 
-//  printf("output has been written to>>> %s\n",argv[6]);
+  /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
 }
@@ -370,7 +376,7 @@ float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastd
 
      /* wetting FROM rain  */
      if(rain>0 && DELTA_MCrain>0.0){
-   //          printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
+        /* printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc); */
         mc= 20.0+280.0/exp(0.023*lastdmc);
         mc+=DELTA_MCrain*(rain/rain24);  /*  the MC increase by the rain in this hour...  total * rain_hour/rain24*/
         lastdmc = 43.43*(5.6348-log(mc-20));
@@ -382,7 +388,7 @@ float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastd
 
      DELTA_dry = 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001;  /* full day of drying in old FWI/DMC  */
 
-//   printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
+     /* printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac)); */
 
      dmc= lastdmc + (DELTA_dry*DryFrac);
 
@@ -508,7 +514,7 @@ bmw
    xkd=(0.424*(1-pow(a1,1.7))+(0.0694*sqrt(wind)*(1-pow(a1,8))));
    xkd=xkd*drf*exp(0.0365*tf);
 
-//   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
+    /* printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew); */
 
    xm=e+moe*exp(-1.0*log(10.0)*xkd*time);
   }
