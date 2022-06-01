@@ -228,12 +228,23 @@ pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
 
 setnames(pred, c("P_TEMP", "P_WS", "P_RH", "P_PREC", "YR"), c("TEMP", "WIND", "RH", "RAIN", "YEAR"))
 colnames(pred) <- tolower(colnames(pred))
-df <- copy(pred)
-df[, mon := sprintf("%02d", mon)]
+
+# FIX: fill in start and end so they have 24 hours for every day
+dates <- data.table(date=unique(pred$date))
+hours <- data.table(hour = 0:23)
+cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
+
+df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
+df[, year := sprintf("%02d", year(date))]
+df[, mon := sprintf("%02d", month(date))]
 df[, day := sprintf("%02d", day(date))]
 df[, hour := sprintf("%02d", hour)]
 df[, lat := latitude]
 df[, long := longitude]
+df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
+df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
+df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
+df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
 df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
 write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 
