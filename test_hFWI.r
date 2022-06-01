@@ -36,12 +36,12 @@ toDaily <- function(w, all=FALSE)
   return(merged)
 }
 
-test_hfwi <- function(df=test_hffmc)
+test_hfwi <- function(df=test_hffmc, timezone=-6)
 {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
   
-  r <- hFWI(weatherstream, FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT)
+  r <- hFWI(weatherstream, timezone=timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc_old=DC_DEFAULT)
   
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
