@@ -51,10 +51,10 @@ void main(int argc, char *argv[]){
   char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
 
    if(argc!=7){
-       printf("Command line:   NGFWI  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n\n");
+       printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <input file> <output file>\n\n", argv[0]);
        printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
-       printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
        printf("All times should be local standard time\n");
+       printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
        printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humitiy(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
        exit(1);
    }
