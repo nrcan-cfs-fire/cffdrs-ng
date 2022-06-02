@@ -1,3 +1,5 @@
+# convert hourly weather into daily format
+
 bak <- as.data.table(read.csv("./bak_hourly.csv"))
 
 df <- data.table(bak)

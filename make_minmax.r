@@ -1,3 +1,5 @@
+# convert daily weather into min/max weather format
+
 findQ <- function(temp, rh)
 {
   # find absolute humidity
