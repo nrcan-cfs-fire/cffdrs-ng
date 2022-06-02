@@ -53,6 +53,11 @@ void main(int argc, char *argv[]){
 
          printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", year, mon , day,hour,temp,rh,wind,rain,err);
    while(err>0){
+     if (12 != hour)
+     {
+       printf("Expected daily weather (hour value should be 12 but got %d)\n", hour);
+       exit(1);
+     }
      float temp_min = temp - 15;
      float temp_max = temp + 2;
      float q = findQ(temp, rh);
