@@ -30,5 +30,13 @@ df[, wind_max := 1.25 * wind]
 df[, mon := sprintf("%02d", mon)]
 df[, day := sprintf("%02d", day)]
 df[, hour := sprintf("%02d", hour)]
+df[, temp_max := sprintf("%.2f", temp_max)]
+df[, temp_min := sprintf("%.2f", temp_min)]
+df[, rh_max := sprintf("%.2f", rh_max)]
+df[, rh_min := sprintf("%.2f", rh_min)]
+df[, wind_max := sprintf("%.2f", wind_max)]
+df[, wind_min := sprintf("%.2f", wind_min)]
+df[, rain := sprintf("%.2f", rain)]
+
 df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
 write.table(df, "bak_minmax.csv", quote=FALSE, sep=",", row.names=FALSE)
