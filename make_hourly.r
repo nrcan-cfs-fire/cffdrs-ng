@@ -247,6 +247,10 @@ df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
 df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
 df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
 df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
+df[, temp := sprintf("%.2f", round(temp, 2))]
+df[, rh := sprintf("%.2f", round(rh, 2))]
+df[, wind := sprintf("%.2f", round(wind, 2))]
+df[, rain := sprintf("%.2f", round(rain, 2))]
 df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
 write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 

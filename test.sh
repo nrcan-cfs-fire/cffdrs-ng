@@ -8,3 +8,6 @@ gcc -o make_daily make_daily.c -lm -std=c90 || exit
 
 gcc -o make_minmax make_minmax.c -lm -std=c90 || exit
 ./make_minmax ./bak_daily.csv bak_minmax_c.csv
+
+gcc -o make_hourly make_hourly.c -lm -std=c90 || exit
+./make_hourly -6 ./bak_minmax_c.csv bak_diurnal_c.csv
