@@ -357,11 +357,8 @@ float DCdryingweight (float Temp, float RH, float ws)
 
 float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastdmc, float DryFrac, float rain24, float DELTA_MCrain, float tnoon,float rhnoon)
 {
-     float mc,dmc,el[13],DELTA_dry;
-
-      el[1]=6.5; el[2]=7.5; el[3]=9.0;el[4]=12.8; el[5]=13.9;el[6]=13.9;
-      el[7]=12.4;el[8]=10.9;el[9]=9.4;el[10]=8.0;el[11]=7.0; el[12]=6.0;
-
+    float el[] = {6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0};
+    float mc,dmc,DELTA_dry;
      /* wetting FROM rain  */
      if(rain>0 && DELTA_MCrain>0.0){
         /* printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc); */
@@ -374,7 +371,7 @@ float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastd
      /*drying all day long too */
      if(tnoon<-1.1) tnoon=-1.1;
 
-     DELTA_dry = 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001;  /* full day of drying in old FWI/DMC  */
+     DELTA_dry = 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon-1]*0.0001;  /* full day of drying in old FWI/DMC  */
 
      /* printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac)); */
 
@@ -387,15 +384,14 @@ float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastd
 
 float hourly_DC(float t, float rh,float ws, float rain, float lastdc, int mon, float rain24, float dryfrac, float DELTArain24,float temp12)
 {
-     float dc,fl[13],DELTAdry24;
-      fl[1]=-1.6;fl[2]=-1.6;fl[3]=-1.6;fl[4]=0.9;fl[5]=3.8;fl[6]=5.8;
-      fl[7]=6.4;fl[8]=5.0;fl[9]=2.4;fl[10]=0.4;fl[11]=-1.6;fl[12]=-1.6;
+     float fl[] = {-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6};
+     float dc,DELTAdry24;
 
      if(rain>0 && DELTArain24<0.0){
         lastdc+= DELTArain24*(rain/rain24);  /* (weight it by Rainhour/rain24 )*/
      }
 
-     DELTAdry24 = (0.36*(temp12+2.8) + fl[mon])/2.0;   /* toatl dry for the DAY  */
+     DELTAdry24 = (0.36*(temp12+2.8) + fl[mon-1])/2.0;   /* toatl dry for the DAY  */
      if (DELTAdry24<0.0) DELTAdry24 = 0.0;    /* the fix for winter negative DC change...shoulders*/
 
      dc = lastdc + DELTAdry24*dryfrac;   /* dry frac is VPD weighted value for the hour */
