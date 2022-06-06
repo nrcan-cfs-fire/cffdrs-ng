@@ -15,37 +15,36 @@ float findrh(float q, float temp)
   return(100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-
-float sun(float lat,float lon, int mon,int day,int hour,int timezone, float *sunrise, float *sunset)
+float sun(float lat, float lon, int mon, int day, int hour, int timezone, float *sunrise, float *sunset)
 {
   int jd = julian(mon, day);
   return sun_julian(lat, lon, jd, hour, timezone, sunrise, sunset);
 }
 
 float sun_julian(float lat, float lon, int jd, int hour, int timezone, float *sunrise, float *sunset)
-/*
-
-this routine approximately calcualtes sunrise and sunset and daylength
-Really any routine like this could be used,  some are more precise than others.
-
-It takes in:
-latitude:   in degrees north -  positive number
-longtitude: in degress EAST(standard)  - WEST hemisphere is a negative
-month:
-day:
-adjust:  hours off of Greenich mean time (for EST = -5  (EDT=-4)   CST=-6 MST=-7  PST=-8)
-
-It returns (as pass by reference from the funciton call line)
-SUNRISE in decimal hours  (in the local time zone specified)
-SUNSET in decimal hours  (in the local time zone specified)
-
-and the function itself returns
-DAYLENGTH (in hours)
-
-
-bmw
-*/
 {
+  /*
+
+  this routine approximately calcualtes sunrise and sunset and daylength
+  Really any routine like this could be used,  some are more precise than others.
+
+  It takes in:
+  latitude:   in degrees north -  positive number
+  longtitude: in degress EAST(standard)  - WEST hemisphere is a negative
+  month:
+  day:
+  adjust:  hours off of Greenich mean time (for EST = -5  (EDT=-4)   CST=-6 MST=-7  PST=-8)
+
+  It returns (as pass by reference from the funciton call line)
+  SUNRISE in decimal hours  (in the local time zone specified)
+  SUNSET in decimal hours  (in the local time zone specified)
+
+  and the function itself returns
+  DAYLENGTH (in hours)
+
+
+  bmw
+  */
   float dechour = 12.0;
   float fracyear = 2.0 * pi / 365.0 * ((float)(jd) - 1.0 + ((float)(dechour) - 12.0) / 24.0);
   float eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin (fracyear)
