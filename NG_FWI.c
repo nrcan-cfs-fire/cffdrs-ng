@@ -18,6 +18,7 @@ bmw/2021
 #include <float.h>
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 /*    gcc -o ngfwi NG_FWI.c -lm -std=c90 */
 /*    ./ngfwi -6 85 6 15 ../data/BAK2018_hourly.csv test.csv */
@@ -33,9 +34,6 @@ float grassISI (float wind, float GMC, float cur);
 float grassFWI (float gsi, float grassload);
 float DMCdryingweight (float T,float RH,float ws);
 float DCdryingweight (float T,float RH,float ws);
-
-float sun(float lat,float lon, int mon,int day,int hour, int timezone, float *sunrise, float *sunset);
-int julian(int mon, int day);
 
 void main(int argc, char *argv[]){
   FILE *inp, *out;
@@ -269,70 +267,6 @@ float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc)
   }
   mo=xm;
   return ( 59.5*(250-xm)/(147.27723+xm) );
-}
-
-
-float sun(float lat,float lon, int mon,int day,int hour,int timezone, float *sunrise, float *sunset)
-/*
-
-this routine approximately calcualtes sunrise and sunset and daylength
-REally any routine like this could be used,  some are more precise than others.
-
-It takes in:
-latitude:   in degrees north -  poistive number
-longtitude: in degress EAST(standard)  - WEST hemisphere is a negative
-month:
-day:
-adjust:  hours off of Greenich mean time (for EST = -5  (EDT=-4)   CST=-6 MST=-7  PST=-8)
-
-It returns (as pass by reference from the funciton call line)
-SUNRISE in decimal hours  (in the local time zone specified)
-SUNSET in decimal hours  (in the local time zone specified)
-
-and the function itself returns
-DAYLENGTH (in hours)
-
-
-bmw
-*/
-
-{
-  float pi=3.14159265, zenith;
-  float dechour=12.0,fracyear,eqtime,decl,halfday,hourangle,tst,timeoffset,solrad;
-  int jd;
-
-
-  jd=julian(mon, day);
-  fracyear=2.0*pi/365.0*( (float)(jd)-1.0+((float)(dechour)-12.0)/24.0);
-
-  eqtime = 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) );
-
-  decl=0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear)
-    - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear);
-  timeoffset=eqtime+4*lon-60*timezone;
-
-  tst=(float)hour*60.0+timeoffset;
-  hourangle=tst/4-180;
-  zenith=acos(sin(lat*pi/180)*sin(decl)+cos(lat*pi/180)*cos(decl)*cos(hourangle*pi/180) );
-  solrad=0.95*cos(zenith);
-  if(solrad<0)solrad=0.0;
-  printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",jd,hour,fracyear,decl,timeoffset,tst,hourangle,zenith,solrad);
-
-  zenith=90.833*pi/180.0;
-
-
-  halfday=180.0/pi*acos( cos(zenith)/(cos(lat*pi/180.0)*cos(decl))-tan(lat*pi/180.0)*tan(decl) );
-  *sunrise=(720.0-4.0*(lon+halfday)-eqtime)/60+timezone;
-  *sunset=(720.0-4.0*(lon-halfday)-eqtime)/60+timezone;
-  return solrad;
-
-}
-
-int julian(int mon, int day)
-{
-  int month[13]={0,31,59,90,120,151,181,212,242,273,304,334,365};
-  return month[mon-1]+day;
-
 }
 
 float DMCdryingweight (float Temp,float RH,float ws)
