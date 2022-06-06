@@ -92,13 +92,20 @@ void main(int argc, char *argv[]){
    float ytemp_sunset = 0.0;
    float yrh_sunset = 0.0;
    float ywind_sunset = 0.0;
+   int done_first = 0;
    while(err>0){
      if (12 != cur.hour)
      {
        printf("Expected daily weather (hour value should be 12 but got %d)\n", cur.hour);
        exit(1);
      }
-     err = read_row(inp, &tom);
+     if (done_first)
+     {
+       err = read_row(inp, &tom);
+     } else {
+       yday = cur;
+       tom = cur;
+     }
      if (!(err > 0))
      {
        /* error but we still want to figure out today's values */
@@ -129,11 +136,16 @@ void main(int argc, char *argv[]){
      yrh_sunset = diurnal(1.0 - cur.rh_max/100.0, 1.0-cur.rh_min/100.0, 1.0-tom.rh_max/100.0, yrh_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_RH, arh);
      ywind_sunset = diurnal(cur.wind_min, cur.wind_max, tom.wind_min, ywind_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_WIND, awind);
      arain[7] = cur.rain;
-     for (h = 0; h < 24; ++h)
+     if (done_first)
      {
-        arh[h] = 100 * (1.0 - arh[h]);
-        fprintf(out,"%.4f,%.4f,%4d,%02d,%02d,%02d,%.2f,%.2f,%.2f,%.2f\n",
-                cur.lat,cur.lon,cur.year,cur.mon,cur.day,h,atemp[h],arh[h],awind[h],arain[h]);
+       for (h = 0; h < 24; ++h)
+       {
+          arh[h] = 100 * (1.0 - arh[h]);
+          fprintf(out,"%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+                  cur.lat,cur.lon,cur.year,cur.mon,cur.day,h,atemp[h],arh[h],awind[h],arain[h]);
+       }
+     } else {
+       done_first = 1;
      }
      /* move today to yesterday's variables */
      yday = cur;

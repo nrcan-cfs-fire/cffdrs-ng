@@ -7,55 +7,6 @@ C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)
 
 bak <- as.data.table(read.csv("./bak_minmax.csv"))
 
-
-timezone <- -6
-w <- copy(bak)
-setnames(w, c("year", "hour"), c("yr", "hr"))
-colnames(w) <- toupper(colnames(w))
-w[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YR, MON, DAY, HR, 0))]
-w[, DATE := as_date(TIMESTAMP)]
-r <- copy(w)
-dates <- as_datetime(unique(w$TIMESTAMP))
-latitude <- w$LAT[[1]]
-longitude <- w$LONG[[1]]
-sunlight <- getSunlight(dates, timezone, latitude, longitude, TRUE)
-setnames(sunlight, c("DATE"), c("TIMESTAMP"))
-sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
-r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
-# # FIX: is solar noon just midpoint between sunrise and sunset?
-r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
-
-# 
-# row <- r[1,]
-# v_min <- row$TEMP_MIN
-# v_max <- row$TEMP_MAX
-# v_coeffs <- C_TEMP
-# sunrise <- row$SUNRISE
-# sunset <- row$SUNSET
-# # FIX: is solar noon just midpoint between sunrise and sunset?
-# noon <- (sunset - sunrise) / 2 + sunrise
-# t_min = sunrise + v_coeffs$alpha
-# t_max = noon + v_coeffs$beta
-# hrs <- data.table(HR=0:23)
-# 
-# f <- function(t)
-# {
-#   return((t - t_min)/(t_max - t_min))
-# }
-# 
-# g <- function(t)
-# {
-#   return((t - sunset)/(24 - sunset + (sunset_tom + v_coeffs$alpha))
-# }
-# 
-# hrs[, V := ifelse(HR <= sunset,
-#                   v_min + ((v_max - vmin) * sin(pi / 2) * f(HR)),
-#                   )]
-# 
-# 
-# 
-
-
 makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1)
 {
   print(paste0('Predicting ', v, ' changing at ', change_at))
@@ -215,42 +166,77 @@ doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
   return(cmp)
 }
 
-r$ID <- 1
-r$TIMEZONE <- "Etc/GMT+6"
-for_temp <- makePrediction(r, C_TEMP$c_alpha, C_TEMP$c_beta, C_TEMP$c_gamma, v="TEMP")
-setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
-r[, RH_OPP_MIN := 1 - RH_MAX/100]
-r[, RH_OPP_MAX := 1 - RH_MIN/100]
-r[, RAIN1200 := APCP]
-r[, RAIN0000 := 0]
-r[, RAIN0600 := 0]
-r[, RAIN1800 := 0]
-r[, DATE := as.character(DATE)]
-pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
 
-setnames(pred, c("P_TEMP", "P_WS", "P_RH", "P_PREC", "YR"), c("TEMP", "WIND", "RH", "RAIN", "YEAR"))
-colnames(pred) <- tolower(colnames(pred))
+diurnal <- function(w, timezone)
+{
+  r <- copy(w)
+  setnames(r, c("year", "hour"), c("yr", "hr"))
+  colnames(r) <- toupper(colnames(r))
+  r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YR, MON, DAY, HR, 0))]
+  orig_dates <- data.table(date=as.character(unique(as_date(r$TIMESTAMP))))
+  # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
+  yest <- r[1,]
+  tom <- r[nrow(r),]
+  yest[, TIMESTAMP := TIMESTAMP - days(1)]
+  tom[, TIMESTAMP := TIMESTAMP + days(1)]
+  r <- rbind(yest, r, tom)
+  r[, DATE := as_date(TIMESTAMP)]
+  r[, YR := year(TIMESTAMP)]
+  r[, MON := month(TIMESTAMP)]
+  r[, DAY := day(TIMESTAMP)]
+  r[, HR := hour(TIMESTAMP)]
+  dates <- as_datetime(unique(r$TIMESTAMP))
+  latitude <- r$LAT[[1]]
+  longitude <- r$LONG[[1]]
+  sunlight <- getSunlight(dates, timezone, latitude, longitude, TRUE)
+  setnames(sunlight, c("DATE"), c("TIMESTAMP"))
+  sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
+  r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
+  # # FIX: is solar noon just midpoint between sunrise and sunset?
+  r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
+  
+  r$ID <- 1
+  r$TIMEZONE <- "Etc/GMT+6"
+  for_temp <- makePrediction(r, C_TEMP$c_alpha, C_TEMP$c_beta, C_TEMP$c_gamma, v="TEMP")
+  setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
+  r[, RH_OPP_MIN := 1 - RH_MAX/100]
+  r[, RH_OPP_MAX := 1 - RH_MIN/100]
+  r[, RAIN1200 := APCP]
+  r[, RAIN0000 := 0]
+  r[, RAIN0600 := 0]
+  r[, RAIN1800 := 0]
+  r[, DATE := as.character(DATE)]
+  pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
+  
+  setnames(pred, c("P_TEMP", "P_WS", "P_RH", "P_PREC", "YR"), c("TEMP", "WIND", "RH", "RAIN", "YEAR"))
+  colnames(pred) <- tolower(colnames(pred))
+  
+  # FIX: fill in start and end so they have 24 hours for every day
+  dates <- data.table(date=unique(pred$date))
+  hours <- data.table(hour = 0:23)
+  cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
+  
+  df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
+  df <- merge(orig_dates, df, by="date")
+  df[, year := sprintf("%02d", year(date))]
+  df[, mon := sprintf("%02d", month(date))]
+  df[, day := sprintf("%02d", day(date))]
+  df[, hour := sprintf("%02d", hour)]
+  df[, lat := latitude]
+  df[, long := longitude]
+  df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
+  df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
+  df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
+  df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
+  df[, temp := sprintf("%.1f", round(temp, 1))]
+  df[, rh := sprintf("%.0f", round(rh, 0))]
+  df[, wind := sprintf("%.1f", round(wind, 1))]
+  df[, rain := sprintf("%.1f", round(rain, 1))]
+  df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+  write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
+  return(df)
+}  
 
-# FIX: fill in start and end so they have 24 hours for every day
-dates <- data.table(date=unique(pred$date))
-hours <- data.table(hour = 0:23)
-cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
-
-df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
-df[, year := sprintf("%02d", year(date))]
-df[, mon := sprintf("%02d", month(date))]
-df[, day := sprintf("%02d", day(date))]
-df[, hour := sprintf("%02d", hour)]
-df[, lat := latitude]
-df[, long := longitude]
-df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
-df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
-df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
-df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
-df[, temp := sprintf("%.2f", round(temp, 2))]
-df[, rh := sprintf("%.2f", round(rh, 2))]
-df[, wind := sprintf("%.2f", round(wind, 2))]
-df[, rain := sprintf("%.2f", round(rain, 2))]
-df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
-write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
-
+timezone <- -6
+w <- copy(bak)
+result <- diurnal(w, timezone)
