@@ -194,7 +194,6 @@ diurnal <- function(w, timezone)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
   # # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
-  
   r$ID <- 1
   r$TIMEZONE <- "Etc/GMT+6"
   for_temp <- makePrediction(r, C_TEMP$c_alpha, C_TEMP$c_beta, C_TEMP$c_gamma, v="TEMP")
@@ -207,15 +206,12 @@ diurnal <- function(w, timezone)
   r[, RAIN1800 := 0]
   r[, DATE := as.character(DATE)]
   pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
-  
   setnames(pred, c("P_TEMP", "P_WS", "P_RH", "P_PREC", "YR"), c("TEMP", "WIND", "RH", "RAIN", "YEAR"))
   colnames(pred) <- tolower(colnames(pred))
-  
   # FIX: fill in start and end so they have 24 hours for every day
   dates <- data.table(date=unique(pred$date))
   hours <- data.table(hour = 0:23)
   cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
-  
   df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
   df <- merge(orig_dates, df, by="date")
   df[, year := sprintf("%02d", year(date))]
@@ -235,7 +231,7 @@ diurnal <- function(w, timezone)
   df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
   write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
   return(df)
-}  
+}
 
 timezone <- -6
 w <- copy(bak)
