@@ -6,7 +6,7 @@ gcc -o ngfwi NG_FWI.c util.c -lm -std=c90 || exit
 gcc -o make_daily make_daily.c -lm -std=c90 || exit
 ./make_daily ./bak_hourly.csv bak_daily_c.csv
 
-gcc -o make_minmax make_minmax.c -lm -std=c90 || exit
+gcc -o make_minmax make_minmax.c util.c -lm -std=c90 || exit
 ./make_minmax ./bak_daily.csv bak_minmax_c.csv
 
 gcc -o make_hourly make_hourly.c util.c -lm -std=c90 || exit

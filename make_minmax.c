@@ -8,9 +8,7 @@ outputs min/max weather stream
 #include <float.h>
 #include <stdlib.h>
 #include <string.h>
-
-float findQ(float temp, float rh);
-float findrh(float q, float temp);
+#include "util.h"
 
 void main(int argc, char *argv[]){
   FILE *inp, *out;
@@ -84,19 +82,4 @@ void main(int argc, char *argv[]){
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
-}
-
-
-float findQ(float temp, float rh)
-{
-  /* find absolute humidity */
-  float svp = 6.108 * exp(17.27 * temp / (temp + 237.3));
-  float vp = svp * rh / 100.0;
-  return(217 * vp / (273.17 + temp));
-}
-
-float findrh(float q, float temp)
-{
-  float cur_vp = (273.17 + temp) * q / 217;
-  return(100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
