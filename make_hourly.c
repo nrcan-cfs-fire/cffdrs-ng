@@ -1,6 +1,6 @@
 /*
-inputs daily weather stream
-outputs min/max weather stream
+inputs min/max weather stream
+outputs hourly weather stream
 */
 
 #include <stdio.h>
@@ -10,10 +10,12 @@ outputs min/max weather stream
 #include <string.h>
 #include "util.h"
 
+/* Alpha/Beta/Gamma coefficients for Temperature, RH, and Wind Speed */
 const float C_TEMP[3] = {0.3, 2.0, -3.3};
 const float C_RH[3] = {0.4, 2.0, -3.4};
 const float C_WIND[3] = {0.3, 3.5, -3.3};
 
+/* A row from the input file */
 struct row {
   float lat, lon;
   int year, mon, day, hour;
@@ -156,6 +158,8 @@ void main(int argc, char *argv[]){
 }
 
 /**
+ * Determines values based on a diurnal curve
+ *
  * @param v_min               minimum value today
  * @param v_max               maximum value today
  * @param tv_min              tomorrow's minimum value
