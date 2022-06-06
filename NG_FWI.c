@@ -84,7 +84,7 @@ void main(int argc, char *argv[]){
    const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
    check_header(inp, header);
    err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
-   oyear=year;omon=mon;oday=day;ohour=hour;
+   olat=lat;olon=lon;oyear=year;omon=mon;oday=day;ohour=hour;
 
          printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,hour,atemp[hour],arh[hour],aws[hour],arain[hour],err);
 
@@ -95,6 +95,11 @@ void main(int argc, char *argv[]){
          aws[hour]=ws;
          arain[hour]=rain;
          err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
+         if (err > 0 && (olon != lon || olat != lat))
+         {
+           printf("Latitude and Longitude must be constant\n");
+           exit(1);
+         }
          /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err); */
      }  /* end the while to read thru a day */
 
