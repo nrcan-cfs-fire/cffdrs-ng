@@ -8,6 +8,7 @@ outputs daily weather stream
 #include <float.h>
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 void main(int argc, char *argv[]){
   FILE *inp, *out;
@@ -34,23 +35,11 @@ void main(int argc, char *argv[]){
 
   /*  CSV headers */
    const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
+   check_header(inp, header);
    fprintf(out, "%s\n", header);
 
    for(hour=0;hour<24;hour++){
      atemp[hour]=0.0;arh[hour]=0.0;aws[hour]=0.0;arain[hour]=0.0;
-   }
-   /* check that the header matches what is expected */
-   const int header_len = strlen(header);
-   int i;
-   /* do this one character at a time because unsure how long line would be if we used %s */
-   for(i = 0; i < header_len; ++i)
-   {
-     fscanf(inp, "%c", a);
-     if (a[0] != header[i])
-     {
-       printf("Expected columns to be '%s'\n", header);
-       exit(1);
-     }
    }
    err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
    olat=lat;olon=lon;oyear=year;omon=mon;oday=day;ohour=hour;

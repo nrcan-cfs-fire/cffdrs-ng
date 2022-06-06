@@ -82,19 +82,7 @@ void main(int argc, char *argv[]){
    }
    /* check that the header matches what is expected */
    const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
-   const int header_len = strlen(header);
-   int i;
-   /* do this one character at a time because unsure how long line would be if we used %s */
-   for(i = 0; i < header_len; ++i)
-   {
-     fscanf(inp, "%c", a);
-     if (a[0] != header[i])
-     {
-       printf("Expected columns to be '%s'\n", header);
-       exit(1);
-     }
-   }
-
+   check_header(inp, header);
    err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
    oyear=year;omon=mon;oday=day;ohour=hour;
 

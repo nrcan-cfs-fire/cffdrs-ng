@@ -32,21 +32,9 @@ void main(int argc, char *argv[]){
 
   /*  CSV headers */
    const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
+   check_header(inp, header);
    fprintf(out, "%s\n", "lat,long,year,mon,day,hour,temp_min,temp_max,rh_min,rh_max,wind_min,wind_max,rain");
 
-   /* check that the header matches what is expected */
-   const int header_len = strlen(header);
-   int i;
-   /* do this one character at a time because unsure how long line would be if we used %s */
-   for(i = 0; i < header_len; ++i)
-   {
-     fscanf(inp, "%c", a);
-     if (a[0] != header[i])
-     {
-       printf("Expected columns to be '%s'\n", header);
-       exit(1);
-     }
-   }
    err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&wind,a,&rain);
 
          printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", year, mon , day,hour,temp,rh,wind,rain,err);

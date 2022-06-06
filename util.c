@@ -75,3 +75,21 @@ int julian(int mon, int day)
   static const int month[13] = {0, 31, 59, 90, 120, 151, 181, 212, 242, 273, 304, 334, 365};
   return month[mon - 1] + day;
 }
+
+void check_header(FILE* input, const char* header)
+{
+   /* check that the header matches what is expected */
+   char a[1];
+   const int header_len = strlen(header);
+   int i;
+   /* do this one character at a time because unsure how long line would be if we used %s */
+   for(i = 0; i < header_len; ++i)
+   {
+     fscanf(input, "%c", a);
+     if (a[0] != header[i])
+     {
+       printf("Expected columns to be '%s'\n", header);
+       exit(1);
+     }
+   }
+}

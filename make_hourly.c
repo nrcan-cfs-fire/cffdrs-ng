@@ -56,22 +56,10 @@ void main(int argc, char *argv[]){
    TZadjust=atoi(argv[1]);
    if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   LOCal time zone adjustment must be vaguely in CAnada so between -9 and -2 \n"); exit(1);}
 
+  check_header(inp, header);
   /*  CSV headers */
    fprintf(out, "%s\n", "lat,long,year,mon,day,hour,temp,rh,wind,rain");
 
-   /* check that the header matches what is expected */
-   const int header_len = strlen(header);
-   int i;
-   /* do this one character at a time because unsure how long line would be if we used %s */
-   for(i = 0; i < header_len; ++i)
-   {
-     fscanf(inp, "%c", a);
-     if (a[0] != header[i])
-     {
-       printf("Expected columns to be '%s'\n", header);
-       exit(1);
-     }
-   }
    struct row tom;
    struct row cur;
    struct row yday;

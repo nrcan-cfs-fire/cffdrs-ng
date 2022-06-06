@@ -62,4 +62,11 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float *su
  * @return            Day of year
  */
 int julian(int mon, int day);
+/**
+ * Check that the file stream matches the given string and exit if not
+ *
+ * @param input       Input file to check for string
+ * @param header      String to match
+ */
+void check_header(FILE* input, const char* header);
 #endif
