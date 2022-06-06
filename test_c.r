@@ -49,4 +49,46 @@ setnames(bak_diurnal, c("year", "hour", "wind", "rain"), c("yr", "hr", "ws", "pr
 result3 <- hFWI(bak_diurnal, timezone=-6)
 save_csv(result3, "./result3.csv")
 
+source("make_daily.r")
+bak <- as.data.table(read.csv("./bak_hourly.csv"))
+df <- hourly_to_daily(bak)
+df[, mon := sprintf("%02d", mon)]
+df[, day := sprintf("%02d", day)]
+df[, hour := sprintf("%02d", hour)]
+write.table(df, "bak_daily.csv", quote=FALSE, sep=",", row.names=FALSE)
+
+
+source("make_minmax.r")
+bak <- as.data.table(read.csv("./bak_daily.csv"))
+df <- daily_to_minmax(bak)
+df[, mon := sprintf("%02d", mon)]
+df[, day := sprintf("%02d", day)]
+df[, hour := sprintf("%02d", hour)]
+df[, temp_max := sprintf("%.2f", temp_max)]
+df[, temp_min := sprintf("%.2f", temp_min)]
+df[, rh_max := sprintf("%.2f", rh_max)]
+df[, rh_min := sprintf("%.2f", rh_min)]
+df[, wind_max := sprintf("%.2f", wind_max)]
+df[, wind_min := sprintf("%.2f", wind_min)]
+df[, rain := sprintf("%.2f", rain)]
+write.table(df, "bak_minmax.csv", quote=FALSE, sep=",", row.names=FALSE)
+
+
+
+source("make_hourly.r")
+bak_minmax <- as.data.table(read.csv("./bak_minmax.csv"))
+df <- minmax_to_hourly(bak_minmax, timezone=-6)
+df[, year := sprintf("%02d", year)]
+df[, mon := sprintf("%02d", mon)]
+df[, day := sprintf("%02d", day)]
+df[, hour := sprintf("%02d", hour)]
+df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
+df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
+df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
+df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
+df[, temp := sprintf("%.1f", round(temp, 1))]
+df[, rh := sprintf("%.0f", round(rh, 0))]
+df[, wind := sprintf("%.1f", round(wind, 1))]
+df[, rain := sprintf("%.1f", round(rain, 1))]
+write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 

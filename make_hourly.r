@@ -1,11 +1,12 @@
 # convert min/max weather format into hourly format
+library(data.table)
+library(lubridate)
+source("util.r")
 
 source("hFWI.r")
 C_TEMP <- list(c_alpha=0.3, c_beta=2.0, c_gamma=-3.3)
 C_RH <- list(c_alpha=0.4, c_beta=2.0, c_gamma=-3.4)
 C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)
-
-bak <- as.data.table(read.csv("./bak_minmax.csv"))
 
 makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1)
 {
@@ -167,7 +168,7 @@ doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
 }
 
 
-diurnal <- function(w, timezone)
+minmax_to_hourly <- function(w, timezone)
 {
   r <- copy(w)
   setnames(r, c("year", "hour"), c("yr", "hr"))
@@ -214,25 +215,12 @@ diurnal <- function(w, timezone)
   cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
   df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
   df <- merge(orig_dates, df, by="date")
-  df[, year := sprintf("%02d", year(date))]
-  df[, mon := sprintf("%02d", month(date))]
-  df[, day := sprintf("%02d", day(date))]
-  df[, hour := sprintf("%02d", hour)]
+  df[, year := year(date)]
+  df[, mon := month(date)]
+  df[, day := day(date)]
+  df[, hour := hour(timestamp)]
   df[, lat := latitude]
   df[, long := longitude]
-  df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
-  df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
-  df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
-  df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
-  df[, temp := sprintf("%.1f", round(temp, 1))]
-  df[, rh := sprintf("%.0f", round(rh, 0))]
-  df[, wind := sprintf("%.1f", round(wind, 1))]
-  df[, rain := sprintf("%.1f", round(rain, 1))]
   df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
-  write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
   return(df)
 }
-
-timezone <- -6
-w <- copy(bak)
-result <- diurnal(w, timezone)
