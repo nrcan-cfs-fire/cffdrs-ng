@@ -100,6 +100,12 @@ void main(int argc, char *argv[]){
            printf("Latitude and Longitude must be constant\n");
            exit(1);
          }
+         if (err > 0 && (1 != (hour - ohour) && !(23 == ohour && 0 == hour)))
+         {
+           printf("Hours must be sequential but went from %d to %d\n", ohour, hour);
+           exit(1);
+         }
+         ohour = hour;
          /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err); */
      }  /* end the while to read thru a day */
 
