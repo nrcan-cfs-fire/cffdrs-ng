@@ -148,7 +148,7 @@ void main(int argc, char *argv[]){
          }
          else{
              printf("   ********WDMC24===0 \n");
-             if(h>=sunrise && h<=sunset)dmcDryFrac=1/(sunset-sunrise);  /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
+             if(h>=sunrise && h<=sunset)dmcDryFrac=1/daylength;  /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dmcDryFrac=0.0;
          }
          /* for each hour, calculate a full day of drying at those conditions, and then use fraction of that */
@@ -160,7 +160,7 @@ void main(int argc, char *argv[]){
          }
          else {
              printf("   ********WDC24===0 \n");
-             if(h>=sunrise && h<=sunset) dcDryFrac=1/(sunset-sunrise); /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
+             if(h>=sunrise && h<=sunset) dcDryFrac=1/daylength; /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dcDryFrac=0.0;
          }
 
