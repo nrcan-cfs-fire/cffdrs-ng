@@ -82,10 +82,6 @@ df[, year := sprintf("%02d", year)]
 df[, mon := sprintf("%02d", mon)]
 df[, day := sprintf("%02d", day)]
 df[, hour := sprintf("%02d", hour)]
-df$temp <- nafill(nafill(df$temp, "locf"), "nocb")
-df$rh <- nafill(nafill(df$rh, "locf"), "nocb")
-df$wind <- nafill(nafill(df$wind, "locf"), "nocb")
-df$rain <- nafill(nafill(df$rain, "locf"), "nocb")
 df[, temp := sprintf("%.1f", round(temp, 1))]
 df[, rh := sprintf("%.0f", round(rh, 0))]
 df[, wind := sprintf("%.1f", round(wind, 1))]
