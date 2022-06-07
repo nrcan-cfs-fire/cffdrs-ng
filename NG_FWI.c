@@ -384,106 +384,126 @@ float FWIcalc(float isi, float bui)
   return fwi;
 }
 
-float hourly_gfmc(float temp,float rh,float wind,float rain,float lastmc,float solrad, float time)
-/* MARK II of the model (2016) wth new solar rad model specific to grass
-
-   Temp is temperature in C
-   RH is realtive humidty in %
-   wind is average wind speed in km/h
-   rain is rainfall in mm
-   solrad is kW/m2  (radiaiton reaching fuel)
-   mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-   time - time between obs in HOURS
-
-
-DRF of 1/16.1 comes from reducting the standard response time curve
-at 26.7C, 20%RH, 2 km/h to 0.85hr.
-
-
-
-bmw
-*/
+/**
+ * Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
+ *
+ * @param temp            Temperature (Celcius)
+ * @param rh              Relative Humidity (percent, 0-100)
+ * @param wind            Wind Speed (km/h)
+ * @param rain            Precipitation (mm)
+ * @param lastmc          Previous grass fuel moisture (percent)
+ * @param solrad          Solar radiation (kW/m^2)
+ * @param time            Time since last observation (hours)
+ * @return                Grass Fuel Moisture (percent)
+ */
+float hourly_gfmc(float temp, float rh, float wind, float rain, float lastmc, float solrad, float time)
 {
-  float drf=0.389633,tf,rhf;
-  float mo,ed,ew,moew,moed,xm,a1,e,moe,xkd;
+  /* MARK II of the model (2016) wth new solar rad model specific to grass
 
-  mo=lastmc;
+     Temp is temperature in C
+     RH is realtive humidty in %
+     wind is average wind speed in km/h
+     rain is rainfall in mm
+     solrad is kW/m2  (radiaiton reaching fuel)
+     mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
+     time - time between obs in HOURS
 
-  /* fuel temperature/humidity  */
-  tf=temp+17.9*solrad*exp(-0.034*wind);   /* fuel temp from CEVW*/
+  DRF of 1/16.1 comes from reducting the standard response time curve
+  at 26.7C, 20%RH, 2 km/h to 0.85hr.
 
-  if(tf>temp)rhf=rh*6.107*pow(10.0,7.5*temp/(temp+237.0) )/(6.107*pow(10.0,7.5*tf/(tf+237.0) ));
-  else rhf=rh;
-  if(rain!=0)
-   {
-/*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
-     /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-     mo=mo+ rain/0.3*100.0;   /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
-     if(mo>250.0) mo=250.0;
-   }
-   ed=1.62*pow(rhf,0.532)+(13.7*exp( (rhf-100)/13.0))+0.27*(26.7-tf)*
-     (1.0-1.0/exp(0.115*rhf));   /*GRASS EMC*/
-   moed=mo-ed;
-   ew=1.42*pow(rhf,0.512)+(12.0*exp((rhf-100)/18.0))+0.27*(26.7-tf)*
-     (1.0-1.0/exp(0.115*rhf));     /*GRASS EMC*/
-   moew=mo-ew;
-  if (moed==0 || (moew>=0 && moed<0))
+  bmw
+  */
+  float rhf, xm, e;
+  float drf = 0.389633;
+  float mo = lastmc;
+  /* fuel temp from CEVW*/
+  float tf = temp + 17.9 * solrad * exp(-0.034 * wind);
+  /* fuel humidity */
+  if (tf > temp) {
+    rhf = rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0)) / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0)));
+  } else {
+    rhf = rh;
+  }
+  if (rain != 0)
   {
-    xm=mo;
-    if(moed==0) e=ed;
-    if(moew>=0) e=ew;
+    /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
+    /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
+    mo = mo + rain / 0.3 * 100.0;   /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
+    if (mo > 250.0) { mo = 250.0; }
+  }
+  float ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0))
+              + 0.27 * (26.7 - tf)* (1.0 - (1.0 / exp(0.115 * rhf)));   /*GRASS EMC*/
+  float moed = mo - ed;
+  float ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0))
+              + 0.27 * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));  /*GRASS EMC*/
+  float moew = mo - ew;
+  if (moed == 0 || (moew >= 0 && moed < 0))
+  {
+    xm = mo;
+    if (moed == 0) { e=ed; }
+    if (moew >= 0) { e=ew; }
   }
   else
   {
-    if( moed>0)
+    float a1, moe;
+    if (moed > 0)
     {
-      a1=rhf/100;
-      e=ed;
-      moe=moed;
+      a1 = rhf / 100;
+      e = ed;
+      moe = moed;
     }
     else
     {
-      a1=(100.0-rhf)/100.0;
-      e=ew;
-      moe=moew;
+      a1 = (100.0 - rhf) / 100.0;
+      e = ew;
+      moe = moew;
     }
-   xkd=(0.424*(1-pow(a1,1.7))+(0.0694*sqrt(wind)*(1-pow(a1,8))));
-   xkd=xkd*drf*exp(0.0365*tf);
-
+    float xkd = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1,8))));
+    xkd *= drf * exp(0.0365 * tf);
     /* printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew); */
-
-   xm=e+moe*exp(-1.0*log(10.0)*xkd*time);
+    xm = e + moe * exp(-1.0 * log(10.0) * xkd * time);
   }
-
-  return ( xm );
+  return xm;
 }
 
-
-
+/**
+ * Calculate Grass Spread Index (GSI)
+ *
+ * @param wind            Wind Speed (km/h)
+ * @param mc              Grass moisture content (percent)
+ * @param cur             Degree of curing (percent, 0-100)
+ * @return                Grass Spread Index
+ */
 float grassISI (float wind, float mc, float cur)
 {
-    float fw,fm,cf,GSI;
-
-    if(wind<5)fw =( 0.054 +0.209*wind)*16.67;
-    else fw = (1.1 + 0.715*(wind-5.0)*0.844)*16.67;
-
-    if(mc<12)fm = exp(-0.108*mc);
-    else if(mc<20.0 && wind<10.0) fm = 0.684-0.0342*mc;
-    else if(mc<23.9 && wind>=10.0) fm = 0.547-0.0228*mc;
-    else fm = 0;
-
-    if(cur>20)cf = 1.034/(1+104*exp(-0.1*(cur-20)));
-    else cf = 0.0;
-    GSI  =  1.11* fw *fm * cf;
-    return GSI;
+  float fw;
+  if (wind < 5) { fw = (0.054 + 0.209 * wind) * 16.67; }
+  else { fw = (1.1 + 0.715 * (wind - 5.0) * 0.844) * 16.67; }
+  float fm;
+  if (mc < 12) { fm = exp(-0.108 * mc); }
+  else if (mc < 20.0 && wind < 10.0) { fm = 0.684 - 0.0342 * mc; }
+  else if (mc < 23.9 && wind >= 10.0) { fm = 0.547 - 0.0228 * mc; }
+  else { fm = 0; }
+  float cf;
+  if (cur > 20) { cf = 1.034 / (1 + 104 * exp(-0.1 * (cur - 20))); }
+  else { cf = 0.0; }
+  float GSI = 1.11 * fw * fm * cf;
+  return GSI;
 }
+
+/**
+ * Calculate Grass Fire Weather Index
+ *
+ * @param gsi               Grass Spread Index
+ * @param load              Fuel Load (kg/m^2)
+ * @return                  Grass Fire Weather Index
+ */
 float grassFWI (float gsi, float load)
 {
-    float Fint, GFWI, ros;
-    ros=gsi/1.11;  /*  this just converts back to ROS in m/min*/
-    Fint=300.0*load * ros;
-    if (Fint>100)GFWI = ( log(Fint/60.0) ) / 0.14     ;
-    else GFWI=Fint/25.0;
-    return GFWI;
+  float ros = gsi / 1.11;  /*  this just converts back to ROS in m/min*/
+  float Fint = 300.0 * load * ros;
+  float GFWI;
+  if (Fint > 100) { GFWI = log(Fint / 60.0) / 0.14; }
+  else { GFWI = Fint / 25.0; }
+  return GFWI;
 }
-
