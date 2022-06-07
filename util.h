@@ -69,4 +69,13 @@ int julian(int mon, int day);
  * @param header      String to match
  */
 void check_header(FILE* input, const char* header);
+/**
+ * Check that weather parameters are valid
+ *
+ * @param temp        Temperature (Celcius)
+ * @param rh          Relative humidity (percent, 0-100)
+ * @param wind        Wind speed (km/h)
+ * @param rain        Rain (mm)
+ */
+void check_inputs(float temp, float rh, float wind, float rain);
 #endif

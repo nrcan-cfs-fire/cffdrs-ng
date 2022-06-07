@@ -54,6 +54,7 @@ void main(int argc, char *argv[]){
      rain_pm_old = rain_pm;
      rain_pm = 0.0;
      while(err>0 && omon==mon && oday==day){  /* This loads up 24 hours at a time  ...need to for this version*/
+         check_inputs(temp, rh, ws, rain);
          atemp[hour]=temp;
          arh[hour]=rh;
          aws[hour]=ws;

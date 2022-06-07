@@ -44,6 +44,7 @@ void main(int argc, char *argv[]){
        printf("Expected daily weather (hour value should be 12 but got %d)\n", hour);
        exit(1);
      }
+     check_inputs(temp, rh, wind, rain);
      float temp_min = temp - 15;
      float temp_max = temp + 2;
      float q = findQ(temp, rh);

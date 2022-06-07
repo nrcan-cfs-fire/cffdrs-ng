@@ -93,3 +93,20 @@ void check_header(FILE* input, const char* header)
      }
    }
 }
+
+void check_inputs(float temp, float rh, float wind, float rain)
+{
+  /* just do basic checks, but use this so we can expand checks if desired */
+  if (rh < 0 || rh > 100) {
+    printf("RH must be 0-100, but got %f\n", rh);
+    exit(1);
+  }
+  if (wind < 0) {
+    printf("Wind must be positive, but got %f\n", wind);
+    exit(1);
+  }
+  if (rain < 0) {
+    printf("Rain must be positive, but got %f\n", rain);
+    exit(1);
+  }
+}
