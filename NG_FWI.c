@@ -329,38 +329,59 @@ float hourly_DC(float t, float rh,float ws, float rain, float lastdc, int mon, f
      if(dc<0) dc=0;
      return dc;
 }
+
+/**
+ * Calculate Initial Spread Index (ISI)
+ *
+ * @param wind            Wind Speed (km/h)
+ * @param ffmc            Fine Fuel Moisure Code
+ * @return                Initial Spread Index
+ */
 float ISIcalc(float ws, float ffmc)
 {
-    float isi,fm,sf;
-    fm = 147.2773*(101.0-ffmc)/(59.5+ffmc);
-    sf = 19.115*exp(-0.1386*fm)*(1.0+pow(fm,5.31)/4.93e07);
-    isi = sf*exp(0.05039*ws);
-    return isi;
+  float fm = 147.2773 * (101.0 - ffmc) / (59.5 + ffmc);
+  float sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
+  float isi = sf * exp(0.05039 * ws);
+  return isi;
 }
 
+/**
+ * Calculate Build-up Index (BUI)
+ *
+ * @param dmc             Duff Moisture Code
+ * @param dc              Drought Code
+ * @return                Build-up Index
+ */
 float BUIcalc (float dmc, float dc)
 {
-    float bui,p,cc;
-    if(dmc==0 && dc==0) bui=0;
-    else bui = 0.8*dc*dmc/(dmc+0.4*dc);
-    if(bui<dmc)
-     {
-       p=(dmc-bui)/dmc;
-       cc = 0.92+pow( (0.0114*dmc),1.7);
-       bui = dmc - cc*p;
-       if(bui<0) bui=0;
-     }
-    return bui;
+  float bui;
+  if (dmc == 0 && dc == 0) { bui=0; }
+  else { bui = 0.8 * dc * dmc / (dmc + 0.4 * dc); }
+  if (bui < dmc)
+  {
+    float p = (dmc - bui) / dmc;
+    float cc = 0.92 + pow((0.0114 * dmc), 1.7);
+    bui = dmc - cc * p;
+    if (bui < 0) { bui = 0; }
+  }
+  return bui;
 }
 
+/**
+ * Calculate Fire Weather Index (FWI)
+ *
+ * @param isi             Initial Spread Index
+ * @param bui             Build-up Index
+ * @return                Fire Weather Index
+ */
 float FWIcalc(float isi, float bui)
 {
-    float bb,fwi;
-    if(bui>80)bb= 0.1*isi*(1000.0/(25.0+108.64/exp(0.023*bui)));
-    else bb= 0.1*isi*(0.626*pow(bui,0.809)+2.0);
-    if (bb<=1)fwi=bb;
-    else fwi=exp(2.72*pow(0.434*log(bb),0.647) );
-   return fwi;
+  float bb, fwi;
+  if (bui > 80) { bb = 0.1 * isi * (1000.0 / (25.0 + 108.64 / exp(0.023 * bui))); }
+  else { bb = 0.1 * isi * (0.626 * pow(bui, 0.809) + 2.0); }
+  if (bb <= 1) { fwi = bb; }
+  else { fwi = exp(2.72 * pow(0.434 * log(bb), 0.647)); }
+  return fwi;
 }
 
 float hourly_gfmc(float temp,float rh,float wind,float rain,float lastmc,float solrad, float time)
