@@ -20,9 +20,6 @@ bmw/2021
 #include <string.h>
 #include "util.h"
 
-/*    gcc -o ngfwi NG_FWI.c -lm -std=c90 */
-/*    ./ngfwi -6 85 6 15 ../data/BAK2018_hourly.csv test.csv */
-
 float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc);
 float hourly_DMC (float Temp, float rh, float ws, float rain, int mon, float lastdmc, float DryFrac, float rain24,float DELTA,float tnoon,float rhnoon);
 float hourly_DC(float Temp, float rh,float ws, float rain, float lastdc, int mon, float rain24, float dryfrac, float DELTA, float temp12);
