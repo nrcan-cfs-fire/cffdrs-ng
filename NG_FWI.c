@@ -207,55 +207,63 @@ void main(int argc, char *argv[]){
   fclose(out);
 }
 
-
-float hourly_ffmc(float temp,float rh,float wind,float rain,float oldffmc)
-/* this is the hourly ffmc routine given wx and previous ffmc */
+/**
+ * Calculate hourly FFMC value
+ *
+ * @param temp            Temperature (Celcius)
+ * @param rh              Relative Humidity (percent, 0-100)
+ * @param wind            Wind Speed (km/h)
+ * @param rain            Precipitation (mm)
+ * @param oldffmc         Previous hourly FFMC
+ * @return                Hourly FFMC
+ */
+float hourly_ffmc(float temp, float rh, float wind, float rain, float oldffmc)
 {
-  float rf=42.5,drf=0.0579;
-  float mo,ed,ew,moew,moed,xm,a1,e,moe,xkd;
-  mo=147.27723*(101-oldffmc)/(59.5+oldffmc);
-
-
-
-  if(rain!=0.0)
-   {
-     if(mo>150) mo+= 0.0015*(mo-150)*(mo-150)*sqrt(rain)
-               +rf*rain*exp(-100.0/(251-mo))*(1.0-exp(-6.93/rain));
-       else mo+=rf*rain*exp(-100.0/(251-mo))*(1.0-exp(-6.93/rain));
-     if(mo>250) mo=250;
-   }
-  ed=0.942*pow(rh,0.679)+(11.0*exp( (rh-100)/10.0))+0.18*(21.1-temp)*
-     (1.0-1.0/exp(0.115*rh));
-  moed=mo-ed;
-  ew=0.618*pow(rh,0.753)+(10.0*exp((rh-100)/10.0))+0.18*(21.1-temp)*
-     (1.0-1.0/exp(0.115*rh));
-  moew=mo-ew;
+  /* this is the hourly ffmc routine given wx and previous ffmc */
+  float rf = 42.5;
+  float drf = 0.0579;
+  float xm, a1, e, moe;
+  float mo = 147.27723 * (101 - oldffmc) / (59.5 + oldffmc);
+  if(rain != 0.0)
+  {
+    /* duplicated in both formulas, so calculate once */
+    float m = rf * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain));
+    if (mo > 150) { mo += 0.0015 * (mo - 150) * (mo - 150) * sqrt(rain) + m; }
+    else { mo += m; }
+    if (mo > 250) { mo=250; }
+  }
+  /* duplicated in both formulas, so calculate once */
+  float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
+  float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
+  float moed = mo - ed;
+  float ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
+  float moew = mo - ew;
   if (moed==0 || (moew>=0 && moed<0))
   {
-    xm=mo;
-    if(moed==0) e=ed;
-    if(moew>=0) e=ew;
+    xm = mo;
+    if (moed == 0) { e = ed; }
+    if (moew >= 0) { e = ew; }
   }
   else
   {
-    if( moed>0)
+    if (moed > 0)
     {
-      a1=rh/100;
-      e=ed;
-      moe=moed;
+      a1 = rh / 100;
+      e = ed;
+      moe = moed;
     }
     else
     {
-      a1=(100.0-rh)/100.0;
-      e=ew;
-      moe=moew;
+      a1 = (100.0 - rh) / 100.0;
+      e = ew;
+      moe = moew;
     }
-   xkd=(0.424*(1-pow(a1,1.7))+(0.0694*sqrt(wind)*(1-pow(a1,8))));
-   xkd=xkd*drf*exp(0.0365*temp);
-   xm=e+moe*exp(-log(10.0)*xkd);
+    float xkd = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
+    xkd *= drf * exp(0.0365 * temp);
+    xm = e + moe * exp(-log(10.0) * xkd);
   }
-  mo=xm;
-  return ( 59.5*(250-xm)/(147.27723+xm) );
+  mo = xm;
+  return (59.5 * (250 - xm) / (147.27723 + xm));
 }
 
 float DMCdryingweight (float Temp,float RH,float ws)
