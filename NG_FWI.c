@@ -183,17 +183,7 @@ void main(int argc, char *argv[]){
 
 /* grass */
          if(minRH>=100) minRH=99.5;
-         /*
-         right now this is:
-         if minimum RH for the calendar date is > 30 then calculate solar prop based on 2300 rh
-         should probably be:
-         if minimum RH for the calendar date is >30 then calculate solar prop based on rh for the hour
-         or
-         if rh > 30 then calculate solar prop based on rh for the hour
-         or
-         if minimum RH for the calendar date is >30 then calculate solar prop based on min rh for the day
-         if(minRH>30) solprop=maxsolprop*(1.27-0.0111*rh);
-         */
+         /* if min RH for the calendar date is >30 then calculate solar prop based on min rh for the day */
          if(minRH>30) solprop=maxsolprop*(1.27-0.0111*minRH);
          else solprop=maxsolprop;
          if (solprop<0)solprop=0;
