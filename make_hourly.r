@@ -111,6 +111,14 @@ minmax_to_hourly <- function(w, timezone)
 {
   r <- copy(w)
   colnames(r) <- toupper(colnames(r))
+  if (length(na.omit(unique(r$LAT))) != 1)
+  {
+    stop('Expected a single LAT value for input weather')
+  }
+  if (length(na.omit(unique(r$LONG))) != 1)
+  {
+    stop('Expected a single LONG value for input weather')
+  }
   r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0))]
   orig_dates <- data.table(date=as.character(unique(as_date(r$TIMESTAMP))))
   # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
