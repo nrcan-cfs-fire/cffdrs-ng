@@ -77,7 +77,7 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
   RH[, `:=`(RH = 100 * (1 - RH_OPP))]
   RH <- RH[,c('ID', 'TIMESTAMP', 'RH')]
   out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
-  output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WIND', 'RH')]
+  output <- out[,c('ID', 'LAT', 'LONG', 'TIMESTAMP', 'TEMP', 'WIND', 'RH')]
   #~ output <- fwi(output)
   print('Assigning times')
   output[, HOUR := hour(TIMESTAMP)]
@@ -94,6 +94,7 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
   print('Calculating times')
   cmp[, YEAR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
+  cmp[, DAY := day(TIMESTAMP)]
   cmp[, TIME := HOUR + MINUTE / 60.0]
   print("Done prediction")
   return(cmp)
@@ -148,12 +149,6 @@ minmax_to_hourly <- function(w, timezone)
   df <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH)
   colnames(df) <- tolower(colnames(df))
   df <- merge(orig_dates, df, by="date")
-  df[, year := year(date)]
-  df[, mon := month(date)]
-  df[, day := day(date)]
-  df[, hour := hour(timestamp)]
-  df[, lat := latitude]
-  df[, long := longitude]
   df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
   return(df)
 }
