@@ -1,10 +1,5 @@
 library(lubridate)
-library(sf)
 library(data.table)
-library(fasttime)
-library(rvest)
-# FIX: don't want to be dependent on this but need to look up time zone for now
-library(lutz)
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
