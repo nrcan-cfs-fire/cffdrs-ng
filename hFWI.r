@@ -49,86 +49,43 @@ FWIcalc <- function (isi, bui)
   return(fwi)
 }
 
-hourly_ffmc <- function (weatherstream, ffmc_old = 85, time.step = 1, calc.step = FALSE, 
-                   batch = TRUE) 
+hourly_ffmc <- function (weatherstream, ffmc_old = 85)
 {
-  t0 <- time.step
-  names(weatherstream) <- tolower(names(weatherstream))
-  if (batch) {
-    if ("id" %in% names(weatherstream)) {
-      n <- length(unique(weatherstream$id))
-      if (length(unique(weatherstream[1:n, "id"])) != 
-          n) {
-        stop("Multiple stations have to start and end at the same dates/time, \n             and the data must be sorted by date/time and id")
-      }
-    }
-    else {
-      n <- 1
-    }
-  }
-  else {
-    n <- nrow(weatherstream)
-  }
-  if (length(ffmc_old) == 1 & n > 1) {
-    Fo <- rep(ffmc_old, n)
-  }
-  else {
+  fctHFFMC <- function(temp, rh, ws, prec, ffmc_old)
+  {
     Fo <- ffmc_old
-  }
-  Tp <- weatherstream$temp
-  H <- weatherstream$rh
-  W <- weatherstream$ws
-  ro <- weatherstream$prec
-  if (calc.step) {
-    hr <- weatherstream$hr
-    if (!exists("hr") | is.null(hr)) 
-      warning("hour value is missing!")
-  }
-  if (!exists("Tp") | is.null(Tp)) 
-    warning("temperature (temp) is missing!")
-  if (!exists("ro") | is.null(ro)) 
-    warning("precipitation (prec) is missing!")
-  if (!exists("W") | is.null(W)) 
-    warning("wind speed (ws) is missing!")
-  if (!exists("H") | is.null(H)) 
-    warning("relative humidity (rh) is missing!")
-  if (length(H)%%n != 0) 
-    warning("Weatherstream do not match with number of weather stations")
-  n0 <- length(H)/n
-  f <- NULL
-  for (i in 1:n0) {
-    k <- ((i - 1) * n + 1):(i * n)
-    if (calc.step & i > 1) {
-      t0 <- ifelse(n0 > 1, hr[k] - hr[k - n], t0)
-      t0 <- ifelse(t0 == -23, 1, t0)
-      t0 <- ifelse(t0 < 0, -1 * t0, t0)
-    }
+    t0 <- 1
     mo <- 147.27723 * (101 - Fo)/(59.5 + Fo)
-    rf <- ro[k]
-    mr <- ifelse(mo <= 150, mo + 42.5 * rf * exp(-100/(251 - 
-                                                         mo)) * (1 - exp(-6.93/rf)), mo + 42.5 * rf * exp(-100/(251 - 
-                                                                                                                  mo)) * (1 - exp(-6.93/rf)) + 0.0015 * ((mo - 150)^2) * 
-                   (rf^0.5))
+    mr <- ifelse(mo <= 150,
+                 mo + 42.5 * prec * exp(-100/(251 - mo)) * (1 - exp(-6.93/prec)),
+                 mo + 42.5 * prec * exp(-100/(251 - mo)) * (1 - exp(-6.93/prec)) + 0.0015 * ((mo - 150)^2) * (prec^0.5))
     mr <- ifelse(mr > 250, 250, mr)
-    mo <- ifelse(ro[k] > 0, mr, mo)
-    Ed <- 0.942 * (H[k]^0.679) + 11 * exp((H[k] - 100)/10) + 
-      0.18 * (21.1 - Tp[k]) * (1 - exp(-0.115 * H[k]))
-    ko <- 0.424 * (1 - (H[k]/100)^1.7) + 0.0694 * (W[k]^0.5) * 
-      (1 - (H[k]/100)^8)
-    kd <- ko * 0.0579 * exp(0.0365 * Tp[k])
+    mo <- ifelse(prec > 0, mr, mo)
+    Ed <- 0.942 * (rh^0.679) + 11 * exp((rh - 100)/10) +
+      0.18 * (21.1 - temp) * (1 - exp(-0.115 * rh))
+    ko <- 0.424 * (1 - (rh/100)^1.7) + 0.0694 * (ws^0.5) *
+      (1 - (rh/100)^8)
+    kd <- ko * 0.0579 * exp(0.0365 * temp)
     md <- Ed + (mo - Ed) * (10^(-kd * t0))
-    Ew <- 0.618 * (H[k]^0.753) + 10 * exp((H[k] - 100)/10) + 
-      0.18 * (21.1 - Tp[k]) * (1 - exp(-0.115 * H[k]))
-    k1 <- 0.424 * (1 - ((100 - H[k])/100)^1.7) + 0.0694 * 
-      (W[k]^0.5) * (1 - ((100 - H[k])/100)^8)
-    kw <- k1 * 0.0579 * exp(0.0365 * Tp[k])
+    Ew <- 0.618 * (rh^0.753) + 10 * exp((rh - 100)/10) +
+      0.18 * (21.1 - temp) * (1 - exp(-0.115 * rh))
+    k1 <- 0.424 * (1 - ((100 - rh)/100)^1.7) + 0.0694 *
+      (ws^0.5) * (1 - ((100 - rh)/100)^8)
+    kw <- k1 * 0.0579 * exp(0.0365 * temp)
     mw <- Ew - (Ew - mo) * (10^(-kw * t0))
     m <- ifelse(mo > Ed, md, mw)
     m <- ifelse(Ed >= mo & mo >= Ew, mo, m)
     Fo <- 59.5 * (250 - m)/(147.27723 + m)
     Fo <- ifelse(Fo <= 0, 0, Fo)
-    f <- c(f, Fo)
+    return(Fo)
   }
+  f <- reduce_by_row(
+    function(ffmc_old, n){
+      row <- weatherstream[n,]
+      return(fctHFFMC(row$TEMP, row$RH, row$WS, row$PREC, ffmc_old))
+    },
+    weatherstream,
+    ffmc_old)
   return(f)
 }
 
@@ -182,7 +139,6 @@ isSequentialHours <- function(df)
   for_ffmc[, SUM_PREC := sum(PREC), by=c("DATE")]
   for_ffmc[, FFMC_MULTIPLIER := ifelse(0.5 >= SUM_PREC, 0, (SUM_PREC - 0.5) / SUM_PREC)]
   for_ffmc[, PREC := PREC * FFMC_MULTIPLIER]
-  
   for_ffmc$FFMC <- hourly_ffmc(for_ffmc, ffmc_old=ffmc_old)
   for_ffmc <- for_ffmc[, c('TIMESTAMP', 'FFMC')]
   return(for_ffmc$FFMC)

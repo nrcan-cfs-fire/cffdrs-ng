@@ -135,7 +135,7 @@ minmax_to_hourly <- function(w, timezone)
   dates <- as_datetime(unique(r$TIMESTAMP))
   latitude <- r$LAT[[1]]
   longitude <- r$LONG[[1]]
-  sunlight <- getSunlight(dates, timezone, latitude, longitude, TRUE)
+  sunlight <- getSunlight(dates, timezone, latitude, longitude)
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
   sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
