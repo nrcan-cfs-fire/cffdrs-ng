@@ -70,20 +70,15 @@ doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
   print('Doing prediction')
   v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals)
   v_WS <- makePrediction(fcsts, row_WS$c_alpha, row_WS$c_beta, row_WS$c_gamma, 'WS', 'SUNSET', min_value=0, intervals=intervals)
-  t <- v_temp[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'LAT', 'LONG', 'TIME_MAX', 'HOUR_CURVE', 'TIME_G_MIN', 'APCP', 'TEMP_MAX', 'TEMP_MIN', 'RH_MIN', 'RH_MAX', 'WS_MIN', 'WS_MAX', 'SUNRISE', 'SUNSET', 'TEMP', 'START_DATE', 'VAR_CHANGE')]
+  t <- v_temp[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'LAT', 'LONG', 'TEMP')]
   w <- v_WS[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'WS')]
   out <- merge(t, w)
   RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
-  RH[, `:=`(CUR_RH = 100 * (1 - RH_OPP))]
-  RH <- RH[,c('ID', 'TIMESTAMP', 'CUR_RH')]
+  RH[, `:=`(RH = 100 * (1 - RH_OPP))]
+  RH <- RH[,c('ID', 'TIMESTAMP', 'RH')]
   out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
-  out[, P_Q := findQ(TEMP, CUR_RH)]
-  output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WS', 'CUR_RH', 'P_Q', 'TIME_MAX', 'HOUR_CURVE', 'START_DATE')]
+  output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WS', 'RH')]
   #~ output <- fwi(output)
-  print('Setting names')
-  setnames(output, 'TEMP', 'P_TEMP')
-  setnames(output, 'WS', 'P_WS')
-  setnames(output, 'CUR_RH', 'P_RH')
   print('Assigning times')
   output[, HOUR := hour(TIMESTAMP)]
   output[, MINUTE := minute(TIMESTAMP)]
@@ -164,7 +159,7 @@ minmax_to_hourly <- function(w, timezone)
   r[, RAIN1800 := 0]
   r[, DATE := as.character(DATE)]
   pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
-  setnames(pred, c("P_TEMP", "P_WS", "P_RH", "P_PREC", "YR"), c("TEMP", "WIND", "RH", "RAIN", "YEAR"))
+  setnames(pred, c("WS", "P_PREC", "YR"), c("WIND", "RAIN", "YEAR"))
   colnames(pred) <- tolower(colnames(pred))
   # FIX: fill in start and end so they have 24 hours for every day
   dates <- data.table(date=unique(pred$date))
