@@ -529,6 +529,10 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   hadLatitude <- 'LAT' %in% colnames(wx)
   hadLongitude <- 'LONG' %in% colnames(wx)
   hadTimestamp <- 'TIMESTAMP' %in% colnames(wx)
+  wasWind <- 'WIND' %in% colnames(wx)
+  wasRain <- 'RAIN' %in% colnames(wx)
+  wasYear <- 'YEAR' %in% colnames(wx)
+  wasHour <- 'HOUR' %in% colnames(wx)
   if (!hadStn)
   {
     wx[, ID := 'STN']
@@ -537,10 +541,6 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   {
     wx[, MINUTE := 0]
   }
-  if (!hadDate)
-  {
-    wx[, DATE := as.character(as.Date(sprintf('%04d-%02d-%02d', YR, MON, DAY)))]
-  }
   if (!hadLatitude)
   {
     wx[, LAT := DEFAULT_LATITUDE]
@@ -548,6 +548,26 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   if (!hadLongitude)
   {
     wx[, LONG := DEFAULT_LONGITUDE]
+  }
+  if (wasWind)
+  {
+    setnames(wx, c("WIND"), c("WS"))
+  }
+  if (wasRain)
+  {
+    setnames(wx, c("RAIN"), c("PREC"))
+  }
+  if (wasYear)
+  {
+    setnames(wx, c("YEAR"), c("YR"))
+  }
+  if (wasHour)
+  {
+    setnames(wx, c("HOUR"), c("HR"))
+  }
+  if (!hadDate)
+  {
+    wx[, DATE := as.character(as.Date(sprintf('%04d-%02d-%02d', YR, MON, DAY)))]
   }
   if (!hadTimestamp)
   {
@@ -587,6 +607,22 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
     if (!hadTimestamp)
     {
       results <- results[, -c('TIMESTAMP')]
+    }
+    if (wasWind)
+    {
+      setnames(results, c("WS"), c("WIND"))
+    }
+    if (wasRain)
+    {
+      setnames(results, c("PREC"), c("RAIN"))
+    }
+    if (wasYear)
+    {
+      setnames(results, c("YR"), c("YEAR"))
+    }
+    if (wasHour)
+    {
+      setnames(results, c("HR"), c("HOUR"))
     }
     setnames(results, new_names, old_names)
   }

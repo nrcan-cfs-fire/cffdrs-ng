@@ -3,12 +3,10 @@ library(ggplot2)
 library(data.table)
 library(lubridate)
 bak <- as.data.table(read.csv("./bak_hourly.csv"))
-setnames(bak, c("year", "hour", "wind", "rain"), c("yr", "hr", "ws", "prec"))
 
 save_csv <- function(df, file)
 {
   result <- copy(df)
-  setnames(result, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))
   colnames(result) <- tolower(colnames(result))
   result[, mon := sprintf("%2d", mon)]
   result[, day := sprintf("%2d", day)]
