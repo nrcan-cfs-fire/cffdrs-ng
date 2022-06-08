@@ -91,3 +91,4 @@ result4 <- hFWI(bak_windy, timezone=-6)
 save_csv(result4, "./result4.csv")
 
 save_csv(hFWI(as.data.table(read.csv("./bak_rh100.csv")), timezone=-6), "./result5.csv")
+save_csv(hFWI(as.data.table(read.csv("./bak_rh0.csv")), timezone=-6), "./result6.csv")
