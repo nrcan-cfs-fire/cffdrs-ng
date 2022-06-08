@@ -85,26 +85,13 @@ doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
   print('Converting date')
   output[, DATE := as.character(as_date(TIMESTAMP))]
   print('Allocating rain')
-  rain1900 <- fcsts[, c('DATE', 'RAIN0000')]
-  rain1900[, `:=`(DATE = as.character(as.Date(DATE) - 1),
-                  HOUR = 19)]
-  setnames(rain1900, 'RAIN0000', 'P_PREC')
-  rain0100 <- fcsts[, c('DATE', 'RAIN0600')]
-  rain0100[, HOUR := 1]
-  setnames(rain0100, 'RAIN0600', 'P_PREC')
-  rain <- rbind(rain1900, rain0100)
-  rain0700 <- fcsts[, c('DATE', 'RAIN1200')]
-  rain0700[, HOUR := 7]
-  setnames(rain0700, 'RAIN1200', 'P_PREC')
-  rain <- rbind(rain, rain0700)
-  rain1300 <- fcsts[, c('DATE', 'RAIN1800')]
-  rain1300[, HOUR := 13]
-  setnames(rain1300, 'RAIN1800', 'P_PREC')
-  rain <- rbind(rain, rain1300)
+  rain <- fcsts[, c('DATE', 'APCP')]
+  rain[, HOUR := 7]
+  setnames(rain, 'APCP', 'PREC')
   rain[, MINUTE := 0]
   print('Merging')
   cmp <- merge(output, rain, by=c('DATE', 'HOUR', 'MINUTE'), all=TRUE)[!is.na(TIMESTAMP)]
-  cmp$P_PREC <- nafill(cmp$P_PREC, fill=0)
+  cmp$PREC <- nafill(cmp$PREC, fill=0)
   print('Calculating times')
   cmp[, YR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
@@ -153,13 +140,9 @@ minmax_to_hourly <- function(w, timezone)
   setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
-  r[, RAIN1200 := APCP]
-  r[, RAIN0000 := 0]
-  r[, RAIN0600 := 0]
-  r[, RAIN1800 := 0]
   r[, DATE := as.character(DATE)]
   pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
-  setnames(pred, c("WS", "P_PREC", "YR"), c("WIND", "RAIN", "YEAR"))
+  setnames(pred, c("WS", "PREC", "YR"), c("WIND", "RAIN", "YEAR"))
   colnames(pred) <- tolower(colnames(pred))
   # FIX: fill in start and end so they have 24 hours for every day
   dates <- data.table(date=unique(pred$date))
