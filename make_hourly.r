@@ -11,7 +11,6 @@ C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)
 makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1)
 {
   print(paste0('Predicting ', v, ' changing at ', change_at))
-  tz <- fcsts$TIMEZONE[[1]]
   fcsts <- copy(fcsts)
   var_min <- paste0(v, '_MIN')
   var_max <- paste0(v, '_MAX')
@@ -58,7 +57,7 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
   # combine and sort everything
   out <- rbind(rising, falling)
   setorder(out, cols='DATE', 'HOUR')
-  out[, TIMESTAMP := as.POSIXct(paste0(as.character(DATE), ' ', HOUR, ':', MINUTE, ':00'), tz=tz)]
+  out[, TIMESTAMP := as_datetime(paste0(as.character(DATE), ' ', HOUR, ':', MINUTE, ':00'))]
   out[, eval(v) := pmin(pmax(get(v), min_value), max_value)]
   # HACK: somehow this isn't returning unless we do something to it first
   out <- out[!is.na(get(v))]
@@ -68,7 +67,6 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
 
 doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
 {
-  tz <- fcsts$TIMEZONE[[1]]
   print('Doing prediction')
   v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals)
   v_WS <- makePrediction(fcsts, row_WS$c_alpha, row_WS$c_beta, row_WS$c_gamma, 'WS', 'SUNSET', min_value=0, intervals=intervals)
@@ -137,7 +135,7 @@ doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
   output[, HOUR := hour(TIMESTAMP)]
   output[, MINUTE := minute(TIMESTAMP)]
   print('Converting date')
-  output[, DATE := as.character(as.Date(TIMESTAMP, tz=tz))]
+  output[, DATE := as.character(as_date(TIMESTAMP))]
   print('Allocating rain')
   rain1900 <- fcsts[, c('DATE', 'RAIN0000')]
   rain1900[, `:=`(DATE = as.character(as.Date(DATE) - 1),
@@ -203,7 +201,6 @@ minmax_to_hourly <- function(w, timezone)
   # # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
   r$ID <- 1
-  r$TIMEZONE <- paste0("Etc/GMT+", -timezone)
   for_temp <- makePrediction(r, C_TEMP$c_alpha, C_TEMP$c_beta, C_TEMP$c_gamma, v="TEMP")
   setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
