@@ -55,15 +55,15 @@ void main(int argc, char *argv[]){
    }
 
    inp=fopen(argv[5],"r");
-   printf("Openning input file >>> %s   \n",argv[5]);
-   if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[5]);exit(1);}
+   printf("Opening input file >>> %s   \n",argv[5]);
+   if(inp==NULL){printf("\n\n ***** FILE  %s  does not exist\n",argv[5]);exit(1);}
    out=fopen(argv[6],"w");
 
   /*  CSV headers */
    fprintf(out,"year,mon,day,hour,temp,rh,wind,rain,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi\n");
 
    TZadjust=atoi(argv[1]);
-   if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   LOCal time zone adjustment must be vaguely in CAnada so between -9 and -2 \n"); exit(1);}
+   if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n"); exit(1);}
    lastffmc=atof(argv[2]);
    if(lastffmc>101 || lastffmc<0){ printf(" /n/n *****   FFMC must be between 0 and 101 \n"); exit(1);}
    lastdmc=atof(argv[3]);
@@ -122,7 +122,7 @@ void main(int argc, char *argv[]){
          if(h>=sunrise && h<=sunset)Wdc24+=DCdryingweight(atemp[h],arh[h],aws[h]);
         }
 
-     if(rain24>0.5) ffmcRF=(rain24-0.5)/rain24;   /* so we can use the old horly routine directly*/
+     if(rain24>0.5) ffmcRF=(rain24-0.5)/rain24;   /* so we can use the old hourly routine directly*/
      else ffmcRF=0.0;
 
      if(rain24>1.5){
@@ -403,7 +403,7 @@ float hourly_gfmc(float temp, float rh, float wind, float rain, float lastmc, fl
   /* MARK II of the model (2016) wth new solar rad model specific to grass
 
      Temp is temperature in C
-     RH is realtive humidty in %
+     RH is relative humidty in %
      wind is average wind speed in km/h
      rain is rainfall in mm
      solrad is kW/m2  (radiaiton reaching fuel)

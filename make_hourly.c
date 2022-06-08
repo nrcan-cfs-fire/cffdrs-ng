@@ -55,12 +55,12 @@ void main(int argc, char *argv[]){
    }
 
    inp=fopen(argv[2],"r");
-   printf("Openning input file >>> %s   \n",argv[2]);
-   if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[2]);exit(1);}
+   printf("Opening input file >>> %s   \n",argv[2]);
+   if(inp==NULL){printf("\n\n ***** FILE  %s  does not exist\n",argv[2]);exit(1);}
    out=fopen(argv[3],"w");
 
    TZadjust=atoi(argv[1]);
-   if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   LOCal time zone adjustment must be vaguely in CAnada so between -9 and -2 \n"); exit(1);}
+   if(TZadjust <-9 || TZadjust> -2 ){ printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n"); exit(1);}
 
   check_header(inp, header);
   /*  CSV headers */

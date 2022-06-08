@@ -29,8 +29,8 @@ void main(int argc, char *argv[]){
    }
 
    inp=fopen(argv[1],"r");
-   printf("Openning input file >>> %s   \n",argv[1]);
-   if(inp==NULL){printf("/n/n ***** FILE  %s  does not exist\n",argv[1]);exit(1);}
+   printf("Opening input file >>> %s   \n",argv[1]);
+   if(inp==NULL){printf("\n\n ***** FILE  %s  does not exist\n",argv[1]);exit(1);}
    out=fopen(argv[2],"w");
 
   /*  CSV headers */
