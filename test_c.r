@@ -40,11 +40,6 @@ df <- as.data.table(read.csv("./input_hffmc.csv"))
 result_hffmc <- hFWI(df, timezone=-6)
 save_csv(result_hffmc, "./result_hffmc.csv")
 
-
-bak_diurnal <- as.data.table(read.csv("./bak_diurnal.csv"))
-result3 <- hFWI(bak_diurnal, timezone=-6)
-save_csv(result3, "./result3.csv")
-
 source("make_daily.r")
 bak <- as.data.table(read.csv("./bak_hourly.csv"))
 df <- hourly_to_daily(bak)
@@ -85,5 +80,7 @@ df[, wind := sprintf("%.1f", round(wind, 1))]
 df[, rain := sprintf("%.1f", round(rain, 1))]
 write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 
-result <- hFWI(df_hourly, timezone=-6)
-save_csv(result, "./result4.csv")
+
+bak_diurnal <- as.data.table(read.csv("./bak_diurnal.csv"))
+result3 <- hFWI(bak_diurnal, timezone=-6)
+save_csv(result3, "./result3.csv")
