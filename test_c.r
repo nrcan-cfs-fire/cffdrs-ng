@@ -30,13 +30,12 @@ save_csv <- function(df, file)
 result <- hFWI(bak, timezone=-6)
 save_csv(result, "./result.csv")
 
-df <- data.table(test_hffmc)
+df <- data.table(cffdrs::test_hffmc)
 df[, lat := bak$lat[[1]]]
 df[, long := bak$long[[1]]]
 setnames(df, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))
 write.table(df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")], "./input_hffmc.csv", quote=FALSE, row.names=FALSE, sep=",")
 df <- as.data.table(read.csv("./input_hffmc.csv"))
-setnames(df, c("year", "hour", "wind", "rain"), c("yr", "hr", "ws", "prec"))
 
 result_hffmc <- hFWI(df, timezone=-6)
 save_csv(result_hffmc, "./result_hffmc.csv")
