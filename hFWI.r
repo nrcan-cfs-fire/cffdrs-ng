@@ -577,6 +577,7 @@ grassFWI <- Vectorize(function(gsi, load)
   r[, DSR := 0.0272 * (FWI ^ 1.77)]
   
   r[, MIN_RH := min(RH), by=c("DATE")]
+  r[, MIN_RH := ifelse(100==MIN_RH, 99.5, MIN_RH)]
   # r[, SOLPROP := max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
   # r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * RH), 1)]
   r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * MIN_RH), 1)]
