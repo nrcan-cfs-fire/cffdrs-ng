@@ -1,4 +1,3 @@
-library(cffdrs)
 library(lubridate)
 library(sf)
 library(data.table)
@@ -29,6 +28,109 @@ ISIcalc <- function(ws, ffmc)
   sf <- 19.115 * exp(-0.1386 * fm) * (1.0 + fm^5.31 / 4.93e07)
   isi <- sf * exp(0.05039 * ws)
   return(isi)
+}
+
+BUIcalc <- function (dmc, dc) 
+{
+  bui1 <- ifelse(dmc == 0 & dc == 0, 0, 0.8 * dc * dmc/(dmc + 
+                                                          0.4 * dc))
+  p <- ifelse(dmc == 0, 0, (dmc - bui1)/dmc)
+  cc <- 0.92 + ((0.0114 * dmc)^1.7)
+  bui0 <- dmc - cc * p
+  bui0 <- ifelse(bui0 < 0, 0, bui0)
+  bui1 <- ifelse(bui1 < dmc, bui0, bui1)
+  return(bui1)
+}
+
+FWIcalc <- function (isi, bui) 
+{
+  bb <- ifelse(bui > 80, 0.1 * isi * (1000/(25 + 108.64/exp(0.023 * 
+                                                              bui))), 0.1 * isi * (0.626 * (bui^0.809) + 2))
+  fwi <- ifelse(bb <= 1, bb, exp(2.72 * ((0.434 * log(bb))^0.647)))
+  return(fwi)
+}
+
+hourly_ffmc <- function (weatherstream, ffmc_old = 85, time.step = 1, calc.step = FALSE, 
+                   batch = TRUE) 
+{
+  t0 <- time.step
+  names(weatherstream) <- tolower(names(weatherstream))
+  if (batch) {
+    if ("id" %in% names(weatherstream)) {
+      n <- length(unique(weatherstream$id))
+      if (length(unique(weatherstream[1:n, "id"])) != 
+          n) {
+        stop("Multiple stations have to start and end at the same dates/time, \n             and the data must be sorted by date/time and id")
+      }
+    }
+    else {
+      n <- 1
+    }
+  }
+  else {
+    n <- nrow(weatherstream)
+  }
+  if (length(ffmc_old) == 1 & n > 1) {
+    Fo <- rep(ffmc_old, n)
+  }
+  else {
+    Fo <- ffmc_old
+  }
+  Tp <- weatherstream$temp
+  H <- weatherstream$rh
+  W <- weatherstream$ws
+  ro <- weatherstream$prec
+  if (calc.step) {
+    hr <- weatherstream$hr
+    if (!exists("hr") | is.null(hr)) 
+      warning("hour value is missing!")
+  }
+  if (!exists("Tp") | is.null(Tp)) 
+    warning("temperature (temp) is missing!")
+  if (!exists("ro") | is.null(ro)) 
+    warning("precipitation (prec) is missing!")
+  if (!exists("W") | is.null(W)) 
+    warning("wind speed (ws) is missing!")
+  if (!exists("H") | is.null(H)) 
+    warning("relative humidity (rh) is missing!")
+  if (length(H)%%n != 0) 
+    warning("Weatherstream do not match with number of weather stations")
+  n0 <- length(H)/n
+  f <- NULL
+  for (i in 1:n0) {
+    k <- ((i - 1) * n + 1):(i * n)
+    if (calc.step & i > 1) {
+      t0 <- ifelse(n0 > 1, hr[k] - hr[k - n], t0)
+      t0 <- ifelse(t0 == -23, 1, t0)
+      t0 <- ifelse(t0 < 0, -1 * t0, t0)
+    }
+    mo <- 147.27723 * (101 - Fo)/(59.5 + Fo)
+    rf <- ro[k]
+    mr <- ifelse(mo <= 150, mo + 42.5 * rf * exp(-100/(251 - 
+                                                         mo)) * (1 - exp(-6.93/rf)), mo + 42.5 * rf * exp(-100/(251 - 
+                                                                                                                  mo)) * (1 - exp(-6.93/rf)) + 0.0015 * ((mo - 150)^2) * 
+                   (rf^0.5))
+    mr <- ifelse(mr > 250, 250, mr)
+    mo <- ifelse(ro[k] > 0, mr, mo)
+    Ed <- 0.942 * (H[k]^0.679) + 11 * exp((H[k] - 100)/10) + 
+      0.18 * (21.1 - Tp[k]) * (1 - exp(-0.115 * H[k]))
+    ko <- 0.424 * (1 - (H[k]/100)^1.7) + 0.0694 * (W[k]^0.5) * 
+      (1 - (H[k]/100)^8)
+    kd <- ko * 0.0579 * exp(0.0365 * Tp[k])
+    md <- Ed + (mo - Ed) * (10^(-kd * t0))
+    Ew <- 0.618 * (H[k]^0.753) + 10 * exp((H[k] - 100)/10) + 
+      0.18 * (21.1 - Tp[k]) * (1 - exp(-0.115 * H[k]))
+    k1 <- 0.424 * (1 - ((100 - H[k])/100)^1.7) + 0.0694 * 
+      (W[k]^0.5) * (1 - ((100 - H[k])/100)^8)
+    kw <- k1 * 0.0579 * exp(0.0365 * Tp[k])
+    mw <- Ew - (Ew - mo) * (10^(-kw * t0))
+    m <- ifelse(mo > Ed, md, mw)
+    m <- ifelse(Ed >= mo & mo >= Ew, mo, m)
+    Fo <- 59.5 * (250 - m)/(147.27723 + m)
+    Fo <- ifelse(Fo <= 0, 0, Fo)
+    f <- c(f, Fo)
+  }
+  return(f)
 }
 
 vpd <- function(temperature, relative_humidity)
@@ -117,7 +219,7 @@ isSequentialHours <- function(df)
   for_ffmc[, FFMC_MULTIPLIER := ifelse(0.5 >= SUM_PREC, 0, (SUM_PREC - 0.5) / SUM_PREC)]
   for_ffmc[, PREC := PREC * FFMC_MULTIPLIER]
   
-  for_ffmc$FFMC <- hffmc(for_ffmc, ffmc_old=ffmc_old, hourlyFWI=FALSE)
+  for_ffmc$FFMC <- hourly_ffmc(for_ffmc, ffmc_old=ffmc_old)
   for_ffmc <- for_ffmc[, c('TIMESTAMP', 'FFMC')]
   return(for_ffmc$FFMC)
 }
@@ -469,10 +571,9 @@ grassFWI <- Vectorize(function(gsi, load)
   # print("DC")
   r$DC <- .hdc(r, dc_old)
   
-  # FIX: what is fbpMod doing? this is the default value for it
   r[, ISI := ISIcalc(WS, FFMC)]
-  r[, BUI := cffdrs:::.buiCalc(DMC, DC)]
-  r[, FWI := cffdrs:::.fwiCalc(ISI, BUI)]
+  r[, BUI := BUIcalc(DMC, DC)]
+  r[, FWI := FWIcalc(ISI, BUI)]
   # taken from package code
   r[, DSR := 0.0272 * (FWI ^ 1.77)]
   
