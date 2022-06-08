@@ -29,7 +29,7 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
   setorder(cross, cols='DATE', 'HOUR', 'MINUTE')
   cross[, TIME := HOUR + MINUTE / 60.0]
   #cross <- merge(cross, fcsts[, -c('HOUR', 'MINUTE', 'TIME')], by=c('ID', 'DATE'))
-  for (column in c('HOUR', 'MINUTE', 'TIME', 'MON', 'YR'))
+  for (column in c('HOUR', 'MINUTE', 'TIME', 'MON', 'YEAR'))
   {
     if (column %in% colnames(fcsts))
     {
@@ -65,19 +65,19 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
 }
 
 
-doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
+doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
 {
   print('Doing prediction')
   v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals)
-  v_WS <- makePrediction(fcsts, row_WS$c_alpha, row_WS$c_beta, row_WS$c_gamma, 'WS', 'SUNSET', min_value=0, intervals=intervals)
+  v_wind <- makePrediction(fcsts, row_wind$c_alpha, row_wind$c_beta, row_wind$c_gamma, 'WIND', 'SUNSET', min_value=0, intervals=intervals)
   t <- v_temp[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'LAT', 'LONG', 'TEMP')]
-  w <- v_WS[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'WS')]
+  w <- v_wind[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'WIND')]
   out <- merge(t, w)
   RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
   RH[, `:=`(RH = 100 * (1 - RH_OPP))]
   RH <- RH[,c('ID', 'TIMESTAMP', 'RH')]
   out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
-  output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WS', 'RH')]
+  output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WIND', 'RH')]
   #~ output <- fwi(output)
   print('Assigning times')
   output[, HOUR := hour(TIMESTAMP)]
@@ -85,15 +85,14 @@ doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
   print('Converting date')
   output[, DATE := as.character(as_date(TIMESTAMP))]
   print('Allocating rain')
-  rain <- fcsts[, c('DATE', 'APCP')]
+  rain <- fcsts[, c('DATE', 'RAIN')]
   rain[, HOUR := 7]
-  setnames(rain, 'APCP', 'PREC')
   rain[, MINUTE := 0]
   print('Merging')
   cmp <- merge(output, rain, by=c('DATE', 'HOUR', 'MINUTE'), all=TRUE)[!is.na(TIMESTAMP)]
-  cmp$PREC <- nafill(cmp$PREC, fill=0)
+  cmp$RAIN <- nafill(cmp$RAIN, fill=0)
   print('Calculating times')
-  cmp[, YR := year(TIMESTAMP)]
+  cmp[, YEAR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
   cmp[, TIME := HOUR + MINUTE / 60.0]
   print("Done prediction")
@@ -111,9 +110,8 @@ doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
 minmax_to_hourly <- function(w, timezone)
 {
   r <- copy(w)
-  setnames(r, c("year", "hour"), c("yr", "hr"))
   colnames(r) <- toupper(colnames(r))
-  r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YR, MON, DAY, HR, 0))]
+  r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0))]
   orig_dates <- data.table(date=as.character(unique(as_date(r$TIMESTAMP))))
   # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
   yest <- r[1,]
@@ -122,10 +120,10 @@ minmax_to_hourly <- function(w, timezone)
   tom[, TIMESTAMP := TIMESTAMP + days(1)]
   r <- rbind(yest, r, tom)
   r[, DATE := as_date(TIMESTAMP)]
-  r[, YR := year(TIMESTAMP)]
+  r[, YEAR := year(TIMESTAMP)]
   r[, MON := month(TIMESTAMP)]
   r[, DAY := day(TIMESTAMP)]
-  r[, HR := hour(TIMESTAMP)]
+  r[, HOUR := hour(TIMESTAMP)]
   dates <- as_datetime(unique(r$TIMESTAMP))
   latitude <- r$LAT[[1]]
   longitude <- r$LONG[[1]]
@@ -136,12 +134,10 @@ minmax_to_hourly <- function(w, timezone)
   # # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
   r$ID <- 1
-  setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
   r[, DATE := as.character(DATE)]
-  pred <- doPrediction(r, row_temp=C_TEMP, row_WS=C_WIND, row_RH=C_RH)
-  setnames(pred, c("WS", "PREC", "YR"), c("WIND", "RAIN", "YEAR"))
+  pred <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH)
   colnames(pred) <- tolower(colnames(pred))
   # FIX: fill in start and end so they have 24 hours for every day
   dates <- data.table(date=unique(pred$date))
