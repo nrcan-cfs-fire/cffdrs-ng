@@ -29,9 +29,9 @@ ISIcalc <- function(ws, ffmc)
   return(isi)
 }
 
-BUIcalc <- function (dmc, dc) 
+BUIcalc <- function (dmc, dc)
 {
-  bui1 <- ifelse(dmc == 0 & dc == 0, 0, 0.8 * dc * dmc/(dmc + 
+  bui1 <- ifelse(dmc == 0 & dc == 0, 0, 0.8 * dc * dmc/(dmc +
                                                           0.4 * dc))
   p <- ifelse(dmc == 0, 0, (dmc - bui1)/dmc)
   cc <- 0.92 + ((0.0114 * dmc)^1.7)
@@ -41,9 +41,9 @@ BUIcalc <- function (dmc, dc)
   return(bui1)
 }
 
-FWIcalc <- function (isi, bui) 
+FWIcalc <- function (isi, bui)
 {
-  bb <- ifelse(bui > 80, 0.1 * isi * (1000/(25 + 108.64/exp(0.023 * 
+  bb <- ifelse(bui > 80, 0.1 * isi * (1000/(25 + 108.64/exp(0.023 *
                                                               bui))), 0.1 * isi * (0.626 * (bui^0.809) + 2))
   fwi <- ifelse(bb <= 1, bb, exp(2.72 * ((0.434 * log(bb))^0.647)))
   return(fwi)
@@ -125,11 +125,11 @@ isSequentialHours <- function(df)
   # daily <- toDaily(w, all=TRUE)
   # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
   # daily$FOR_DATE <- daily$DATE
-  
+  #
   # FFMC uses the hourly FFMC calculation, but reduces the overall rain received by
   # 0.5mm. This is done by figuring out what fraction of the period's rain occurs in
   # each hour and then taking that fraction of 0.5mm off of that hour.
-  
+  #
   # want to take 0.5 mm off of the total but proportional to amounts per hour
   # CHECK: does this make more sense than just removing the first 0.5mm?
   # figure out what fraction of the total rain to be counted 1mm is
@@ -147,7 +147,6 @@ isSequentialHours <- function(df)
 hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCrain, tnoon, rhnoon)
 {
   el <- c(6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6)
-  
   # wetting FROM rain
   if(rain>0 && DELTA_MCrain>0.0) {
     # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
@@ -155,23 +154,17 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
     #  the MC increase by the rain in this hour...  total * rain_hour/rain24
     mc <- mc + DELTA_MCrain*(rain/rain24)
     lastdmc <- 43.43*(5.6348-log(mc-20))
-      
   }
-  
   # drying all day long too
   if(tnoon < -1.1)
   {
     tnoon <- -1.1
   }
-  
   # full day of drying in old FWI/DMC
   DELTA_dry <- 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001
-    
   # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
-  
   dmc <- lastdmc + (DELTA_dry*DryFrac)
   if (dmc < 0) { dmc <- 0}
-  
   return(dmc)
 }
 
@@ -192,7 +185,6 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
     # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
     # #<<<
     lastdmc <- dmc_old
-    
     dates <- unique(w$DATE)
     result <- NULL
     for (n in 1:length(dates))
@@ -243,7 +235,6 @@ hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCr
 hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24, temp12)
 {
   fl <- c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6)
-  
   if(rain > 0 && DELTArain24 < 0.0) {
     # (weight it by Rainhour/rain24 )
     lastdc <- lastdc + DELTArain24 * (rain / rain24)
@@ -278,7 +269,6 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
   # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
   # #<<<
   lastdc <- dc_old
-  
   dates <- unique(w$DATE)
   result <- NULL
   for (n in 1:length(dates))
@@ -289,7 +279,6 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
     tnoon <- noon$TEMP
     # print(for_date)
     rain24 <- noon$RAIN24
-    
     if(rain24 > 2.8) {
       rw <- 0.83 * rain24 - 1.27;
       smi <- 800 * exp(-lastdc / 400);
@@ -321,7 +310,7 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
 }
 
 # MARK II of the model (2016) wth new solar rad model specific to grass
-# 
+#
 # Temp is temperature in C
 # RH is realtive humidty in %
 # wind is average wind speed in km/h
@@ -329,22 +318,20 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
 # solrad is kW/m2  (radiaiton reaching fuel)
 # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
 # time - time between obs in HOURS
-# 
-# 
+#
+#
 # DRF of 1/16.1 comes from reducting the standard response time curve
 # at 26.7C, 20%RH, 2 km/h to 0.85hr.
-# 
-# 
-# 
+#
+#
+#
 # bmw
 hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
 {
   drf <- 0.389633
   mo <- lastmc;
-  
   # fuel temperature/humidity
   tf <- temp+17.9*solrad*exp(-0.034*wind);   #fuel temp from CEVW
-  
   if(tf>temp)
   {
     rhf <- rh*6.107*10.0^(7.5*temp/(temp+237.0) )/(6.107*10.0^(7.5*tf/(tf+237.0) ))
@@ -389,12 +376,9 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
     }
     xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(wind)*(1-a1^8)))
     xkd <- xkd*drf*exp(0.0365*tf)
-    
     # //   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
-    
     xm <- e+moe*exp(-1.0*log(10.0)*xkd*time)
   }
-  
   return(xm)
 }
 
@@ -409,7 +393,6 @@ grassISI <- Vectorize(function(wind, mc, cur)
   } else {
     fw <- (1.1 + 0.715*(wind-5.0)*0.844)*16.67
   }
-  
   if(mc<12)
   {
     fm <- exp(-0.108*mc)
@@ -420,7 +403,6 @@ grassISI <- Vectorize(function(wind, mc, cur)
   } else {
     fm <- 0
   }
-  
   if(cur>20)
   {
     cf <- 1.034/(1+104*exp(-0.1*(cur-20)))
@@ -445,7 +427,7 @@ grassFWI <- Vectorize(function(gsi, load)
 })
 
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
-#' 
+#'
 #' @param     w               hourly values weather stream
 #' @param     timezone        integer offset from GMT to use for sun calculations
 #' @param     ffmc_old        previous value for Fine Fuel Moisture Code
@@ -484,20 +466,17 @@ grassFWI <- Vectorize(function(gsi, load)
   maxsolprop <- 0.85
   grassfuelload <- 0.35
   # print(r[(nrow(r)-10):nrow(r),])
-  
   # print("FFMC")
   r$FFMC <- .hffmc(r, ffmc_old)
   # print("DMC")
   r$DMC <- .hdmc(r, dmc_old)
   # print("DC")
   r$DC <- .hdc(r, dc_old)
-  
   r[, ISI := ISIcalc(WS, FFMC)]
   r[, BUI := BUIcalc(DMC, DC)]
   r[, FWI := FWIcalc(ISI, BUI)]
   # taken from package code
   r[, DSR := 0.0272 * (FWI ^ 1.77)]
-  
   r[, MIN_RH := min(RH), by=c("DATE")]
   r[, MIN_RH := ifelse(100==MIN_RH, 99.5, MIN_RH)]
   # r[, SOLPROP := max(0, maxsolprop * ifelse(min(99.5, MIN_RH) > 30, (1.27 - 0.0111 * RH), 1))]
@@ -505,7 +484,6 @@ grassFWI <- Vectorize(function(gsi, load)
   r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * MIN_RH), 1)]
   r[, SOLPROP := ifelse(SOLPROP < 0, 0, maxsolprop * SOLPROP)]
   r[, SOLRAD := SOLRAD * SOLPROP]
-  
   lastmcgmc <- 101-ffmc_old # approximation for a start up
   r$MCGMC <- reduce_by_row(
     function(lastmcgmc, n){
@@ -521,7 +499,7 @@ grassFWI <- Vectorize(function(gsi, load)
 }
 
 #' Calculate hourly FWI indices from hourly weather stream.
-#' 
+#'
 #' @param     weatherstream   hourly values weather stream
 #' @param     timezone        integer offset from GMT to use for sun calculations
 #' @param     ffmc_old        previous value for Fine Fuel Moisture Code
@@ -604,7 +582,6 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
     r <- .stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
     results <- rbind(results, r)
   }
-  
   # this is all just to remove dummy variables that we added
   if (!is.null(results)) {
     if (!hadStn)

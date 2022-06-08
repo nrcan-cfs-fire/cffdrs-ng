@@ -69,7 +69,7 @@ void main(int argc, char *argv[]){
    struct row tom;
    struct row cur;
    struct row yday;
-   
+
    err=read_row(inp, &cur);
    if (!(err > 0))
    {

@@ -4,7 +4,7 @@ source("util.r")
 
 #' Convert daily noon values stream to daily min/max values stream.
 #' Uses values from statistics to do the conversion.
-#' 
+#'
 #' @param df        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #' @return          daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
 #' @export daily_to_minmax

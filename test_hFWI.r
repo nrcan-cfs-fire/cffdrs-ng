@@ -40,9 +40,7 @@ test_hfwi <- function(df=test_hffmc, timezone=-6)
 {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
-  
   r <- hFWI(weatherstream, timezone=timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc_old=DC_DEFAULT)
-  
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
   w[, timestamp := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', yr, mon, day, hr, 0))]
@@ -60,15 +58,10 @@ test_hfwi <- function(df=test_hffmc, timezone=-6)
              daily[, c('YR', 'MON', 'DAY', 'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR')],
              by=c('YR', 'MON', 'DAY'))
   r[, DISI := cffdrs:::.ISIcalc(DFFMC, WS, fbpMod = FALSE)]
-  
   r[, DBUI := cffdrs:::.buiCalc(DDMC, DDC)]
   r[, DFWI := cffdrs:::.fwiCalc(DISI, DBUI)]
   # taken from package code
   r[, DDSR := 0.0272 * (DFWI ^ 1.77)]
-  
-  
-  
-  
   # output input and FWI columns so git can tell us if they change
   r <- r[, c('TIMESTAMP', 'TEMP', 'WS', 'RH', 'PREC',
              'FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI', 'DSR',

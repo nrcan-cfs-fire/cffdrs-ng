@@ -102,7 +102,7 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
 
 #' Convert daily min/max values stream to hourly values stream.
 #' Uses Beck & Trevitt method with default A/B/G values.
-#' 
+#'
 #' @param     w         daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
 #' @param     timezone  integer offset from GMT to use for sun calculations
 #' @return              hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]

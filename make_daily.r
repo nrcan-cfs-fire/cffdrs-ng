@@ -3,7 +3,7 @@ library(data.table)
 library(lubridate)
 
 #' Convert hourly values stream to daily noon values stream.
-#' 
+#'
 #' @param   df    hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #' @return        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #' @export hourly_to_daily
