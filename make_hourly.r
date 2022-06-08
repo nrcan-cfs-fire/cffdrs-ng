@@ -65,7 +65,7 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
 }
 
 
-doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
+doPrediction <- function(fcsts, row_temp, row_WS, row_RH, intervals=1)
 {
   print('Doing prediction')
   v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals)
@@ -73,58 +73,11 @@ doPrediction <- function(fcsts, row_temp, row_WS, intervals=1, row_RH=NULL)
   t <- v_temp[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'LAT', 'LONG', 'TIME_MAX', 'HOUR_CURVE', 'TIME_G_MIN', 'APCP', 'TEMP_MAX', 'TEMP_MIN', 'RH_MIN', 'RH_MAX', 'WS_MIN', 'WS_MAX', 'SUNRISE', 'SUNSET', 'TEMP', 'START_DATE', 'VAR_CHANGE')]
   w <- v_WS[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'WS')]
   out <- merge(t, w)
-  if (is.null(row_RH))
-  {
-    # add in absolute humidity calculation based on max TEMP and min RH
-    out[, Q_MIN := findQ(TEMP_MAX, RH_MIN)]
-    out[, Q_MAX := findQ(TEMP_MIN, RH_MAX)]
-    q_day <- unique(out[,c('DATE', 'Q_MIN', 'Q_MAX')])
-    q_day[, `:=`(Q_MIN_TOM = data.table::shift(Q_MIN, -1),
-                 Q_MIN_YEST = data.table::shift(Q_MIN, 1),
-                 Q_MAX_TOM = data.table::shift(Q_MAX, -1),
-                 Q_MAX_YEST = data.table::shift(Q_MAX, 1))]
-    q_day$Q_MIN_TOM <- nafill(q_day$Q_MIN_TOM, 'locf')
-    q_day$Q_MIN_YEST <- nafill(q_day$Q_MIN_YEST, 'nocb')
-    q_day$Q_MAX_TOM <- nafill(q_day$Q_MAX_TOM, 'locf')
-    q_day$Q_MAX_YEST <- nafill(q_day$Q_MAX_YEST, 'nocb')
-    out <- merge(out, q_day, by=c('DATE', 'Q_MIN', 'Q_MAX'))
-    out[, MINUTE := minute(TIMESTAMP)]
-    out[, TIME := HOUR + MINUTE / 60.0]
-    out[,HOUR_CURVE := ifelse(TIME > TIME_MAX,
-                              0,
-                              24) + TIME]
-    out[, TIME_SINCE_MAX := HOUR_CURVE - TIME_MAX]
-    out[, TIME_SINCE_MIN := HOUR_CURVE - (24 + TIME_G_MIN)]
-    out[, RISING_PM := TIME_G_MIN + 24.0 - TIME_MAX]
-    out[, FALLING_AM := TIME_MAX - TIME_G_MIN]
-    out[, P_Q := ifelse(TIME > TIME_MAX,
-                        Q_MIN + (Q_MAX_TOM - Q_MIN) / RISING_PM * TIME_SINCE_MAX,
-                        ifelse(HOUR_CURVE >= 24 & TIME < TIME_G_MIN,
-                               Q_MIN_YEST + (Q_MAX - Q_MIN_YEST) / RISING_PM * TIME_SINCE_MAX,
-                               ifelse(HOUR_CURVE >= 24 & TIME >= TIME_G_MIN,
-                                      Q_MAX + (Q_MIN - Q_MAX) / FALLING_AM * TIME_SINCE_MIN,
-                                      NA)))]
-    #~ lines(P_Q ~ TIMESTAMP, out, col=4)
-    out[, CUR_RH := findRH(P_Q, TEMP)]
-    out[, MAX_Q := findQ(TEMP, 100)]
-    out[, P_Q := pmin(P_Q, MAX_Q)]
-    out$P_Q <- nafill(out$P_Q, 'locf')
-    #~ out[,CUR_RH := findRH(Q, TEMP)]
-    # HACK: use pmin so it doesn't do min of whole CUR_RH column
-    out[,CUR_RH := pmax(0.0, pmin(100.0, CUR_RH))]
-    out$CUR_RH <- nafill(out$CUR_RH, 'locf')
-  } else {
-    if (3 == length(row_RH))
-    {
-      RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
-    } else {
-      RH <- makePredictionSinusoidal(fcsts, row_RH$c_alpha, row_RH$c_beta, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
-    }
-    RH[, `:=`(CUR_RH = 100 * (1 - RH_OPP))]
-    RH <- RH[,c('ID', 'TIMESTAMP', 'CUR_RH')]
-    out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
-    out[, P_Q := findQ(TEMP, CUR_RH)]
-  }
+  RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
+  RH[, `:=`(CUR_RH = 100 * (1 - RH_OPP))]
+  RH <- RH[,c('ID', 'TIMESTAMP', 'CUR_RH')]
+  out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
+  out[, P_Q := findQ(TEMP, CUR_RH)]
   output <- out[,c('ID', 'TIMESTAMP', 'TEMP', 'WS', 'CUR_RH', 'P_Q', 'TIME_MAX', 'HOUR_CURVE', 'START_DATE')]
   #~ output <- fwi(output)
   print('Setting names')
