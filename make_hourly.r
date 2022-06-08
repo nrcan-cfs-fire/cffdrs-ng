@@ -3,7 +3,6 @@ library(data.table)
 library(lubridate)
 source("util.r")
 
-source("hFWI.r")
 C_TEMP <- list(c_alpha=0.3, c_beta=2.0, c_gamma=-3.3)
 C_RH <- list(c_alpha=0.4, c_beta=2.0, c_gamma=-3.4)
 C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)

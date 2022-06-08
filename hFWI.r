@@ -1,5 +1,6 @@
 library(lubridate)
 library(data.table)
+source("util.r")
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
@@ -143,41 +144,6 @@ vpd <- function(temperature, relative_humidity)
 
 toDecimal <- function(t){
   return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)
-}
-
-julian <- function(mon, day)
-{
-  month <- c(0,31,59,90,120,151,181,212,242,273,304,334,365)
-  return(month[mon]+day)
-  
-}
-
-getSunlight <- function(dates, timezone, latitude, longitude, verbose=FALSE)
-{
-  df <- data.table(DATE=dates)
-  df[, d := as_date(DATE)]
-  dechour <- 12.0
-  df[, jd := julian(month(d), day(d))]
-  df[, fracyear := 2.0*pi/365.0*( jd-1.0+(dechour-12.0)/24.0)]
-  df[, eqtime := 229.18*( 0.000075+ 0.001868*cos(fracyear) - 0.032077*sin (fracyear) - 0.014615*cos(2.0*fracyear) - 0.040849*sin(2.0*fracyear) )]
-  df[, decl := 0.006918-0.399912*cos(fracyear) + 0.070257*sin(fracyear) - 0.006758*cos(fracyear*2.0)+0.000907*sin(2.0*fracyear) - 0.002697*cos(3.0*fracyear) + 0.00148*sin(3.0*fracyear)]
-  df[, timeoffset := eqtime+4*longitude-60*timezone]
-  df[, zenith := 90.833*pi/180.0]
-  df[, halfday := 180.0/pi*acos( cos(zenith)/(cos(latitude*pi/180.0)*cos(decl))-tan(latitude*pi/180.0)*tan(decl) )]
-  df[, sunrise := (720.0-4.0*(longitude+halfday)-eqtime)/60+timezone]
-  df[, sunset := (720.0-4.0*(longitude-halfday)-eqtime)/60+timezone]
-  df[, hr := hour(DATE)]
-  df[, tst := as.numeric(hr)*60.0+timeoffset]
-  df[, hourangle := tst/4-180]
-  df[, zenith := acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )]
-  df[, solrad := 0.95*cos(zenith)]
-  df[, solrad := ifelse(solrad < 0, 0, solrad)]
-  colnames(df) <- toupper(colnames(df))
-  df[, LAT := latitude]
-  df[, LONG := longitude]
-  result <- df[, c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")]
-  result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
-  return(result)
 }
 
 isSequential <- function(data)
@@ -554,7 +520,7 @@ grassFWI <- Vectorize(function(gsi, load)
   dates <- as_datetime(unique(w$TIMESTAMP))
   latitude <- w$LAT[[1]]
   longitude <- w$LONG[[1]]
-  sunlight <- getSunlight(dates, timezone, latitude, longitude, TRUE)
+  sunlight <- getSunlight(dates, timezone, latitude, longitude)
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
   sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
