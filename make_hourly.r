@@ -145,13 +145,8 @@ minmax_to_hourly <- function(w, timezone)
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
   r[, DATE := as.character(DATE)]
-  pred <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH)
-  colnames(pred) <- tolower(colnames(pred))
-  # FIX: fill in start and end so they have 24 hours for every day
-  dates <- data.table(date=unique(pred$date))
-  hours <- data.table(hour = 0:23)
-  cross <- as.data.table(merge(as.data.frame(hours),as.data.frame(dates), all=TRUE))
-  df <- merge(cross, pred, by=c("date", "hour"), all=TRUE)
+  df <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH)
+  colnames(df) <- tolower(colnames(df))
   df <- merge(orig_dates, df, by="date")
   df[, year := year(date)]
   df[, mon := month(date)]
