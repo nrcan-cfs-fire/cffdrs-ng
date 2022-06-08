@@ -20,8 +20,11 @@ reduce_by_row <- function(fct, df, init)
 ISIcalc <- function(ws, ffmc)
 {
   fm <- 147.2773 * (101.0 - ffmc)/(59.5 + ffmc)
-  sf <- 19.115 * exp(-0.1386 * fm) * (1.0 + fm^5.31 / 4.93e07)
-  isi <- sf * exp(0.05039 * ws)
+  fw <- ifelse(ws >= 40,
+               12 * (1 - exp(-0.0818 * (ws - 28))),
+               exp(0.05039 * ws))
+  sf <- 19.1152 * exp(-0.1386 * fm) * (1.0 + fm^5.31 / 4.93e07)
+  isi <- sf * fw
   return(isi)
 }
 

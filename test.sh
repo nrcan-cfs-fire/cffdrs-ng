@@ -12,3 +12,5 @@ gcc -o make_hourly make_hourly.c util.c -lm -std=c90 || exit
 ./make_hourly -6 ./bak_minmax_c.csv bak_diurnal_c.csv
 
 ./ngfwi -6 85 6 15 ./bak_diurnal.csv test3.csv
+
+./ngfwi -6 85 6 15 ./bak_windy.csv test4.csv

@@ -84,3 +84,8 @@ write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 bak_diurnal <- as.data.table(read.csv("./bak_diurnal.csv"))
 result3 <- hFWI(bak_diurnal, timezone=-6)
 save_csv(result3, "./result3.csv")
+
+
+bak_windy <- as.data.table(read.csv("./bak_windy.csv"))
+result4 <- hFWI(bak_windy, timezone=-6)
+save_csv(result4, "./result4.csv")

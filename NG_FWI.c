@@ -338,8 +338,11 @@ float hourly_DC(float t, float rh,float ws, float rain, float lastdc, int mon, f
 float ISIcalc(float ws, float ffmc)
 {
   float fm = 147.2773 * (101.0 - ffmc) / (59.5 + ffmc);
+  float fw;
+  if (ws >= 40) { fw = 12 * (1 - exp(-0.0818 * (ws - 28))); }
+  else { fw = exp(0.05039 * ws); }
   float sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
-  float isi = sf * exp(0.05039 * ws);
+  float isi = sf * fw;
   return isi;
 }
 
