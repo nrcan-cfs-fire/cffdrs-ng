@@ -305,6 +305,7 @@ float hourly_DMC ( float t, float rh, float ws, float rain, int mon, float lastd
      /* printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac)); */
 
      dmc= lastdmc + (DELTA_dry*DryFrac);
+     if (dmc < 0) { dmc = 0; }
 
      return dmc;
 
