@@ -421,6 +421,15 @@ grassFWI <- Vectorize(function(gsi, load)
   return(GFWI);
 })
 
+#' Calculate hourly FWI indices from hourly weather stream for a single station.
+#' 
+#' @param     w               hourly values weather stream
+#' @param     timezone        integer offset from GMT to use for sun calculations
+#' @param     ffmc_old        previous value for Fine Fuel Moisture Code
+#' @param     dmc_old         previous value for Duff Moisture Code
+#' @param     dc_old          previous value for Drought Code
+#' @param     percent_cured   Grass curing (percent, 0-100)
+#' @return                    hourly values FWI and weather stream
 .stnHFWI <- function(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
 {
   if (!isSequentialHours(w))
@@ -488,6 +497,16 @@ grassFWI <- Vectorize(function(gsi, load)
   return(r)
 }
 
+#' Calculate hourly FWI indices from hourly weather stream.
+#' 
+#' @param     weatherstream   hourly values weather stream
+#' @param     timezone        integer offset from GMT to use for sun calculations
+#' @param     ffmc_old        previous value for Fine Fuel Moisture Code
+#' @param     dmc_old         previous value for Duff Moisture Code
+#' @param     dc_old          previous value for Drought Code
+#' @param     percent_cured   Grass curing (percent, 0-100)
+#' @return                    hourly values FWI and weather stream
+#' @export minmax_to_hourly
 hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
 {
   wx <- copy(weatherstream)
