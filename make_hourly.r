@@ -136,7 +136,6 @@ minmax_to_hourly <- function(w, timezone)
   # # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
   r$ID <- 1
-  for_temp <- makePrediction(r, C_TEMP$c_alpha, C_TEMP$c_beta, C_TEMP$c_gamma, v="TEMP")
   setnames(r, c("WIND_MIN", "WIND_MAX", "RAIN"), c("WS_MIN", "WS_MAX", "APCP"))
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
