@@ -76,6 +76,7 @@ write.table(df, "bak_minmax.csv", quote=FALSE, sep=",", row.names=FALSE)
 source("make_hourly.r")
 bak_minmax <- as.data.table(read.csv("./bak_minmax.csv"))
 df <- minmax_to_hourly(bak_minmax, timezone=-6)
+df_hourly <- copy(df)
 df[, year := sprintf("%02d", year)]
 df[, mon := sprintf("%02d", mon)]
 df[, day := sprintf("%02d", day)]
@@ -86,3 +87,5 @@ df[, wind := sprintf("%.1f", round(wind, 1))]
 df[, rain := sprintf("%.1f", round(rain, 1))]
 write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
 
+result <- hFWI(df_hourly, timezone=-6)
+save_csv(result, "./result4.csv")
