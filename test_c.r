@@ -42,7 +42,6 @@ save_csv(result_hffmc, "./result_hffmc.csv")
 
 
 bak_diurnal <- as.data.table(read.csv("./bak_diurnal.csv"))
-setnames(bak_diurnal, c("year", "hour", "wind", "rain"), c("yr", "hr", "ws", "prec"))
 result3 <- hFWI(bak_diurnal, timezone=-6)
 save_csv(result3, "./result3.csv")
 
