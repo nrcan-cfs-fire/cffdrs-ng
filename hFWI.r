@@ -113,7 +113,7 @@ hourly_ffmc <- function (weatherstream, ffmc_old = 85)
 
 #' Calculate vapour pressure deficit
 #'
-#' @param temperature         Temerature (Celcius)
+#' @param temperature         Temperature (Celcius)
 #' @param relative_humidity   Relative Humidity (percent, 0-100)
 #' @return                    Vapour Pressure Deficit (kPa)
 vpd <- function(temperature, relative_humidity)
