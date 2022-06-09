@@ -11,6 +11,13 @@ FFMC_DEFAULT <- 85
 DMC_DEFAULT <- 6
 DC_DEFAULT <- 15
 
+#' Call Reduce for each row number of a dataframe. Keep outputs, aside from
+#' initial input value.
+#'
+#' @param fct             Function to call for each row number
+#' @param df              dataframe to apply function to
+#' @param init            startup value for Reduce()
+#' @return                list of output values, with initial input removed
 reduce_by_row <- function(fct, df, init)
 {
   result <- Reduce(fct, seq(1, nrow(df)), init, accumulate=TRUE)
@@ -18,6 +25,11 @@ reduce_by_row <- function(fct, df, init)
   return(result[2:length(result)])
 }
 
+#' Calculate Initial Spread Index (ISI)
+#'
+#' @param wind            Wind Speed (km/h)
+#' @param ffmc            Fine Fuel Moisure Code
+#' @return                Initial Spread Index
 ISIcalc <- function(ws, ffmc)
 {
   fm <- 147.2773 * (101.0 - ffmc)/(59.5 + ffmc)
@@ -29,6 +41,11 @@ ISIcalc <- function(ws, ffmc)
   return(isi)
 }
 
+#' Calculate Build-up Index (BUI)
+#'
+#' @param dmc             Duff Moisture Code
+#' @param dc              Drought Code
+#' @return                Build-up Index
 BUIcalc <- function (dmc, dc)
 {
   bui1 <- ifelse(dmc == 0 & dc == 0, 0, 0.8 * dc * dmc/(dmc +
@@ -41,6 +58,11 @@ BUIcalc <- function (dmc, dc)
   return(bui1)
 }
 
+#' Calculate Fire Weather Index (FWI)
+#'
+#' @param isi             Initial Spread Index
+#' @param bui             Build-up Index
+#' @return                Fire Weather Index
 FWIcalc <- function (isi, bui)
 {
   bb <- ifelse(bui > 80, 0.1 * isi * (1000/(25 + 108.64/exp(0.023 *
@@ -89,12 +111,14 @@ hourly_ffmc <- function (weatherstream, ffmc_old = 85)
   return(f)
 }
 
+#' Calculate vapour pressure deficit
+#'
+#' @param temperature         Temerature (Celcius)
+#' @param relative_humidity   Relative Humidity (percent, 0-100)
+#' @return                    Vapour Pressure Deficit (kPa)
 vpd <- function(temperature, relative_humidity)
 {
-  # calculate vapour pressure deficit
   vapour_pressure_saturation <- 0.61078 * exp(17.269 * temperature / (temperature + 237.3))
-  # vapour_pressure_actual <- relative_humidity / 100 * vapour_pressure_saturation
-  # vapour_pressure_deficit <- vapour_pressure_actual - vapour_pressure_saturation
   vapour_pressure_deficit <- vapour_pressure_saturation * (1.0 - relative_humidity / 100.0)
   return(vapour_pressure_deficit)
 }
@@ -309,25 +333,35 @@ hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24
   return(result)
 }
 
-# MARK II of the model (2016) wth new solar rad model specific to grass
-#
-# Temp is temperature in C
-# RH is realtive humidty in %
-# wind is average wind speed in km/h
-# rain is rainfall in mm
-# solrad is kW/m2  (radiaiton reaching fuel)
-# mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-# time - time between obs in HOURS
-#
-#
-# DRF of 1/16.1 comes from reducting the standard response time curve
-# at 26.7C, 20%RH, 2 km/h to 0.85hr.
-#
-#
-#
-# bmw
+#' Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
+#'
+#' @param temp            Temperature (Celcius)
+#' @param rh              Relative Humidity (percent, 0-100)
+#' @param wind            Wind Speed (km/h)
+#' @param rain            Precipitation (mm)
+#' @param lastmc          Previous grass fuel moisture (percent)
+#' @param solrad          Solar radiation (kW/m^2)
+#' @param time            Time since last observation (hours)
+#' @return                Grass Fuel Moisture (percent)
 hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
 {
+  # MARK II of the model (2016) wth new solar rad model specific to grass
+  #
+  # Temp is temperature in C
+  # RH is realtive humidty in %
+  # wind is average wind speed in km/h
+  # rain is rainfall in mm
+  # solrad is kW/m2  (radiaiton reaching fuel)
+  # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
+  # time - time between obs in HOURS
+  #
+  #
+  # DRF of 1/16.1 comes from reducting the standard response time curve
+  # at 26.7C, 20%RH, 2 km/h to 0.85hr.
+  #
+  #
+  #
+  # bmw
   drf <- 0.389633
   mo <- lastmc;
   # fuel temperature/humidity
@@ -383,6 +417,12 @@ hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
 }
 
 
+#' Calculate Grass Spread Index (GSI)
+#'
+#' @param wind            Wind Speed (km/h)
+#' @param mc              Grass moisture content (percent)
+#' @param cur             Degree of curing (percent, 0-100)
+#' @return                Grass Spread Index
 grassISI <- Vectorize(function(wind, mc, cur)
 {
   # print(wind)
@@ -413,7 +453,11 @@ grassISI <- Vectorize(function(wind, mc, cur)
   return(GSI)
 })
 
-
+#' Calculate Grass Fire Weather Index
+#'
+#' @param gsi               Grass Spread Index
+#' @param load              Fuel Load (kg/m^2)
+#' @return                  Grass Fire Weather Index
 grassFWI <- Vectorize(function(gsi, load)
 {
   ros<- gsi/1.11;  #  this just converts back to ROS in m/min
