@@ -13,11 +13,7 @@ outputs daily weather stream
 void main(int argc, char *argv[]){
   FILE *inp, *out;
   int err, year, mon, day, hour,h, oyear,omon,oday,ohour;
-
   float lat,lon, olat,olon,temp,rh,ws,rain,atemp[24],arh[24],aws[24],arain[24];
-  float minRH,mcgmc,gfmc,solar,rain24,Wdmc24,Wdc24, sunrise, sunset, daylength, ffmcRF, dmcDryFrac,dcDryFrac ;
-  float reff,b,rw,smi;
-  float DELTA_mcdmcrain24, DELTA_DCrain24, solprop;
   char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
 
    if(argc != 3){
@@ -68,7 +64,7 @@ void main(int argc, char *argv[]){
          err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
          /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err); */
      }  /* end the while to read thru a day */
-     rain24 = rain_am + rain_pm_old;
+     float rain24 = rain_am + rain_pm_old;
      /* now go through the loop again ,  calcuate houlry values AND output*/
      h = 12;
      fprintf(out,"%.4f,%.4f,%4d,%02d,%02d,%02d,%g,%g,%g,%g\n",
