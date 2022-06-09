@@ -110,3 +110,28 @@ void check_inputs(float temp, float rh, float wind, float rain)
     exit(1);
   }
 }
+
+int read_row(FILE *inp, struct row* r)
+{
+  char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
+  int err = fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",
+  &r->lat,a,&r->lon,a,&r->year,a,&r->mon,a,&r->day,a,&r->hour,a,&r->temp,a,&r->rh,a,&r->wind,a,&r->rain);
+  if (err > 0)
+  {
+    check_inputs(r->temp, r->rh, r->wind, r->rain);
+  }
+  return err;
+}
+
+int read_row_minmax(FILE *inp, struct row_minmax* r)
+{
+  char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
+  int err = fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f%c%f%c%f%c%f",
+  &r->lat,a,&r->lon,a,&r->year,a,&r->mon,a,&r->day,a,&r->hour,a,&r->temp_min,a,&r->temp_max,a,&r->rh_min,a,&r->rh_max,a,&r->wind_min,a,&r->wind_max,a,&r->rain);
+  if (err > 0)
+  {
+    check_inputs(r->temp_min, r->rh_min, r->wind_min, r->rain);
+    check_inputs(r->temp_max, r->rh_max, r->wind_max, r->rain);
+  }
+  return err;
+}

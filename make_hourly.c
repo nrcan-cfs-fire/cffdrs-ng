@@ -15,27 +15,7 @@ const float C_TEMP[3] = {0.3, 2.0, -3.3};
 const float C_RH[3] = {0.4, 2.0, -3.4};
 const float C_WIND[3] = {0.3, 3.5, -3.3};
 
-/* A row from the input file */
-struct row {
-  float lat, lon;
-  int year, mon, day, hour;
-  float temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain;
-};
-
 float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sunrise, float sunset, float solarnoon_yest, float sunset_yest, float sunrise_tom, const float* abg, float* hourly);
-
-int read_row(FILE *inp, struct row* r)
-{
-  char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
-  int err = fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f%c%f%c%f%c%f",
-  &r->lat,a,&r->lon,a,&r->year,a,&r->mon,a,&r->day,a,&r->hour,a,&r->temp_min,a,&r->temp_max,a,&r->rh_min,a,&r->rh_max,a,&r->wind_min,a,&r->wind_max,a,&r->rain);
-  if (err > 0)
-  {
-    check_inputs(r->temp_min, r->rh_min, r->wind_min, r->rain);
-    check_inputs(r->temp_max, r->rh_max, r->wind_max, r->rain);
-  }
-  return err;
-}
 
 void main(int argc, char *argv[]){
   const char* header = "lat,long,year,mon,day,hour,temp_min,temp_max,rh_min,rh_max,wind_min,wind_max,rain";
@@ -66,11 +46,11 @@ void main(int argc, char *argv[]){
   /*  CSV headers */
    fprintf(out, "%s\n", "lat,long,year,mon,day,hour,temp,rh,wind,rain");
 
-   struct row tom;
-   struct row cur;
-   struct row yday;
+   struct row_minmax tom;
+   struct row_minmax cur;
+   struct row_minmax yday;
 
-   err=read_row(inp, &cur);
+   err=read_row_minmax(inp, &cur);
    if (!(err > 0))
    {
         printf("Unable to read first row of indices\n");
@@ -92,7 +72,7 @@ void main(int argc, char *argv[]){
      }
      if (done_first)
      {
-       err = read_row(inp, &tom);
+       err = read_row_minmax(inp, &tom);
      } else {
        yday = cur;
        tom = cur;

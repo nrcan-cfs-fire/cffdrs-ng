@@ -10,7 +10,30 @@
  * Mathematical constant PI
  */
 const float pi;
-
+/**
+ * A row from the input file for an hourly weather stream
+ */
+struct row {
+  float lat, lon;
+  int year, mon, day, hour;
+  float temp, rh, wind, rain;
+};
+/**
+ * A row from the input file for a min/max weather stream
+ */
+struct row_minmax {
+  float lat, lon;
+  int year, mon, day, hour;
+  float temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain;
+};
+/**
+ * Read a row from a an hourly weather stream file
+ */
+int read_row(FILE *inp, struct row* r);
+/**
+ * Read a row from a min/max weather stream file
+ */
+int read_row_minmax(FILE *inp, struct row_minmax* r);
 /**
  * Find specific humidity
  *
