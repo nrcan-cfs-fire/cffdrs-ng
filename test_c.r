@@ -46,6 +46,10 @@ df <- hourly_to_daily(bak)
 df[, mon := sprintf("%02d", mon)]
 df[, day := sprintf("%02d", day)]
 df[, hour := sprintf("%02d", hour)]
+df[, temp := sprintf("%.1f", round(temp, 1))]
+df[, rh := sprintf("%.0f", round(rh, 0))]
+df[, wind := sprintf("%.1f", round(wind, 1))]
+df[, rain := sprintf("%.1f", round(rain, 1))]
 write.table(df, "bak_daily.csv", quote=FALSE, sep=",", row.names=FALSE)
 
 
