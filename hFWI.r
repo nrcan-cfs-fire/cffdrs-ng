@@ -123,10 +123,6 @@ vpd <- function(temperature, relative_humidity)
   return(vapour_pressure_deficit)
 }
 
-toDecimal <- function(t){
-  return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)
-}
-
 isSequential <- function(data)
 {
   v <- na.omit(unique(data - data.table::shift(data, 1)))

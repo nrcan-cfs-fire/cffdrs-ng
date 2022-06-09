@@ -1,5 +1,9 @@
 source("hFWI.r")
 
+toDecimal <- function(t){
+  return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)
+}
+
 toDaily <- function(w, all=FALSE)
 {
   # split into morning and afternoon so we can assign rain to the proper fwi 'day'
@@ -50,7 +54,7 @@ test_hfwi <- function(df=test_hffmc, timezone=-6)
   d <- toDaily(w)
   d[, LAT := DEFAULT_LATITUDE]
   d[, LONG := DEFAULT_LONGITUDE]
-  daily <- fwi(d, init=c(FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT))
+  daily <- cffdrs::fwi(d, init=c(FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT))
   setnames(daily,
            c('FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI', 'DSR'),
            c('DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR'))
@@ -76,7 +80,7 @@ plot_comparison <- function(r)
   print(ggplot(r) + geom_line(aes(TIMESTAMP, DC)) + geom_point(aes(TIMESTAMP, DDC), data=r[hour(TIMESTAMP) == 16]))
 }
 
-plot_test <- function(df=test_hffmc)
+plot_test <- function(df=cffdrs::test_hffmc)
 {
   r <- test_hfwi(df)
   plot_comparison(r)
