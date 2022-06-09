@@ -34,16 +34,15 @@ float DCdryingweight (float T,float RH,float ws);
 
 void main(int argc, char *argv[]){
   FILE *inp, *out;
-  int err, year, mon, day, hour,h, oyear,omon,oday,ohour;
+  int err, h;
   int TZadjust;
 
   float grassfuelload=0.35,  maxsolprop=0.85, percent_cured=100.0;
 
-  float lat,lon, olat,olon,temp,rh,ws,rain,lastffmc,lastdmc,lastdc,lastmcgmc,dmc,dc,ffmc,isi,bui,fwi,gsi,gfwi,atemp[24],arh[24],aws[24],arain[24];
+  float lastffmc,lastdmc,lastdc,lastmcgmc,dmc,dc,ffmc,isi,bui,fwi,gsi,gfwi,atemp[24],arh[24],aws[24],arain[24];
   float minRH,mcgmc,gfmc,solar,rain24,Wdmc24,Wdc24, sunrise, sunset, daylength, ffmcRF, dmcDryFrac,dcDryFrac ;
   float reff,b,rw,smi;
   float DELTA_mcdmcrain24, DELTA_DCrain24, solprop;
-  char a[1]; /* this is declared as an array just to make it a pointer ...for reading commas easily*/
 
    if(argc!=7){
        printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <input file> <output file>\n\n", argv[0]);
@@ -74,44 +73,43 @@ void main(int argc, char *argv[]){
    printf("TZ=%d    start ffmc=%f  dmc=%f\n",TZadjust,lastffmc,lastdmc);
    lastmcgmc=101-lastffmc;  /* approximation for a start up*/
 
-   for(hour=0;hour<24;hour++){
-     atemp[hour]=0.0;arh[hour]=0.0;aws[hour]=0.0;arain[hour]=0.0;
+   for(h=0;h<24;h++){
+     atemp[h]=0.0;arh[h]=0.0;aws[h]=0.0;arain[h]=0.0;
    }
    /* check that the header matches what is expected */
    const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
    check_header(inp, header);
-   err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
-   olat=lat;olon=lon;oyear=year;omon=mon;oday=day;ohour=hour;
-
-         printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,hour,atemp[hour],arh[hour],aws[hour],arain[hour],err);
+   struct row cur;
+   struct row old;
+   err = read_row(inp, &cur);
+   old = cur;
 
    while(err>0){
-     while(err>0 && omon==mon && oday==day){  /* This loads up 24 hours at a time  ...need to for this version*/
-         check_inputs(temp, rh, ws, rain);
-         atemp[hour]=temp;
-         arh[hour]=rh;
-         aws[hour]=ws;
-         arain[hour]=rain;
-         err=fscanf(inp,"%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f",&lat,a,&lon,a,&year,a,&mon,a,&day,a,&hour,a,&temp,a,&rh,a,&ws,a,&rain);
-         if (err > 0 && (olon != lon || olat != lat))
+     while(err>0 && old.mon==cur.mon && old.day==cur.day){  /* This loads up 24 hours at a time  ...need to for this version*/
+         atemp[cur.hour]=cur.temp;
+         arh[cur.hour]=cur.rh;
+         aws[cur.hour]=cur.wind;
+         arain[cur.hour]=cur.rain;
+         old = cur;
+         err = read_row(inp, &cur);
+         if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
          {
            printf("Latitude and Longitude must be constant\n");
            exit(1);
          }
-         if (err > 0 && (1 != (hour - ohour) && !(23 == ohour && 0 == hour)))
+         if (err > 0 && (1 != (cur.hour - old.hour) && !(23 == old.hour && 0 == cur.hour)))
          {
-           printf("Hours must be sequential but went from %d to %d\n", ohour, hour);
+           printf("Hours must be sequential but went from %d to %d\n", old.hour, cur.hour);
            exit(1);
          }
-         ohour = hour;
-         /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", oyear, omon , oday,ohour,atemp[ohour],arh[ohour],aws[ohour],arain[ohour],err); */
+         /* printf("%d %d %d %d  %5.1f  %5.1f  %5.1f %5.1f %d\n", old.year, old.mon , old.day,old.hour,atemp[old.hour],arh[old.hour],aws[old.hour],arain[old.hour],err); */
      }  /* end the while to read thru a day */
 
 
-     solar=sun(lat,lon,omon,oday,12,TZadjust,&sunrise,&sunset );
+     solar=sun(old.lat,old.lon,old.mon,old.day,12,TZadjust,&sunrise,&sunset );
      daylength=sunset-sunrise;
 
-     printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",lat,lon,oyear,omon,oday,sunrise,sunset);
+     printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",old.lat,old.lon,old.year,old.mon,old.day,sunrise,sunset);
 
      /* an initial go thru the loop to summarize daily information*/
      for(h=0,rain24=0.0, minRH=100.0,Wdmc24=0.0,Wdc24=0.0; h<24; h++)
@@ -147,7 +145,7 @@ void main(int argc, char *argv[]){
 
      /* now go through the loop again ,  calcuate houlry values AND output*/
      for(h=0; h<24; h++){
-         solar=sun(lat,lon,omon,oday,h,TZadjust,&sunrise,&sunset );
+         solar=sun(old.lat,old.lon,old.mon,old.day,h,TZadjust,&sunrise,&sunset );
 
          ffmc=hourly_ffmc(atemp[h],arh[h],aws[h],(arain[h]*ffmcRF),lastffmc);
 
@@ -161,7 +159,7 @@ void main(int argc, char *argv[]){
              else dmcDryFrac=0.0;
          }
          /* for each hour, calculate a full day of drying at those conditions, and then use fraction of that */
-         dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],omon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12],arh[12] );
+         dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],old.mon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12],arh[12] );
 
          if(Wdc24>0){
              if(h>=sunrise && h<=sunset) dcDryFrac = DCdryingweight(atemp[h],arh[h],aws[h])/Wdc24;
@@ -173,7 +171,7 @@ void main(int argc, char *argv[]){
              else dcDryFrac=0.0;
          }
 
-         dc=hourly_DC(atemp[h],arh[h],aws[h],arain[h],lastdc,omon, rain24,dcDryFrac,DELTA_DCrain24,atemp[12] );
+         dc=hourly_DC(atemp[h],arh[h],aws[h],arain[h],lastdc,old.mon, rain24,dcDryFrac,DELTA_DCrain24,atemp[12] );
 
          isi=ISIcalc(aws[h],ffmc);
          bui=BUIcalc(dmc,dc);
@@ -191,13 +189,13 @@ void main(int argc, char *argv[]){
          gsi=grassISI(aws[h],mcgmc, percent_cured);
          gfwi=grassFWI( gsi, grassfuelload);
          fprintf(out,"%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
-          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
+          old.year,old.mon,old.day,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc,gsi,gfwi);
 
          printf("%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f,     %5.2f, %5.2f, %5.2f, %5.1f, %5.1f, %5.1f | %5.1f, %5.1f, %5.1f  %5.2f\n",
-          oyear,omon,oday,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc, gsi, gfwi, mcgmc);
+          old.year,old.mon,old.day,h,atemp[h],arh[h],aws[h],arain[h],ffmc,dmc,dc,isi,bui,fwi, gfmc, gsi, gfwi, mcgmc);
          lastffmc=ffmc;lastdmc=dmc;lastdc=dc; lastmcgmc=mcgmc;
      }  /* end for(h=0; h<24; h++)   */
-     oyear=year;omon=mon;oday=day;ohour=hour;olat=lat;olon=lon;
+     old = cur;
    }  /* end the main while(err>0)  */
 
   /* printf("output has been written to>>> %s\n",argv[6]); */
