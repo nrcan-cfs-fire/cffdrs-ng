@@ -559,7 +559,7 @@ grassFWI <- Vectorize(function(gsi, load)
 #' @param     dc_old          previous value for Drought Code
 #' @param     percent_cured   Grass curing (percent, 0-100)
 #' @return                    hourly values FWI and weather stream
-#' @export minmax_to_hourly
+#' @export hFWI
 hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0)
 {
   wx <- copy(weatherstream)
