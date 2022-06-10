@@ -1,3 +1,4 @@
+#' Plots a comparison between hourly and daily values for the same test data the C code is using
 source("test_hFWI.r")
 source("hFWI.r")
 library(ggplot2)

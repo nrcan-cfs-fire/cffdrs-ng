@@ -1,3 +1,4 @@
+#' Computes hourly FWI indices for an input hourly weather stream
 library(lubridate)
 library(data.table)
 source("util.r")

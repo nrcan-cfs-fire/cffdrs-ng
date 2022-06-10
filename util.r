@@ -1,3 +1,4 @@
+#' Various utility functions used by the other files
 library(data.table)
 library(lubridate)
 

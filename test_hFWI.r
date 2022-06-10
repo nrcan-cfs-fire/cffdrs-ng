@@ -1,3 +1,4 @@
+#' Plots a comparison between hourly and daily values
 source("hFWI.r")
 
 toDecimal <- function(t){
