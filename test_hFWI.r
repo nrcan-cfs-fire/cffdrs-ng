@@ -1,5 +1,5 @@
 #' Plots a comparison between hourly and daily values
-source("hFWI.r")
+source("NG_FWI.r")
 
 toDecimal <- function(t){
   return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)

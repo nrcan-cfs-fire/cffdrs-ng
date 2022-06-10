@@ -1,5 +1,5 @@
 #' Runs through the functions and outputs results so they can be compared to the C code outputs
-source("hFWI.r")
+source("NG_FWI.r")
 library(ggplot2)
 library(data.table)
 library(lubridate)

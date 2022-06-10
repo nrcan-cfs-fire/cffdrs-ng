@@ -1,4 +1,4 @@
-source("hFWI.r")
+source("test_hFWI.r")
 library(ggplot2)
 
 r <- test_hfwi()
