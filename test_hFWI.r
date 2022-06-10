@@ -41,7 +41,7 @@ toDaily <- function(w, all=FALSE)
   return(merged)
 }
 
-test_hfwi <- function(df=test_hffmc, timezone=-6)
+test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6)
 {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
