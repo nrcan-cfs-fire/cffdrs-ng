@@ -597,10 +597,12 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   }
   if (!hadLatitude)
   {
+    warning(paste0("Using default latitude value of ", DEFAULT_LATITUDE))
     wx[, LAT := DEFAULT_LATITUDE]
   }
   if (!hadLongitude)
   {
+    warning(paste0("Using default longitude value of ", DEFAULT_LONGITUDE))
     wx[, LONG := DEFAULT_LONGITUDE]
   }
   if (wasWind)
