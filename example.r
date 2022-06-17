@@ -36,7 +36,20 @@ df_hourly <- minmax_to_hourly(df_minmax, timezone=tz)
 # calculate hourly FWI for hourly weather
 result <- hFWI(df_hourly, timezone=tz)
 
+# plot original vs modified output
+gfmc_orig <- result_orig$GFMC
+gfmc <- result$GFMC
+plot(gfmc ~ gfmc_orig, main="GFMC")
+abline(0, 1)
+
 # pull out and plot daily grass fuel moisture codes
 gfmc_orig <- result_orig[hour == 12]$GFMC
 gfmc <- result[hour == 12]$GFMC
-plot(gfmc ~ gfmc_orig)
+plot(gfmc ~ gfmc_orig, main="GFMC@1200LST")
+abline(0, 1)
+
+# pull out and plot peak grass fuel moisture codes
+gfmc_orig <- result_orig[hour == 17]$GFMC
+gfmc <- result[hour == 17]$GFMC
+plot(gfmc ~ gfmc_orig, main="GFMC@1700LST")
+abline(0, 1)
