@@ -72,8 +72,21 @@ FWIcalc <- function (isi, bui)
   return(fwi)
 }
 
+#' Calculate hourly Fine Fuel Moisture Code (FFMC)
+#'
+#' @param weatherstream   Table of hourly weather data to use for calculations [TEMP, RH, WS, PREC]
+#' @param ffmc_old        Fine Fuel Moisture Code for previous hour
+#' @return                Fine Fuel Moisture Codes for given data
 hourly_ffmc <- function (weatherstream, ffmc_old = 85)
 {
+  #' Calculate hourly Fine Fuel Moisture Code (FFMC)
+  #'
+  #' @param temp            Temperature (Celcius)
+  #' @param rh              Relative Humidity (percent, 0-100)
+  #' @param ws              Wind Speed (km/h)
+  #' @param prec            Precipitation (mm)
+  #' @param ffmc_old        Fine Fuel Moisture Code for previous hour
+  #' @return                Fine Fuel Moisture Code for current hour
   fctHFFMC <- function(temp, rh, ws, prec, ffmc_old)
   {
     Fo <- ffmc_old
@@ -152,6 +165,11 @@ isSequentialHours <- function(df)
   return(isSequential(as.POSIXct(df$TIMESTAMP)))
 }
 
+#' Calculate hourly Fine Fuel Moisture Code (FFMC)
+#'
+#' @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, TEMP, RH, WS, PREC]
+#' @param ffmc_old        Fine Fuel Moisture Code for previous hour
+#' @return                Fine Fuel Moisture Codes for given data
 .hffmc <- function(w, ffmc_old)
 {
   # get daily values but still get for days we don't have noon for because we want PREC total
@@ -177,117 +195,124 @@ isSequentialHours <- function(df)
   return(for_ffmc$FFMC)
 }
 
-hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCrain, tnoon, rhnoon)
-{
-  el <- c(6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6)
-  # wetting FROM rain
-  if(rain>0 && DELTA_MCrain>0.0) {
-    # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
-    mc <- 20.0+280.0/exp(0.023*lastdmc)
-    #  the MC increase by the rain in this hour...  total * rain_hour/rain24
-    mc <- mc + DELTA_MCrain*(rain/rain24)
-    lastdmc <- 43.43*(5.6348-log(mc-20))
-  }
-  # drying all day long too
-  if(tnoon < -1.1)
-  {
-    tnoon <- -1.1
-  }
-  # full day of drying in old FWI/DMC
-  DELTA_dry <- 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001
-  # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
-  dmc <- lastdmc + (DELTA_dry*DryFrac)
-  if (dmc < 0) { dmc <- 0}
-  return(dmc)
-}
-
-
+#' Calculate hourly Duff Moisture Code (DMC)
+#'
+#' @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, SUNRISE, SUNSET, MON, TEMP, RH, PREC]
+#' @param dmc_old         Duff Moisture Code for previous hour
+#' @return                Duff Moisture Codes for given data
 .hdmc <- function(w, dmc_old)
 {
-    dmc <- copy(w)
-    stopifnot("SUNSET" %in% colnames(w))
-    stopifnot("SUNRISE" %in% colnames(w))
-    dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
-    dmc[, RAIN24 := sum(PREC), by=c("DATE")]
-    dmc[, MINRH := min(RH), by=c("DATE")]
-    dmc[, VPD24 := sum(VPD), by=c("DATE")]
-    dmc[, DRYFRAC := ifelse(HR >= SUNRISE & HR <= SUNSET, ifelse(VPD24 == 0,  1 / (SUNSET - SUNRISE), VPD / VPD24), 0.0)]
-    # #>>>
-    # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
-    # dmc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
-    # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
-    # #<<<
-    lastdmc <- dmc_old
-    dates <- unique(w$DATE)
-    result <- NULL
-    for (n in 1:length(dates))
-    {
-      d <- dates[[n]]
-      for_date <- dmc[DATE == d]
-      noon <- for_date[HR == 12]
-      tnoon <- noon$TEMP
-      rhnoon <- noon$RH
-      # print(for_date)
-      rain24 <- for_date$RAIN24[[1]]
-      if(rain24>1.5)
-      {
-        reff <- (0.92*rain24-1.27)
-        if(lastdmc<=33) {
-          b <- 100.0/(0.5+0.3* lastdmc)
-        } else if(lastdmc<=65) {
-          b <- 14.0-1.3*log(lastdmc)
-        } else {
-          b <- 6.2*log(lastdmc)-17.2
-        }
-        # This is the change in MC (moisturecontent)  from FULL DAY's rain
-        DELTA_mcdmcrain24 <- 1000.0*reff/(48.77+b*reff)
-      } else {
-        DELTA_mcdmcrain24 <- 0.0
-      }
-      hrs <- unique(for_date$HR)
-      minhr <- min(hrs)
-      fctDMC <- function(lastdmc, h)
-      {
-        # r <- for_date[HR == h]
-        # HACK: should always be sequential and start at minhrs hrs?
-        r <- for_date[h + 1 - minhr]
-        # print(r)
-        lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon)
-        return(lastdmc)
-      }
-      values <- Reduce(fctDMC, hrs, init=lastdmc, accumulate=TRUE)
-      # get rid of init value
-      values <- values[2:length(values)]
-      lastdmc <- values[length(values)]
-      result <- c(result, values)
-      stopifnot(length(hrs) == length(values))
+  hourly_DMC <- function(t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCrain, tnoon, rhnoon)
+  {
+    el <- c(6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6)
+    # wetting FROM rain
+    if(rain>0 && DELTA_MCrain>0.0) {
+      # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
+      mc <- 20.0+280.0/exp(0.023*lastdmc)
+      #  the MC increase by the rain in this hour...  total * rain_hour/rain24
+      mc <- mc + DELTA_MCrain*(rain/rain24)
+      lastdmc <- 43.43*(5.6348-log(mc-20))
     }
-    return(result)
+    # drying all day long too
+    if(tnoon < -1.1)
+    {
+      tnoon <- -1.1
+    }
+    # full day of drying in old FWI/DMC
+    DELTA_dry <- 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001
+    # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
+    dmc <- lastdmc + (DELTA_dry*DryFrac)
+    if (dmc < 0) { dmc <- 0}
+    return(dmc)
+  }
+  dmc <- copy(w)
+  stopifnot("SUNSET" %in% colnames(w))
+  stopifnot("SUNRISE" %in% colnames(w))
+  dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
+  dmc[, RAIN24 := sum(PREC), by=c("DATE")]
+  dmc[, MINRH := min(RH), by=c("DATE")]
+  dmc[, VPD24 := sum(VPD), by=c("DATE")]
+  dmc[, DRYFRAC := ifelse(HR >= SUNRISE & HR <= SUNSET, ifelse(VPD24 == 0,  1 / (SUNSET - SUNRISE), VPD / VPD24), 0.0)]
+  # #>>>
+  # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
+  # dmc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
+  # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
+  # #<<<
+  lastdmc <- dmc_old
+  dates <- unique(w$DATE)
+  result <- NULL
+  for (n in 1:length(dates))
+  {
+    d <- dates[[n]]
+    for_date <- dmc[DATE == d]
+    noon <- for_date[HR == 12]
+    tnoon <- noon$TEMP
+    rhnoon <- noon$RH
+    # print(for_date)
+    rain24 <- for_date$RAIN24[[1]]
+    if(rain24>1.5)
+    {
+      reff <- (0.92*rain24-1.27)
+      if(lastdmc<=33) {
+        b <- 100.0/(0.5+0.3* lastdmc)
+      } else if(lastdmc<=65) {
+        b <- 14.0-1.3*log(lastdmc)
+      } else {
+        b <- 6.2*log(lastdmc)-17.2
+      }
+      # This is the change in MC (moisturecontent)  from FULL DAY's rain
+      DELTA_mcdmcrain24 <- 1000.0*reff/(48.77+b*reff)
+    } else {
+      DELTA_mcdmcrain24 <- 0.0
+    }
+    hrs <- unique(for_date$HR)
+    minhr <- min(hrs)
+    fctDMC <- function(lastdmc, h)
+    {
+      # r <- for_date[HR == h]
+      # HACK: should always be sequential and start at minhrs hrs?
+      r <- for_date[h + 1 - minhr]
+      # print(r)
+      lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon)
+      return(lastdmc)
+    }
+    values <- Reduce(fctDMC, hrs, init=lastdmc, accumulate=TRUE)
+    # get rid of init value
+    values <- values[2:length(values)]
+    lastdmc <- values[length(values)]
+    result <- c(result, values)
+    stopifnot(length(hrs) == length(values))
+  }
+  return(result)
 }
 
-hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24, temp12)
-{
-  fl <- c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6)
-  if(rain > 0 && DELTArain24 < 0.0) {
-    # (weight it by Rainhour/rain24 )
-    lastdc <- lastdc + DELTArain24 * (rain / rain24)
-  }
-  # total dry for the DAY
-  DELTAdry24 <- (0.36 * (temp12 + 2.8) + fl[mon]) / 2.0
-  if (DELTAdry24 < 0.0) {
-    #;    /* the fix for winter negative DC change...shoulders*/
-    DELTAdry24 = 0.0
-  }
-  #/* dry frac is VPD weighted value for the hour */
-  dc <- lastdc + DELTAdry24*dryfrac;
-  if(dc < 0) {
-    dc <- 0
-  }
-  return(dc)
-}
-
+#' Calculate hourly Drought Code (DC)
+#'
+#' @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, SUNRISE, SUNSET, MON, TEMP, RH, PREC]
+#' @param dc_old          Drought Code for previous hour
+#' @return                Drought Codes for given data
 .hdc <- function(w, dc_old)
 {
+  hourly_DC <- function(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24, temp12)
+  {
+    fl <- c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6)
+    if(rain > 0 && DELTArain24 < 0.0) {
+      # (weight it by Rainhour/rain24 )
+      lastdc <- lastdc + DELTArain24 * (rain / rain24)
+    }
+    # total dry for the DAY
+    DELTAdry24 <- (0.36 * (temp12 + 2.8) + fl[mon]) / 2.0
+    if (DELTAdry24 < 0.0) {
+      #;    /* the fix for winter negative DC change...shoulders*/
+      DELTAdry24 = 0.0
+    }
+    #/* dry frac is VPD weighted value for the hour */
+    dc <- lastdc + DELTAdry24*dryfrac;
+    if(dc < 0) {
+      dc <- 0
+    }
+    return(dc)
+  }
   dc <- copy(w)
   stopifnot("SUNSET" %in% colnames(w))
   stopifnot("SUNRISE" %in% colnames(w))
