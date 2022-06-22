@@ -187,9 +187,10 @@ isSequentialHours <- function(df)
   # daily[, FFMC_MULTIPLIER := ifelse(0.5 >= PREC, 0, (PREC - 0.5) / PREC)]
   # for_ffmc <- merge(w, daily[, c('FOR_DATE', 'FFMC_MULTIPLIER')], by=c('FOR_DATE'))
   for_ffmc <- copy(w)
-  for_ffmc[, SUM_PREC := sum(PREC), by=c("DATE")]
-  for_ffmc[, FFMC_MULTIPLIER := ifelse(0.5 >= SUM_PREC, 0, (SUM_PREC - 0.5) / SUM_PREC)]
-  for_ffmc[, PREC := PREC * FFMC_MULTIPLIER]
+  for_ffmc[, SUM_PREC := cumsum(PREC), by=c("DATE")]
+  for_ffmc[, NEW_PREC := pmax(0, pmin(PREC, SUM_PREC - 0.5))]
+  stopifnot(all(for_ffmc$NEW_PREC <= for_ffmc$PREC))
+  for_ffmc$PREC <- for_ffmc$NEW_PREC
   for_ffmc$FFMC <- hourly_ffmc(for_ffmc, ffmc_old=ffmc_old)
   for_ffmc <- for_ffmc[, c('TIMESTAMP', 'FFMC')]
   return(for_ffmc$FFMC)

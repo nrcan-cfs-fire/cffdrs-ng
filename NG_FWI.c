@@ -40,7 +40,7 @@ void main(int argc, char *argv[]){
   float grassfuelload=0.35,  maxsolprop=0.85, percent_cured=100.0;
 
   float lastffmc,lastdmc,lastdc,lastmcgmc,dmc,dc,ffmc,isi,bui,fwi,gsi,gfwi,atemp[24],arh[24],aws[24],arain[24];
-  float minRH,mcgmc,gfmc,solar,rain24,Wdmc24,Wdc24, sunrise, sunset, daylength, ffmcRF, dmcDryFrac,dcDryFrac ;
+  float minRH,mcgmc,gfmc,solar,rain24,Wdmc24,Wdc24, sunrise, sunset, daylength, dmcDryFrac,dcDryFrac ;
   float reff,b,rw,smi;
   float DELTA_mcdmcrain24, DELTA_DCrain24, solprop;
 
@@ -120,9 +120,6 @@ void main(int argc, char *argv[]){
          if(h>=sunrise && h<=sunset)Wdc24+=DCdryingweight(atemp[h],arh[h],aws[h]);
         }
 
-     if(rain24>0.5) ffmcRF=(rain24-0.5)/rain24;   /* so we can use the old hourly routine directly*/
-     else ffmcRF=0.0;
-
      if(rain24>1.5){
         reff=(0.92*rain24-1.27);
         if(lastdmc<=33) b = 100.0/(0.5+0.3* lastdmc);
@@ -142,12 +139,21 @@ void main(int argc, char *argv[]){
      else DELTA_DCrain24=0.0;;
 
 
-
+     float rain_sum = 0.0;
      /* now go through the loop again ,  calcuate houlry values AND output*/
      for(h=0; h<24; h++){
          solar=sun(old.lat,old.lon,old.mon,old.day,h,TZadjust,&sunrise,&sunset );
-
-         ffmc=hourly_ffmc(atemp[h],arh[h],aws[h],(arain[h]*ffmcRF),lastffmc);
+         rain_sum += arain[h];
+         float ffmc_rain = arain[h];
+         if ((rain_sum - 0.5) < ffmc_rain)
+         {
+           ffmc_rain = rain_sum - 0.5;
+           if (ffmc_rain < 0)
+           {
+             ffmc_rain = 0;
+           }
+         }
+         ffmc=hourly_ffmc(atemp[h],arh[h],aws[h],ffmc_rain,lastffmc);
 
          if(Wdmc24>0){
               if(h>=sunrise && h<=sunset) dmcDryFrac=DMCdryingweight(atemp[h],arh[h],aws[h]) / Wdmc24;
