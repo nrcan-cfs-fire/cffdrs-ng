@@ -230,6 +230,9 @@ isSequentialHours <- function(df)
   stopifnot("SUNSET" %in% colnames(w))
   stopifnot("SUNRISE" %in% colnames(w))
   dmc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
+  dmc[, SUM_PREC := cumsum(PREC), by=c("DATE")]
+  dmc[, NEW_PREC := pmax(0, pmin(PREC, SUM_PREC - 1.5))]
+  stopifnot(all(dmc$NEW_PREC <= dmc$PREC))
   dmc[, RAIN24 := sum(PREC), by=c("DATE")]
   dmc[, MINRH := min(RH), by=c("DATE")]
   dmc[, VPD24 := sum(VPD), by=c("DATE")]
@@ -274,7 +277,7 @@ isSequentialHours <- function(df)
       # HACK: should always be sequential and start at minhrs hrs?
       r <- for_date[h + 1 - minhr]
       # print(r)
-      lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon)
+      lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$NEW_PREC, r$MON, lastdmc, r$DRYFRAC, r$RAIN24 - 1.5, DELTA_mcdmcrain24, tnoon, rhnoon)
       return(lastdmc)
     }
     values <- Reduce(fctDMC, hrs, init=lastdmc, accumulate=TRUE)
@@ -318,6 +321,9 @@ isSequentialHours <- function(df)
   stopifnot("SUNSET" %in% colnames(w))
   stopifnot("SUNRISE" %in% colnames(w))
   dc[, VPD := ifelse(HR >= SUNRISE & HR <= SUNSET, vpd(TEMP, RH), 0.0)]
+  dc[, SUM_PREC := cumsum(PREC), by=c("DATE")]
+  dc[, NEW_PREC := pmax(0, pmin(PREC, SUM_PREC - 2.8))]
+  stopifnot(all(dc$NEW_PREC <= dc$PREC))
   dc[, RAIN24 := sum(PREC), by=c("DATE")]
   dc[, MINRH := min(RH), by=c("DATE")]
   dc[, VPD24 := sum(VPD), by=c("DATE")]
@@ -354,7 +360,7 @@ isSequentialHours <- function(df)
       # HACK: should always be sequential and start at minhrs hrs?
       r <- for_date[h + 1 - minhr]
       # print(r)
-      lastdc <- hourly_DC(r$TEMP, r$RH, r$WS, r$PREC, lastdc, r$MON, r$RAIN24, r$DRYFRAC, DELTA_DCrain24, tnoon)
+      lastdc <- hourly_DC(r$TEMP, r$RH, r$WS, r$NEW_PREC, lastdc, r$MON, r$RAIN24 - 2.8, r$DRYFRAC, DELTA_DCrain24, tnoon)
       stopifnot(noon$MON == r$MON)
       return(lastdc)
     }

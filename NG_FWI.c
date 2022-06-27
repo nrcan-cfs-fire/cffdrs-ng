@@ -164,8 +164,17 @@ void main(int argc, char *argv[]){
              if(h>=sunrise && h<=sunset)dmcDryFrac=1/daylength;  /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dmcDryFrac=0.0;
          }
+         float dmc_rain = arain[h];
+         if ((rain_sum - 1.5) < dmc_rain)
+         {
+           dmc_rain = rain_sum - 1.5;
+           if (dmc_rain < 0)
+           {
+             dmc_rain = 0;
+           }
+         }
          /* for each hour, calculate a full day of drying at those conditions, and then use fraction of that */
-         dmc=hourly_DMC(atemp[h],arh[h],aws[h],arain[h],old.mon,lastdmc,dmcDryFrac,rain24,DELTA_mcdmcrain24,atemp[12],arh[12] );
+         dmc=hourly_DMC(atemp[h],arh[h],aws[h],dmc_rain,old.mon,lastdmc,dmcDryFrac,rain24-1.5,DELTA_mcdmcrain24,atemp[12],arh[12] );
 
          if(Wdc24>0){
              if(h>=sunrise && h<=sunset) dcDryFrac = DCdryingweight(atemp[h],arh[h],aws[h])/Wdc24;
@@ -176,8 +185,16 @@ void main(int argc, char *argv[]){
              if(h>=sunrise && h<=sunset) dcDryFrac=1/daylength; /* is VPD is 0 all day long --rh=100 all day -- then set drying fraction to be uniform */
              else dcDryFrac=0.0;
          }
-
-         dc=hourly_DC(atemp[h],arh[h],aws[h],arain[h],lastdc,old.mon, rain24,dcDryFrac,DELTA_DCrain24,atemp[12] );
+         float dc_rain = arain[h];
+         if ((rain_sum - 2.8) < dc_rain)
+         {
+           dc_rain = rain_sum - 2.8;
+           if (dc_rain < 0)
+           {
+             dc_rain = 0;
+           }
+         }
+         dc=hourly_DC(atemp[h],arh[h],aws[h],dc_rain,lastdc,old.mon, rain24-2.8,dcDryFrac,DELTA_DCrain24,atemp[12] );
 
          isi=ISIcalc(aws[h],ffmc);
          bui=BUIcalc(dmc,dc);
