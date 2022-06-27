@@ -6,8 +6,8 @@ bak <- as.data.table(read.csv("./bak_hourly.csv"))
 
 plot_compare <- function(df, main="")
 {
-  result_old <- hFWI_old(df, timezone=-6)
-  result <- hFWI(df, timezone=-6)
+  result_old <- hFWI_old(df, ffmc_old=85, dmc_old=40, dc_old=200, timezone=-6)
+  result <- hFWI(df, ffmc_old=85, dmc_old=40, dc_old=200, timezone=-6)
   # compare old results to new results
   result_old[, TIMESTAMP := make_datetime(year, mon, day, hour)]
   result[, TIMESTAMP := make_datetime(year, mon, day, hour)]
