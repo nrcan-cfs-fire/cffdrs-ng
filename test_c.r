@@ -31,7 +31,8 @@ save_csv <- function(df, file)
 result <- hFWI(bak, timezone=-6)
 save_csv(result, "./result.csv")
 
-df <- data.table(cffdrs::test_hffmc)
+test_hffmc <- read.csv("test_hffmc.csv")
+df <- data.table(test_hffmc)
 df[, lat := bak$lat[[1]]]
 df[, long := bak$long[[1]]]
 setnames(df, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))

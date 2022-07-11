@@ -9,8 +9,8 @@ long <- -93
 
 # NOTE: if input has multiple stations, would need to do them one at a time
 
-# use test data from cffdrs package
-df_orig <- data.table(cffdrs::test_hffmc)
+test_hffmc <- read.csv("test_hffmc.csv")
+df_orig <- data.table(test_hffmc)
 # add coordinates
 df_orig[, lat := lat]
 df_orig[, long := long]
