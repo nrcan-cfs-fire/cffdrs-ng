@@ -7,9 +7,11 @@ C_TEMP <- list(c_alpha=0.3, c_beta=2.0, c_gamma=-3.3)
 C_RH <- list(c_alpha=0.4, c_beta=2.0, c_gamma=-3.4)
 C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)
 
-makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1)
+makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1, verbose=FALSE)
 {
-  print(paste0('Predicting ', v, ' changing at ', change_at))
+  if (verbose) {
+    print(paste0('Predicting ', v, ' changing at ', change_at))
+  }
   fcsts <- copy(fcsts)
   var_min <- paste0(v, '_MIN')
   var_max <- paste0(v, '_MAX')
@@ -64,38 +66,52 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at=
 }
 
 
-doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
+doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1, verbose=FALSE)
 {
-  print('Doing prediction')
-  v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals)
-  v_wind <- makePrediction(fcsts, row_wind$c_alpha, row_wind$c_beta, row_wind$c_gamma, 'WIND', 'SUNSET', min_value=0, intervals=intervals)
+  if (verbose) {
+    print('Doing prediction')
+  }
+  v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, 'TEMP', 'SUNSET', intervals=intervals, verbose=verbose)
+  v_wind <- makePrediction(fcsts, row_wind$c_alpha, row_wind$c_beta, row_wind$c_gamma, 'WIND', 'SUNSET', min_value=0, intervals=intervals, verbose=verbose)
   t <- v_temp[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'LAT', 'LONG', 'TEMP')]
   w <- v_wind[,c('ID', 'TIMESTAMP', 'DATE', 'HOUR', 'WIND')]
   out <- merge(t, w)
-  RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1)
+  RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, 'RH_OPP', intervals=intervals, min_value=0, max_value=1, verbose=verbose)
   RH[, `:=`(RH = 100 * (1 - RH_OPP))]
   RH <- RH[,c('ID', 'TIMESTAMP', 'RH')]
   out <- merge(RH, out, by=c('ID', 'TIMESTAMP'))
   output <- out[,c('ID', 'LAT', 'LONG', 'TIMESTAMP', 'TEMP', 'WIND', 'RH')]
   #~ output <- fwi(output)
-  print('Assigning times')
+  if (verbose) {
+    print('Assigning times')
+  }
   output[, HOUR := hour(TIMESTAMP)]
   output[, MINUTE := minute(TIMESTAMP)]
-  print('Converting date')
+  if (verbose) {
+    print('Converting date')
+  }
   output[, DATE := as.character(as_date(TIMESTAMP))]
-  print('Allocating rain')
+  if (verbose) {
+    print('Allocating rain')
+  }
   rain <- fcsts[, c('DATE', 'RAIN')]
   rain[, HOUR := 7]
   rain[, MINUTE := 0]
-  print('Merging')
+  if (verbose) {
+    print('Merging')
+  }
   cmp <- merge(output, rain, by=c('DATE', 'HOUR', 'MINUTE'), all=TRUE)[!is.na(TIMESTAMP)]
   cmp$RAIN <- nafill(cmp$RAIN, fill=0)
-  print('Calculating times')
+  if (verbose) {
+    print('Calculating times')
+  }
   cmp[, YEAR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
   cmp[, DAY := day(TIMESTAMP)]
   cmp[, TIME := HOUR + MINUTE / 60.0]
-  print("Done prediction")
+  if (verbose) {
+    print("Done prediction")
+  }
   return(cmp)
 }
 
@@ -107,7 +123,7 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1)
 #' @param     timezone  integer offset from GMT to use for sun calculations
 #' @return              hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #' @export minmax_to_hourly
-minmax_to_hourly <- function(w, timezone)
+minmax_to_hourly <- function(w, timezone, verbose=FALSE)
 {
   r <- copy(w)
   colnames(r) <- toupper(colnames(r))
@@ -145,7 +161,7 @@ minmax_to_hourly <- function(w, timezone)
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
   r[, DATE := as.character(DATE)]
-  df <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH)
+  df <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH, verbose=verbose)
   colnames(df) <- tolower(colnames(df))
   df <- merge(orig_dates, df, by="date")
   df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
