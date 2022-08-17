@@ -135,6 +135,13 @@ minmax_to_hourly <- function(w, timezone, verbose=FALSE)
   {
     stop('Expected a single LONG value for input weather')
   }
+  hadId <- TRUE
+  if (!("ID" %in% colnames(r))) {
+    r$ID <- 1
+    hadId <- FALSE
+  } else if (length(na.omit(unique(r$ID))) != 1) {
+    stop('Expected a single ID value for input weather')
+  }
   r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0))]
   orig_dates <- data.table(date=as.character(unique(as_date(r$TIMESTAMP))))
   # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
@@ -157,13 +164,17 @@ minmax_to_hourly <- function(w, timezone, verbose=FALSE)
   r <- merge(r, sunlight, by=c("TIMESTAMP", "LAT", "LONG"))
   # # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
-  r$ID <- 1
   r[, RH_OPP_MIN := 1 - RH_MAX/100]
   r[, RH_OPP_MAX := 1 - RH_MIN/100]
   r[, DATE := as.character(DATE)]
   df <- doPrediction(r, row_temp=C_TEMP, row_wind=C_WIND, row_RH=C_RH, verbose=verbose)
   colnames(df) <- tolower(colnames(df))
   df <- merge(orig_dates, df, by="date")
-  df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+  if (hadId)
+  {
+    df <- df[, c("id", "lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+  } else {
+    df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+  }
   return(df)
 }
