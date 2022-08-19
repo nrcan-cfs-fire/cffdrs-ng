@@ -630,9 +630,14 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   results <- NULL
   for (stn in unique(wx$ID))
   {
-    w <- wx[ID == stn]
-    r <- .stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
-    results <- rbind(results, r)
+    by_stn <- wx[ID == stn]
+    for (yr in unique(by_stn$YR))
+    {
+      by_year <- by_stn[YR == yr,]
+      print(paste0("Running ", stn, " for ", yr))
+      r <- .stnHFWI(by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
+      results <- rbind(results, r)
+    }
   }
   # this is all just to remove dummy variables that we added
   if (!is.null(results)) {
