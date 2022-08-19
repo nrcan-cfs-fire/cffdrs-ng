@@ -137,34 +137,6 @@ vpd <- function(temperature, relative_humidity)
   return(vapour_pressure_deficit)
 }
 
-#' Determine if data is sequential at intervals of 1 unit
-#'
-#' @param data          data to check
-#' @return              whether each entry in data is 1 unit from the next entry
-isSequential <- function(data)
-{
-  v <- na.omit(unique(data - data.table::shift(data, 1)))
-  return(1 == v[[1]] && length(v) == 1)
-}
-
-#' Determine if data is sequential days
-#'
-#' @param df            data to check
-#' @return              whether each entry is 1 day from the next entry
-isSequentialDays <- function(df)
-{
-  return(isSequential(as.Date(df$DATE)))
-}
-
-#' Determine if data is sequential hours
-#'
-#' @param df            data to check
-#' @return              whether each entry is 1 hour from the next entry
-isSequentialHours <- function(df)
-{
-  return(isSequential(as.POSIXct(df$TIMESTAMP)))
-}
-
 #' Calculate hourly Fine Fuel Moisture Code (FFMC)
 #'
 #' @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, TEMP, RH, WS, PREC]
