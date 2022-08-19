@@ -11,6 +11,10 @@ source("util.r")
 daily_to_minmax <- function(df)
 {
   df <- data.table(df)
+  hadId <- FALSE
+  if ("id" %in% tolower(colnames(df))) {
+    hadId <- TRUE
+  }
   df[, temp_min := temp - 15]
   df[, temp_max := temp + 2]
   df[, q := findQ(temp, rh)]
@@ -20,6 +24,11 @@ daily_to_minmax <- function(df)
   df[, rh_max := ifelse(rh_max > 100, 100, rh_max)]
   df[, wind_min := 0.15 * wind]
   df[, wind_max := 1.25 * wind]
-  df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
+  if (hadId)
+  {
+    df <- df[, c("id", "lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
+  } else {
+    df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
+  }
   return(df)
 }
