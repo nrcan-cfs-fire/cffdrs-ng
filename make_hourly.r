@@ -122,8 +122,7 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals=1, verbose
 #' @param     w         daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
 #' @param     timezone  integer offset from GMT to use for sun calculations
 #' @return              hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-#' @export minmax_to_hourly
-minmax_to_hourly <- function(w, timezone, verbose=FALSE)
+minmax_to_hourly_single <- function(w, timezone, skipInvalid=FALSE, verbose=FALSE)
 {
   r <- copy(w)
   colnames(r) <- toupper(colnames(r))
@@ -142,7 +141,19 @@ minmax_to_hourly <- function(w, timezone, verbose=FALSE)
   } else if (length(na.omit(unique(r$ID))) != 1) {
     stop('Expected a single ID value for input weather')
   }
+  if (length(na.omit(unique(r$YEAR))) != 1) {
+    stop('Expected a single YEAR value for input weather')
+  }
   r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0))]
+  if (!(nrow(r) > 1 && isSequential(as.Date(r$TIMESTAMP))))
+  {
+    if (skipInvalid)
+    {
+      warning(paste0(r$ID[[1]], " for ", r$YEAR[[1]], " - Expected input to be sequential daily weather"))
+      return(NULL)
+    }
+    stop('Expected input to be sequential daily weather')
+  }
   orig_dates <- data.table(date=as.character(unique(as_date(r$TIMESTAMP))))
   # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
   yest <- r[1,]
@@ -177,4 +188,38 @@ minmax_to_hourly <- function(w, timezone, verbose=FALSE)
     df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
   }
   return(df)
+}
+
+#' Convert daily min/max values stream to hourly values stream.
+#' Uses Beck & Trevitt method with default A/B/G values.
+#'
+#' @param     w         daily min/max values weather stream [id, lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
+#' @param     timezone  integer offset from GMT to use for sun calculations
+#' @return              hourly values weather stream [id, lat, long, year, mon, day, hour, temp, rh, wind, rain]
+#' @export minmax_to_hourly
+minmax_to_hourly <- function(w, timezone, skipInvalid=FALSE, verbose=FALSE)
+{
+  r <- copy(w)
+  colnames(r) <- toupper(colnames(r))
+  hadId <- TRUE
+  if (!("ID" %in% colnames(r))) {
+    r$ID <- 1
+    hadId <- FALSE
+  }
+  result <- NULL
+  for (stn in unique(r$ID))
+  {
+    by_stn <- r[ID == stn,]
+    for (yr in unique(by_stn$YEAR))
+    {
+      by_year <- by_stn[YEAR == yr,]
+      print(paste0("Running ", stn, " for ", yr))
+      df <- minmax_to_hourly_single(by_year, timezone, skipInvalid, verbose)
+      result <- rbind(result, df)
+    }
+  }
+  if (!hadId) {
+    result <- result[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+  }
+  return(result)
 }
