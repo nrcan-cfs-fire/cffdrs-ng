@@ -49,7 +49,7 @@ void main(int argc, char *argv[]){
        printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
        printf("All times should be local standard time\n");
        printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-       printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humitiy(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
+       printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
        exit(1);
    }
 

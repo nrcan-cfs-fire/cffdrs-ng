@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
   if(argc != 3) {
     printf("Command line:   %s <input file> <output file>\n\n", argv[0]);
     printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-    printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humitiy(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
+    printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
     printf("All times should be local standard time\n");
     exit(1);
   }
