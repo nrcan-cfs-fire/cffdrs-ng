@@ -25,3 +25,29 @@ def daily_to_minmax(df):
     else:
         df = df[columns]
     return df
+
+
+if '__main__' == __file__:
+    import sys
+    import os
+    if 3 != len(sys.argv):
+        print(f'Command line:   {sys.argv[0]} <input file> <output file>\n')
+        print('INPUT FILE format must be DAILY weather data, comma seperated and take the form')
+        print('Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n')
+        print('All times should be local standard time')
+        sys.exit(1)
+    inp = sys.argv[1]
+    out = sys.argv[2]
+    print(f'Opening input file >> {inp}')
+    if not os.path.exists(inp):
+        print(f'\n\n ***** FILE  {inp}  does not exist')
+        sys.exit(1)
+    df = pd.read_csv(inp)
+    COLUMNS = ['lat', 'long', 'year', 'mon', 'day', 'hour', 'temp', 'rh', 'wind', 'rain']
+    try:
+        df = df[COLUMNS]
+    except:
+        print(f'Expected columns to be {COLUMNS}')
+        sys.exit(1)
+    minmax = daily_to_minmax(df)
+    minmax.to_csv(out, index=False)

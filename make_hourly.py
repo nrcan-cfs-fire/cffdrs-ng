@@ -179,3 +179,33 @@ def minmax_to_hourly(w, timezone, skip_invalid=False, verbose=False):
     if not had_id:
         del result['id']
     return result
+
+
+if '__main__' == __file__:
+    import sys
+    import os
+    COLUMNS = ['lat', 'long', 'year', 'mon', 'day', 'hour', 'temp_min', 'temp_max', 'rh_min', 'rh_max', 'wind_min', 'wind_max', 'rain']
+    if 3 != len(sys.argv):
+        print(f'Command line:   {sys.argv[0]} <local GMToffset> <input file> <output file>\n')
+        print('<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )')
+        print('INPUT FILE format must be DAILY min/max weather data, comma seperated and take the form')
+        print(f'{COLUMNS}\n')
+        sys.exit(1)
+    inp = sys.argv[2]
+    out = sys.argv[3]
+    print(f'Opening input file >> {inp}')
+    if not os.path.exists(inp):
+        print(f'\n\n ***** FILE  {inp}  does not exist')
+        sys.exit(1)
+    TZadjust = int(sys.argv[1])
+    if TZadjust < -9 or TZadjust > -2:
+        print('/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2')
+        sys.exit(1)
+    df = pd.read_csv(inp)
+    try:
+        df = df[COLUMNS]
+    except:
+        print(f'Expected columns to be {COLUMNS}')
+        sys.exit(1)
+    hourly = minmax_to_hourly(df, TZadjust)
+    hourly.to_csv(out, index=False)
