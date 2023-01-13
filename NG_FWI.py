@@ -549,6 +549,7 @@ if "__main__" == __name__:
         print(
             "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humitiy(%%),Wind_speed(km/h),Rainfall(mm)\n")
         exit(1)
+    outfile = sys.argv[6]
     infile = sys.argv[5]
     if not os.path.exists(infile):
         print(f"/n/n ***** FILE  {infile}  does not exist\n")
@@ -584,4 +585,5 @@ if "__main__" == __name__:
     #dmc_old = lastdmc
     #dc_old = lastdc
     #percent_cured = PERCENT_CURED
-    hFWI(df, TZadjust, lastffmc, lastdmc, lastdc, PERCENT_CURED)
+    df_fwi = hFWI(df, TZadjust, lastffmc, lastdmc, lastdc, PERCENT_CURED)
+    df_fwi.to_csv(outfile, index=False)
