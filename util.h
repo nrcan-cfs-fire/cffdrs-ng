@@ -6,10 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-/**
- * Mathematical constant PI
- */
-const float pi;
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 /**
  * A row from the input file for an hourly weather stream
  */

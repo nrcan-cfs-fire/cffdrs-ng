@@ -1,5 +1,4 @@
 #include "util.h"
-const float pi = 3.14159265;
 
 float findQ(float temp, float rh)
 {
@@ -46,7 +45,7 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float *su
   bmw
   */
   float dechour = 12.0;
-  float fracyear = 2.0 * pi / 365.0 * ((float)(jd) - 1.0 + ((float)(dechour) - 12.0) / 24.0);
+  float fracyear = 2.0 * M_PI / 365.0 * ((float)(jd) - 1.0 + ((float)(dechour) - 12.0) / 24.0);
   float eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin (fracyear)
                   - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
   float decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
@@ -55,16 +54,16 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float *su
   float timeoffset = eqtime + 4 * lon - 60 * timezone;
   float tst = (float)hour * 60.0 + timeoffset;
   float hourangle = tst / 4 - 180;
-  float zenith = acos(sin(lat * pi / 180) * sin(decl)
-                  + cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180));
+  float zenith = acos(sin(lat * M_PI / 180) * sin(decl)
+                  + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180));
   float solrad = 0.95 * cos(zenith);
   if(solrad < 0) { solrad = 0.0; }
   printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",
          jd, hour, fracyear, decl, timeoffset, tst, hourangle, zenith, solrad);
-  zenith = 90.833 * pi / 180.0;
-  float halfday = 180.0 / pi *
-            acos(cos(zenith) / (cos(lat * pi / 180.0) * cos(decl))
-                  - tan(lat * pi / 180.0) * tan(decl));
+  zenith = 90.833 * M_PI / 180.0;
+  float halfday = 180.0 / M_PI *
+            acos(cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl))
+                  - tan(lat * M_PI / 180.0) * tan(decl));
   *sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone;
   *sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone;
   return solrad;

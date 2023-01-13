@@ -156,7 +156,7 @@ float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sun
   const float solarnoon = (sunset - sunrise) / 2.0 + sunrise;
   const float t_min = sunrise + c_alpha;
   const float t_max = solarnoon + c_beta;
-  const float v_sunset = v_min + (v_max - v_min) * sin((pi / 2.0)*((sunset - t_min)/(t_max - t_min)));
+  const float v_sunset = v_min + (v_max - v_min) * sin((M_PI / 2.0)*((sunset - t_min)/(t_max - t_min)));
   const float yt_min = solarnoon_yest + c_beta;
   const float time_min_tom = sunrise_tom + c_alpha;
   int h;
@@ -166,7 +166,7 @@ float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sun
     {
       hourly[h] = v_min + (yv_sunset - v_min) * exp(c_gamma * ((h + 24 - sunset_yest)/(24 - sunset_yest + t_min)));
     } else if (h > t_min && h <= sunset) {
-      hourly[h] = v_min + (v_max - v_min) * sin((pi / 2.0)*((h - t_min)/(t_max - t_min)));
+      hourly[h] = v_min + (v_max - v_min) * sin((M_PI / 2.0)*((h - t_min)/(t_max - t_min)));
     } else {
       /* h > sunset && h < 24 + t_min tomorrow */
       hourly[h] = tv_min + (v_sunset - tv_min) * exp(c_gamma * ((h - sunset)/(24 - sunset + time_min_tom)));
