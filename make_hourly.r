@@ -144,9 +144,9 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid=FALSE, verbose=FALS
   if (length(na.omit(unique(r$YEAR))) != 1) {
     stop('Expected a single YEAR value for input weather')
   }
-  r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0))]
-  if (!(nrow(r) > 1 && isSequential(as.Date(r$TIMESTAMP))))
-  {
+  r[, TIMESTAMP := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', YEAR, MON, DAY, HOUR, 0),
+                               tz=paste0('Etc/GMT', ifelse(timezone > 0, '-', '+'), abs(timezone)))]
+  if (!(nrow(r) > 1 && isSequential(as.Date(r$TIMESTAMP)))) {
     if (skipInvalid)
     {
       warning(paste0(r$ID[[1]], " for ", r$YEAR[[1]], " - Expected input to be sequential daily weather"))
