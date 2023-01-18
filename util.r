@@ -100,3 +100,44 @@ getSunlight <- function(dates, timezone, latitude, longitude)
   result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
   return(result)
 }
+
+
+toDecimal <- function(t){
+  return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)
+}
+
+toDaily <- function(w, all=FALSE)
+{
+  # split into morning and afternoon so we can assign rain to the proper fwi 'day'
+  # NOTE: actually need to figure out what makes the most sense
+  # - if we split at 12 then that means we're in LST not LDT
+  # - the rain at 12 is from 1100-1200, so that should be part of today's calculation, not tomorrow's
+  wx <- copy(w)
+  # set DATE field in case there's only a TIMESTAMP
+  wx[, DATE := as.character(as.Date(TIMESTAMP))]
+  # use toDecimal() so we only need TIMESTAMP field and we can deal with minutes or even seconds
+  wx[, FOR_DATE := ifelse(toDecimal(TIMESTAMP) <= 12, as.character(DATE), as.character(as.Date(DATE) + 1))]
+  # wx[, FOR_DATE := DATE]
+  precip <- wx[, list(PREC = sum(PREC, na.rm=TRUE)), by=c('FOR_DATE')]
+  setnames(precip, 'FOR_DATE', 'DATE')
+  merged <- merge(wx[toDecimal(TIMESTAMP) == 12, -c('FOR_DATE', 'PREC')], precip, by=c('DATE'), all=all)
+  merged$PREC <- nafill(merged$PREC, fill=0.0)
+  if (all)
+  {
+    # fix up columns that would be missing values if no noon value for a day
+    merged[, TIMESTAMP := as_datetime(sprintf('%s 12:00:00', as.character(DATE)))]
+    merged[, YR := year(TIMESTAMP)]
+    merged[, MON := month(TIMESTAMP)]
+    merged[, DAY := day(TIMESTAMP)]
+    merged[, HR := hour(TIMESTAMP)]
+    merged[, MINUTE := minute(TIMESTAMP)]
+    merged[, ID := na.omit(unique(merged$ID)[[1]])]
+    merged[, LAT := na.omit(unique(merged$LAT)[[1]])]
+    merged[, LONG := na.omit(unique(merged$LONG)[[1]])]
+    # use default drying day indices from weather guide
+    merged$TEMP <- nafill(merged$TEMP, fill=21.1)
+    merged$RH <- nafill(merged$RH, fill=45)
+    merged$WS <- nafill(merged$WS, fill=13)
+  }
+  return(merged)
+}
