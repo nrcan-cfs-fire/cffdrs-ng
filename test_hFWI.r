@@ -1,12 +1,13 @@
 #' Plots a comparison between hourly and daily values
-source("NG_FWI.r")
+#source("NG_FWI.r")
 source("old_cffdrs.r")
 
-test_hfwi <- function(df=read.csv('./test_hffmc.csv'), timezone=-6)
+
+test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6,PET_DMC = F)
 {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
-  r <- hFWI(weatherstream, timezone=timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc_old=DC_DEFAULT)
+  r <- hFWI(weatherstream, timezone=timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc_old=DC_DEFAULT,PET_DMC = PET_DMC)
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
   w[, timestamp := as_datetime(sprintf('%04d-%02d-%02d %02d:%02d:00', yr, mon, day, hr, 0))]
