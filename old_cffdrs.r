@@ -1,5 +1,5 @@
 # HACK: include code we use from cffdrs library so it doesn't add dependency for terra
-source('NG_FWI.r')
+#source('NG_FWI.r')
 
 FFMCcalc <- function (ffmc_yda, temp, rh, ws, prec) 
 {

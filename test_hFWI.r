@@ -1,6 +1,6 @@
 #' Plots a comparison between hourly and daily values
 #source("NG_FWI.r")
-source("old_cffdrs.r")
+#source("old_cffdrs.r")
 
 
 test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6,PET_DMC = F)
