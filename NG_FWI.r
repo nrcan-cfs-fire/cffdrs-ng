@@ -630,15 +630,6 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   ############################### DMC- UPDATE ###########################################################
 {
   wx <- copy(weatherstream)
-  stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
-  stopifnot(all(wx$WS >= 0))
-  stopifnot(all(wx$PREC >= 0))
-  stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
-  stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
-  stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
-  stopifnot(dmc_old >= 0)
-  stopifnot(dc_old >= 0)
-  stopifnot(percent_cured >= 0 & percent_cured <= 100)
   old_names <- colnames(wx)
   # add a bunch of dummy columns if they don't exist
   colnames(wx) <- toupper(colnames(wx))
@@ -687,6 +678,15 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   {
     setnames(wx, c("HOUR"), c("HR"))
   }
+  stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
+  stopifnot(all(wx$WS >= 0))
+  stopifnot(all(wx$PREC >= 0))
+  stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
+  stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
+  stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
+  stopifnot(dmc_old >= 0)
+  stopifnot(dc_old >= 0)
+  stopifnot(percent_cured >= 0 & percent_cured <= 100)
   if (!hadDate)
   {
     wx[, DATE := as.character(as.Date(sprintf('%04d-%02d-%02d', YR, MON, DAY)))]
