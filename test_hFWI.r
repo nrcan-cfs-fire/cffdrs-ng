@@ -24,7 +24,7 @@ test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6,PET_DMC = F)
   r <- merge(r,
              daily[, c('YR', 'MON', 'DAY', 'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR')],
              by=c('YR', 'MON', 'DAY'))
-  r[, DISI := ISIcalc(DFFMC, WS, fbpMod = FALSE)]
+  r[, DISI := ISIcalc(DFFMC, WS)]
   r[, DBUI := BUIcalc(DDMC, DDC)]
   r[, DFWI := FWIcalc(DISI, DBUI)]
   # taken from package code
