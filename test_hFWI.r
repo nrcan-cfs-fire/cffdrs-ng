@@ -32,7 +32,7 @@ test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6,PET_DMC = F)
   # output input and FWI columns so git can tell us if they change
   r <- r[, c('TIMESTAMP', 'TEMP', 'WS', 'RH', 'PREC',
              'FFMC', 'DMC', 'DC', 'ISI', 'BUI', 'FWI', 'DSR',
-             'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR')]
+             'DFFMC', 'DDMC', 'DDC', 'DISI', 'DBUI', 'DFWI', 'DDSR','SOLRADHAR')]
   write.table(r, file='out.csv', sep=',', row.names=FALSE)
   return(r)
 }
