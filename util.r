@@ -327,7 +327,7 @@ getPET <- function(dmc) {
   ## Specifically using regression model "RK_PET_lm.rda" stored at:
   
   dmc[,DELTA_dry := (PET_mm_sub_daily -1.06394)/0.3597646*1.172863 + 2.201021	]
-  write.table(dmc,file = "dmc_dump.csv",append = file.exists("dmc_dump.csv"),col.names = !file.exists("dmc_dump.csv"),quote = F, row.names = F)
+  write.table(dmc,file = "dmc_dump.csv",append = file.exists("dmc_dump.csv"),col.names = !file.exists("dmc_dump.csv"),quote = F, row.names = F,sep = ",")
   result = dmc[,c("TIMESTAMP","LAT", "LONG","PET_mm_sub","DELTA_dry")]
   
   return(result)
