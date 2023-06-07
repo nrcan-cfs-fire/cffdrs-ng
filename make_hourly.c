@@ -11,9 +11,9 @@ outputs hourly weather stream
 #include "util.h"
 
 /* Alpha/Beta/Gamma coefficients for Temperature, RH, and Wind Speed */
-const float C_TEMP[3] = {0.3, 2.0, -3.3};
-const float C_RH[3] = {0.4, 2.0, -3.4};
-const float C_WIND[3] = {0.3, 3.5, -3.3};
+const float C_TEMP[3] = {0.2, 2.0, -2.9};
+const float C_RH[3] = {0.4, 1.9, -2.9};
+const float C_WIND[3] = {1.2, 1.7, -1.5};
 
 float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sunrise, float sunset, float solarnoon_yest, float sunset_yest, float sunrise_tom, const float* abg, float* hourly);
 

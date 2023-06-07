@@ -3,9 +3,9 @@ library(data.table)
 library(lubridate)
 source("util.r")
 
-C_TEMP <- list(c_alpha=0.3, c_beta=2.0, c_gamma=-3.3)
-C_RH <- list(c_alpha=0.4, c_beta=2.0, c_gamma=-3.4)
-C_WIND <- list(c_alpha=0.3, c_beta=3.5, c_gamma=-3.3)
+C_TEMP <- list(c_alpha=0.2, c_beta=2.0, c_gamma=-2.9)
+C_RH <- list(c_alpha=0.4, c_beta=1.9, c_gamma=-2.9)
+C_WIND <- list(c_alpha=1.2, c_beta=1.7, c_gamma=-1.5)
 
 makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v='TEMP', change_at='SUNSET', min_value=-Inf, max_value=Inf, intervals=1, verbose=FALSE)
 {
