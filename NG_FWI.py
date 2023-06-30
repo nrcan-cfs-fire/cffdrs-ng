@@ -187,7 +187,7 @@ def _hdmc(w, dmc_old):
     result = []
     for d in dates:
         for_date = dmc[dmc['DATE'] == d]
-        noon = for_date.loc[dmc['HR'] == 12]
+        noon = for_date.loc[dmc['HR'] == 12].iloc[0]
         tnoon = float(noon['TEMP'])
         rhnoon = float(noon['RH'])
         rain24 = for_date['RAIN24'].iloc[0]
@@ -259,7 +259,7 @@ def _hdc(w, dc_old):
     result = []
     for d in dates:
         for_date = dc[dc['DATE'] == d]
-        noon = for_date.loc[dc['HR'] == 12]
+        noon = for_date.loc[dc['HR'] == 12].iloc[0]
         tnoon = float(noon['TEMP'])
         rhnoon = float(noon['RH'])
         rain24 = for_date['RAIN24'].iloc[0]

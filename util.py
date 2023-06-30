@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from math import pi, acos, cos, sin, tan, exp, log
 import datetime
 
@@ -8,8 +9,7 @@ import datetime
 # @param data          data to check
 # @return              whether each entry is 1 day from the next entry
 def is_sequential_days(data):
-    return all(datetime.timedelta(days=1) == (data['TIMESTAMP'].iloc[i] - data['TIMESTAMP'][i - 1]) for i in range(1, len(data)))
-
+    return np.all(datetime.timedelta(days=1) == (data['TIMESTAMP'] - data['TIMESTAMP'].shift(1)).iloc[1:])
 
 ##
 # Determine if data is sequential hours
@@ -17,7 +17,7 @@ def is_sequential_days(data):
 # @param data          data to check
 # @return              whether each entry is 1 hour from the next entry
 def is_sequential_hours(data):
-    return all(datetime.timedelta(hours=1) == (data['TIMESTAMP'].iloc[i] - data['TIMESTAMP'][i - 1]) for i in range(1, len(data)))
+    return np.all(datetime.timedelta(hours=1) == (data['TIMESTAMP'] - data['TIMESTAMP'].shift(1)).iloc[1:])
 
 
 ##
