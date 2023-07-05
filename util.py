@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from math import pi, acos, cos, sin, tan, exp, log
 import datetime
+import logging
 
 ##
 # Determine if data is sequential days
@@ -106,8 +107,12 @@ def sun(lat, lon, mon, day, hour, timezone):
     #                                                                                          hourangle, zenith,
     #                                                                                          solrad))
     zenith = 90.833 * pi / 180.0
-    halfday = 180.0 / pi * acos(cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) - tan(lat * pi / 180.0) * tan(decl))
+    # FIX: is this some kind of approximation that can be wrong?
+    #       breaks with (67.1520291504819, -132.37538245496188)
+    x_tmp = cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) - tan(lat * pi / 180.0) * tan(decl)
+    # HACK: keep in range
+    x_tmp = max(-1, min(1, x_tmp))
+    halfday = 180.0 / pi * acos(x_tmp)
     sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone
     sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone
     return solrad, sunrise, sunset
-
