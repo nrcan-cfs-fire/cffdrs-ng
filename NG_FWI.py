@@ -7,6 +7,8 @@ import datetime
 import util
 import logging
 
+logger = logging.getLogger('cffdrs')
+logger.setLevel(logging.WARNING)
 # FIX: figure out what this should be
 DEFAULT_LATITUDE = 55.0
 DEFAULT_LONGITUDE = -120.0
@@ -487,10 +489,10 @@ def hFWI(weatherstream, timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc
     if not had_minute:
         wx['MINUTE'] = 0
     if not had_latitude:
-        logging.warning(f'Using default latitude of {DEFAULT_LATITUDE}')
+        logger.warning(f'Using default latitude of {DEFAULT_LATITUDE}')
         wx['LAT'] = DEFAULT_LATITUDE
     if not had_longitude:
-        logging.warning(f'Using default longitude of {DEFAULT_LONGITUDE}')
+        logger.warning(f'Using default longitude of {DEFAULT_LONGITUDE}')
         wx['LONG'] = DEFAULT_LONGITUDE
     COLUMN_SYNONYMS = {'WIND': 'WS', 'RAIN': 'PREC', 'YEAR': 'YR', 'HOUR': 'HR'}
     wx = wx.rename(columns=COLUMN_SYNONYMS)
@@ -517,7 +519,7 @@ def hFWI(weatherstream, timezone, ffmc_old=FFMC_DEFAULT, dmc_old=DMC_DEFAULT, dc
         by_stn = wx[wx['ID'] == stn]
         for yr in by_stn['YR'].unique():
             by_year = by_stn[by_stn['YR'] == yr]
-            logging.debug(f'Running {stn} for {yr}')
+            logger.debug(f'Running {stn} for {yr}')
             r = _stnHFWI(by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
             results = pd.concat([results, r])
     #########################################
@@ -542,7 +544,7 @@ if "__main__" == __name__:
     #sys.argv = ['NG_FWI.py', '-6', '85', '6', '15', './bak_diurnal.csv', 'test3_py.csv']
     #print(sys.argv)
     if len(sys.argv) != 7:
-        logging.fatal("\n".join(
+        logger.fatal("\n".join(
             [
                 f"Command line:   {sys.argv[0]}  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n",
                 "<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )",
@@ -555,31 +557,31 @@ if "__main__" == __name__:
     outfile = sys.argv[6]
     infile = sys.argv[5]
     if not os.path.exists(infile):
-        logging.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
+        logger.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
         exit(1)
     TZadjust = int(sys.argv[1])
     if TZadjust < -9 or TZadjust > -2:
-        logging.fatal("/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2")
+        logger.fatal("/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2")
         exit(1)
     lastffmc = float(sys.argv[2])
     if lastffmc > 101 or lastffmc < 0:
-        logging.fatal(" /n/n *****   FFMC must be between 0 and 101")
+        logger.fatal(" /n/n *****   FFMC must be between 0 and 101")
         exit(1)
     lastdmc = float(sys.argv[3])
     if lastdmc < 0:
-        logging.fatal(" /n/n *****  starting DMC must be >=0")
+        logger.fatal(" /n/n *****  starting DMC must be >=0")
         exit(1)
     lastdc = float(sys.argv[4])
     if lastdc < 0:
-        logging.fatal(" /n/n *****   starting DC must be >=0\n")
+        logger.fatal(" /n/n *****   starting DC must be >=0\n")
         exit(1)
-    logging.debug(f"TZ={TZadjust}    start ffmc={lastffmc}  dmc={lastdmc}\n")
+    logger.debug(f"TZ={TZadjust}    start ffmc={lastffmc}  dmc={lastdmc}\n")
     colnames_out = ["year", "mon", "day", "hour", "temp", "rh", "wind", "rain", "ffmc", "dmc", "dc", "isi", "bui",
                     "fwi", "gfmc", "gsi", "gfwi"]
     #colnames_in = ["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]
     #df = pd.read_csv(infile, header=None, names=colnames_in)
     df = pd.read_csv(infile)
-    logging.debug(df)
+    logger.debug(df)
     # FIX: add check for sequential hours in input
     # FIX: check for all columns being present
     #weatherstream = df
