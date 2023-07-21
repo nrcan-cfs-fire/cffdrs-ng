@@ -701,30 +701,30 @@ if "__main__" == __name__:
                 ]
             )
         )
-        exit(1)
+        sys.exit(1)
     outfile = sys.argv[6]
     infile = sys.argv[5]
     if not os.path.exists(infile):
         logger.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
-        exit(1)
+        sys.exit(1)
     TZadjust = int(sys.argv[1])
     if TZadjust < -9 or TZadjust > -2:
         logger.fatal(
             "/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2"
         )
-        exit(1)
+        sys.exit(1)
     lastffmc = float(sys.argv[2])
     if lastffmc > 101 or lastffmc < 0:
         logger.fatal(" /n/n *****   FFMC must be between 0 and 101")
-        exit(1)
+        sys.exit(1)
     lastdmc = float(sys.argv[3])
     if lastdmc < 0:
         logger.fatal(" /n/n *****  starting DMC must be >=0")
-        exit(1)
+        sys.exit(1)
     lastdc = float(sys.argv[4])
     if lastdc < 0:
         logger.fatal(" /n/n *****   starting DC must be >=0\n")
-        exit(1)
+        sys.exit(1)
     logger.debug(f"TZ={TZadjust}    start ffmc={lastffmc}  dmc={lastdmc}\n")
     colnames_out = [
         "year",
