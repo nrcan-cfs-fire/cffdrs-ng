@@ -4,13 +4,18 @@ from math import pi, acos, cos, sin, tan, exp, log
 import datetime
 import logging
 
+
 ##
 # Determine if data is sequential days
 #
 # @param data          data to check
 # @return              whether each entry is 1 day from the next entry
 def is_sequential_days(data):
-    return np.all(datetime.timedelta(days=1) == (data['TIMESTAMP'] - data['TIMESTAMP'].shift(1)).iloc[1:])
+    return np.all(
+        datetime.timedelta(days=1)
+        == (data["TIMESTAMP"] - data["TIMESTAMP"].shift(1)).iloc[1:]
+    )
+
 
 ##
 # Determine if data is sequential hours
@@ -18,7 +23,10 @@ def is_sequential_days(data):
 # @param data          data to check
 # @return              whether each entry is 1 hour from the next entry
 def is_sequential_hours(data):
-    return np.all(datetime.timedelta(hours=1) == (data['TIMESTAMP'] - data['TIMESTAMP'].shift(1)).iloc[1:])
+    return np.all(
+        datetime.timedelta(hours=1)
+        == (data["TIMESTAMP"] - data["TIMESTAMP"].shift(1)).iloc[1:]
+    )
 
 
 ##
@@ -33,6 +41,7 @@ def find_q(temp, rh):
     vp = svp * rh / 100.0
     q = 217 * vp / (273.17 + temp)
     return q
+
 
 ##
 # Find relative humidity
@@ -90,15 +99,29 @@ def sun(lat, lon, mon, day, hour, timezone):
     dechour = 12.0
     jd = julian(mon, day)
     fracyear = 2.0 * pi / 365.0 * (jd - 1.0 + (dechour - 12.0) / 24.0)
-    eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(
-        2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear))
-    decl = (0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
-            0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
-            0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear))
+    eqtime = 229.18 * (
+        0.000075
+        + 0.001868 * cos(fracyear)
+        - 0.032077 * sin(fracyear)
+        - 0.014615 * cos(2.0 * fracyear)
+        - 0.040849 * sin(2.0 * fracyear)
+    )
+    decl = (
+        0.006918
+        - 0.399912 * cos(fracyear)
+        + 0.070257 * sin(fracyear)
+        - 0.006758 * cos(fracyear * 2.0)
+        + 0.000907 * sin(2.0 * fracyear)
+        - 0.002697 * cos(3.0 * fracyear)
+        + 0.00148 * sin(3.0 * fracyear)
+    )
     timeoffset = eqtime + 4 * lon - 60 * timezone
     tst = hour * 60.0 + timeoffset
     hourangle = tst / 4 - 180
-    zenith = acos(sin(lat * pi / 180) * sin(decl) + cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180))
+    zenith = acos(
+        sin(lat * pi / 180) * sin(decl)
+        + cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180)
+    )
     solrad = 0.95 * cos(zenith)
     if solrad < 0:
         solrad = 0.0
@@ -109,7 +132,9 @@ def sun(lat, lon, mon, day, hour, timezone):
     zenith = 90.833 * pi / 180.0
     # FIX: is this some kind of approximation that can be wrong?
     #       breaks with (67.1520291504819, -132.37538245496188)
-    x_tmp = cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) - tan(lat * pi / 180.0) * tan(decl)
+    x_tmp = cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) - tan(
+        lat * pi / 180.0
+    ) * tan(decl)
     # HACK: keep in range
     x_tmp = max(-1, min(1, x_tmp))
     halfday = 180.0 / pi * acos(x_tmp)
