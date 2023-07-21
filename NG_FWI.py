@@ -1,11 +1,11 @@
+import datetime
+import logging
 import os.path
 import sys
+from math import exp, log
+
 import pandas as pd
-import numpy as np
-from math import pi, acos, cos, sin, tan, exp, log
-import datetime
 import util
-import logging
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
@@ -165,7 +165,7 @@ def _hffmc(w, ffmc_old):
     # figure out what fraction of the total rain to be counted 1mm is
     # daily[, FFMC_MULTIPLIER := ifelse(0.5 >= PREC, 0, (PREC - 0.5) / PREC)]
     # for_ffmc <- merge(w, daily[, c('FOR_DATE', 'FFMC_MULTIPLIER')], by=c('FOR_DATE'))
-    for_ffmc = w.copy()
+    for_ffmc = w.loc[:]
     sum_prec = pd.DataFrame({"SUM_PREC": for_ffmc.groupby("DATE")["PREC"].sum()})
     for_ffmc = pd.merge(for_ffmc, sum_prec, on=["DATE"])
     for_ffmc["FFMC_MULTIPLIER"] = for_ffmc.apply(
@@ -178,8 +178,9 @@ def _hffmc(w, ffmc_old):
         lambda row: row["PREC"] * row["FFMC_MULTIPLIER"], axis=1
     )
     for_ffmc["FFMC"] = hourly_ffmc(for_ffmc, ffmc_old=ffmc_old)
-    for_ffmc = for_ffmc[["TIMESTAMP", "FFMC"]]
-    return for_ffmc["FFMC"]
+    # for_ffmc = for_ffmc[['TIMESTAMP', 'FFMC']]
+    # NOTE: returning column doesn't assign anything if index doesn't match
+    return list(for_ffmc["FFMC"])
 
 
 ##
@@ -209,7 +210,7 @@ def _hdmc(w, dmc_old):
         dmc = max(0, dmc)
         return dmc
 
-    dmc = w.copy()
+    dmc = w.loc[:]
     if "SUNSET" not in dmc.columns:
         raise RuntimeError("SUNSET column required")
     if "SUNRISE" not in dmc.columns:
@@ -305,7 +306,7 @@ def _hdc(w, dc_old):
         dc = max(0, dc)
         return dc
 
-    dc = w.copy()
+    dc = w.loc[:]
     if "SUNSET" not in dc.columns:
         raise RuntimeError("SUNSET column required")
     if "SUNRISE" not in dc.columns:
@@ -535,7 +536,7 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured):
         raise RuntimeError("Expected a single LAT value for input weather")
     if 1 != len(w["LONG"].unique()):
         raise RuntimeError("Expected a single LONG value for input weather")
-    r = w.copy()
+    r = w.loc[:]
     # dates = w['TIMESTAMP'].apply(lambda d: d.date()).unique()
     row = r.iloc[0]
     latitude = row["LAT"]
@@ -599,7 +600,7 @@ def hFWI(
     dc_old=DC_DEFAULT,
     percent_cured=PERCENT_CURED,
 ):
-    wx = weatherstream.copy()
+    wx = weatherstream.loc[:]
     old_names = wx.columns
     wx.columns = map(str.upper, wx.columns)
     new_names = wx.columns
