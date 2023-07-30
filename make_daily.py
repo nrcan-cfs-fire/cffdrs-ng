@@ -1,16 +1,23 @@
-import pandas as pd
 import datetime
+
+import pandas as pd
 
 
 ##
 # Convert hourly values stream to daily noon values stream.
+# Expected columns are:
+#   [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #
-# @param   df    hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-# @return        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
+# @param   df    hourly values weather stream
+# @return        daily noon values weather stream
 def hourly_to_daily(df):
     df = df.copy()
+
+    def fmt_ymd(year, mon, day):
+        return f"{int(year):4d}-{int(mon):02d}-{int(day):02d}"
+
     df["DATE"] = df.apply(
-        lambda row: f'{int(row["year"]):4d}-{int(row["mon"]):02d}-{int(row["day"]):02d}',
+        lambda row: fmt_ymd(row["year"], row["mon"], row["day"]),
         axis=1,
     )
     df["FOR_DATE"] = df.apply(
@@ -29,16 +36,16 @@ def hourly_to_daily(df):
 
 
 if "__main__" == __file__:
-    import sys
     import os
+    import sys
 
     if 3 != len(sys.argv):
         print(f"Command line:   {sys.argv[0]} <input file> <output file>\n")
         print(
-            "INPUT FILE format must be HOURLY weather data, comma seperated and take the form"
-        )
-        print(
-            "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n"
+            "INPUT FILE format must be HOURLY weather data,"
+            "comma seperated and take the form\n"
+            "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),"
+            "Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n"
         )
         print("All times should be local standard time")
         sys.exit(1)
@@ -63,8 +70,8 @@ if "__main__" == __file__:
     ]
     try:
         df = df[COLUMNS]
-    except:
+    except Exception as ex:
         print(f"Expected columns to be {COLUMNS}")
-        sys.exit(1)
+        raise ex
     daily = hourly_to_daily(df)
     daily.to_csv(out, index=False)

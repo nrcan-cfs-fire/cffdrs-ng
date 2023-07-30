@@ -247,7 +247,11 @@ def _hdmc(w, dmc_old):
     result = []
     for d in dates:
         for_date = dmc[dmc["DATE"] == d]
-        noon = for_date.loc[dmc["HR"] == 12].iloc[0]
+        # HACK: fails if no noon for this day
+        noons = for_date.loc[dmc["HR"] == 12]
+        if 0 == len(noons):
+            raise RuntimeError("Excpected noon value for every day provided")
+        noon = noons.iloc[0]
         tnoon = float(noon["TEMP"])
         rhnoon = float(noon["RH"])
         rain24 = for_date["RAIN24"].iloc[0]
@@ -527,7 +531,7 @@ def _hgffmc(w, lastmcgmc):
 # @param     dc_old          previous value for Drought Code
 # @param     percent_cured   Grass curing (percent, 0-100)
 # @return                    hourly values FWI and weather stream
-def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured):
+def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
     if 1 != len(w["ID"].unique()):
@@ -553,6 +557,19 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured):
         axis=1,
         result_type="expand",
     )
+    # HACK: formulas don't work if noon is missing, so filter
+    have_dates = r["TIMESTAMP"].dt.date.drop_duplicates()
+    have_noon = r[r["HR"] == 12]["TIMESTAMP"].dt.date.drop_duplicates()
+    missing_noon = list(set(have_dates).difference(set(have_noon)))
+    if missing_noon:
+        n0 = len(r)
+        r = r.loc[~(r["TIMESTAMP"].dt.date.isin(missing_noon))]
+        n1 = len(r)
+        if not silent:
+            logging.warning(
+                f"Can't calculate indices for dates missing noon, so dropping {n0 - n1} rows"
+                f"and not calculating for {[x.strftime('%Y-%m-%d') for x in missing_noon]}"
+            )
     r["FFMC"] = _hffmc(r, ffmc_old)
     r["DMC"] = _hdmc(r, dmc_old)
     r["DC"] = _hdc(r, dc_old)
@@ -599,6 +616,7 @@ def hFWI(
     dmc_old=DMC_DEFAULT,
     dc_old=DC_DEFAULT,
     percent_cured=PERCENT_CURED,
+    silent=False,
 ):
     wx = weatherstream.loc[:]
     old_names = wx.columns
@@ -664,9 +682,11 @@ def hFWI(
     for stn in wx["ID"].unique():
         by_stn = wx[wx["ID"] == stn]
         for yr in by_stn["YR"].unique():
-            by_year = by_stn[by_stn["YR"] == yr]
+            by_year = by_stn[by_stn["YR"] == yr].reset_index(drop=True)
             logger.debug(f"Running {stn} for {yr}")
-            r = _stnHFWI(by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured)
+            r = _stnHFWI(
+                by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent
+            )
             results = pd.concat([results, r])
     #########################################
     # REVERT TO ORIGINAL COLUMN NAMES

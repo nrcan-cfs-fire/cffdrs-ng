@@ -116,7 +116,6 @@ def run_tests():
 
     bak_minmax = pd.read_csv("./bak_minmax_py.csv")
     df = make_hourly.minmax_to_hourly(bak_minmax, timezone=-6)
-    df_hourly = df.copy()
     # FIX: this is just to match R code for now
     df["year"] = df["year"].apply("{:02d}".format)
     df["mon"] = df["mon"].apply("{:02d}".format)
