@@ -679,15 +679,18 @@ def hFWI(
     # PROCESS HERE
     #########################################
     results = None
-    for stn in wx["ID"].unique():
-        by_stn = wx[wx["ID"] == stn]
-        for yr in by_stn["YR"].unique():
-            by_year = by_stn[by_stn["YR"] == yr].reset_index(drop=True)
-            logger.debug(f"Running {stn} for {yr}")
-            r = _stnHFWI(
-                by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent
-            )
-            results = pd.concat([results, r])
+    for idx, by_year in wx.groupby(["ID", "YR"]):
+        logger.debug(f"Running for {idx}")
+        r = _stnHFWI(
+            by_year.reset_index(),
+            timezone,
+            ffmc_old,
+            dmc_old,
+            dc_old,
+            percent_cured,
+            silent,
+        )
+        results = pd.concat([results, r])
     #########################################
     # REVERT TO ORIGINAL COLUMN NAMES
     #########################################
