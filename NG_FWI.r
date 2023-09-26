@@ -201,9 +201,13 @@ vpd <- function(temperature, relative_humidity) {
       DELTA_dry <- 1.894 * (tnoon + 1.1) * (100.0 - rhnoon) * el[mon] * 0.0001
     } else {
       # shouldn't use ratio on PET model
-      DryFrac <- 1.0
-      # # if PET model should still only apply to sunlight hours
-      # DryFrac <- ifelse(0 == DryFrac, 0.0, 1.0)
+      DRY_BY_HOUR <- 1.0
+      # # PET model represents a full day of drying, so divide by 24
+      # DRY_BY_HOUR <- 1.0 / 24.0
+      # DryFrac <- DRY_BY_HOUR
+      # HACK: probably tuned model based on only using sunlight hours?
+      # if PET model should still only apply to sunlight hours
+      DryFrac <- ifelse(0 == DryFrac, 0.0, DRY_BY_HOUR)
     }
     dmc <- lastdmc + (DELTA_dry * DryFrac)
     ########################################################################################################
@@ -230,6 +234,8 @@ vpd <- function(temperature, relative_humidity) {
   if (PET_DMC) {
     pet <- getPET(dmc)
     dmc <- merge(dmc, pet, by = c("TIMESTAMP", "LAT", "LONG"))
+  } else {
+    dmc[, DELTA_dry := NA]
   }
   ######################################################################################
 
@@ -275,7 +281,7 @@ vpd <- function(temperature, relative_humidity) {
       ############################### DMC- UPDATE ############################################################
       ## If A PET-based DELTA_Dry was calculated, Pass it to "hourly_DMC"
 
-      lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, r$HR, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon, ifelse(any(grepl("DELTA_dry", colnames(r))), r$DELTA_dry, NA))
+      lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, r$HR, lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon, r$DELTA_dry)
 
       ########################################################################################################
 
