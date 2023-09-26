@@ -1,7 +1,7 @@
 #' Computes hourly FWI indices for an input hourly weather stream
 library(lubridate)
 library(data.table)
-#source("util.r")
+source("util.r")
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
@@ -178,7 +178,7 @@ vpd <- function(temperature, relative_humidity)
 .hdmc <- function(w, dmc_old,
 ########################################################################################################
 ############################### DMC- UPDATE ###########################################################
-## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach             
+## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach
                   PET_DMC = F)
   ############################### DMC- UPDATE ###########################################################
 {
@@ -198,18 +198,18 @@ vpd <- function(temperature, relative_humidity)
     {
       tnoon <- -1.1
     }
-    
+
     ########################################################################################################
     ############################### DMC- UPDATE ############################################################
     ## Only calculate old log drying rate "DELTA_dry" if PET-based "DELTA_dry" was not passed to "hourly_DMC
-    
+
     # full day of drying in old FWI/DMC
     if (is.na(DELTA_dry)) {
       DELTA_dry <- 1.894*(tnoon+1.1)*(100.0-rhnoon)*el[mon]*0.0001
     }
-    
-    ######################################################################################################## 
-    
+
+    ########################################################################################################
+
     # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
     dmc <- lastdmc + (DELTA_dry*DryFrac)
     if (dmc < 0) { dmc <- 0}
@@ -223,18 +223,18 @@ vpd <- function(temperature, relative_humidity)
   dmc[, MINRH := min(RH), by=c("DATE")]
   dmc[, VPD24 := sum(VPD), by=c("DATE")]
   dmc[, DRYFRAC := ifelse(HR >= SUNRISE & HR <= SUNSET, ifelse(VPD24 == 0,  1 / (SUNSET - SUNRISE), VPD / VPD24), 0.0)]
-  
+
   ######################################################################################
   ########################## DMC-Update Drying rate ####################################
-  
+
   ## Calculate understory PET and PET-Based drying rate
   if(PET_DMC) {
     pet = getPET(dmc)
     dmc = merge(dmc,pet, by = c("TIMESTAMP","LAT", "LONG"))
-    
+
   }
   ######################################################################################
-  
+
   # #>>>
   # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
   # dmc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
@@ -278,12 +278,12 @@ vpd <- function(temperature, relative_humidity)
       ########################################################################################################
       ############################### DMC- UPDATE ############################################################
       ## If A PET-based DELTA_Dry was calculated, Pass it to "hourly_DMC"
-      
+
       lastdmc <- hourly_DMC(r$TEMP, r$RH, r$WS, r$PREC, r$MON, r$HR,lastdmc, r$DRYFRAC, r$RAIN24, DELTA_mcdmcrain24, tnoon, rhnoon,ifelse(any(grepl("DELTA_dry",colnames(r))),r$DELTA_dry,NA))
-      
+
       ########################################################################################################
-      
-      
+
+
       return(lastdmc)
     }
     values <- Reduce(fctDMC, hrs, init=lastdmc, accumulate=TRUE)
@@ -390,74 +390,74 @@ vpd <- function(temperature, relative_humidity)
 hourly_gfmc <- function(temp, rh, wind, rain, lastmc, solrad, time)
 {
   # MARK II of the model (2016) wth new solar rad model specific to grass
-  # #
-  # # Temp is temperature in C
-  # # RH is realtive humidty in %
-  # # wind is average wind speed in km/h
-  # # rain is rainfall in mm
-  # # solrad is kW/m2  (radiaiton reaching fuel)
-  # # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-  # # time - time between obs in HOURS
-  # #
-  # #
-  # # DRF of 1/16.1 comes from reducting the standard response time curve
-  # # at 26.7C, 20%RH, 2 km/h to 0.85hr.
-  # #
-  # #
-  # #
-  # # bmw
-  # drf <- 0.389633
-  # mo <- lastmc;
-  # # fuel temperature/humidity
-  # tf <- temp+17.9*solrad*exp(-0.034*wind);   #fuel temp from CEVW
-  # if(tf>temp)
-  # {
-  #   rhf <- rh*6.107*10.0^(7.5*temp/(temp+237.0) )/(6.107*10.0^(7.5*tf/(tf+237.0) ))
-  # } else {
-  #   rhf <- rh
-  # }
-  # if(rain!=0)
-  # {
-  #   # /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
-  #   # /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-  #   mo <- mo+ rain/0.3*100.0   #/* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
-  #   if(mo>250.0)
-  #   {
-  #     mo <- 250.0
-  #   }
-  # }
-  # ed <- 1.62*rhf^0.532+(13.7*exp( (rhf-100)/13.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));   #/*GRASS EMC*/
-  # moed <- mo-ed;
-  # ew <- 1.42*rhf^0.512+(12.0*exp((rhf-100)/18.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));     #/*GRASS EMC*/
-  # moew <- mo-ew;
-  # if (moed==0 || (moew>=0 && moed<0))
-  # {
-  #   xm <- mo
-  #   if(moed==0)
-  #   {
-  #     e <- ed
-  #   }
-  #   if(moew>=0)
-  #   {
-  #     e <- ew
-  #   }
-  # } else {
-  #   if( moed>0)
-  #   {
-  #     a1 <- rhf/100
-  #     e <- ed
-  #     moe <- moed
-  #   } else {
-  #     a1 <- (100.0-rhf)/100.0
-  #     e <- ew
-  #     moe <- moew
-  #   }
-  #   xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(wind)*(1-a1^8)))
-  #   xkd <- xkd*drf*exp(0.0365*tf)
-  #   # //   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
-  #   xm <- e+moe*exp(-1.0*log(10.0)*xkd*time)
-  # }
-  return(1)
+  #
+  # Temp is temperature in C
+  # RH is realtive humidty in %
+  # wind is average wind speed in km/h
+  # rain is rainfall in mm
+  # solrad is kW/m2  (radiaiton reaching fuel)
+  # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
+  # time - time between obs in HOURS
+  #
+  #
+  # DRF of 1/16.1 comes from reducting the standard response time curve
+  # at 26.7C, 20%RH, 2 km/h to 0.85hr.
+  #
+  #
+  #
+  # bmw
+  drf <- 0.389633
+  mo <- lastmc;
+  # fuel temperature/humidity
+  tf <- temp+17.9*solrad*exp(-0.034*wind);   #fuel temp from CEVW
+  if(tf>temp)
+  {
+    rhf <- rh*6.107*10.0^(7.5*temp/(temp+237.0) )/(6.107*10.0^(7.5*tf/(tf+237.0) ))
+  } else {
+    rhf <- rh
+  }
+  if(rain!=0)
+  {
+    # /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
+    # /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
+    mo <- mo+ rain/0.3*100.0   #/* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
+    if(mo>250.0)
+    {
+      mo <- 250.0
+    }
+  }
+  ed <- 1.62*rhf^0.532+(13.7*exp( (rhf-100)/13.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));   #/*GRASS EMC*/
+  moed <- mo-ed;
+  ew <- 1.42*rhf^0.512+(12.0*exp((rhf-100)/18.0))+0.27*(26.7-tf)*(1.0-1.0/exp(0.115*rhf));     #/*GRASS EMC*/
+  moew <- mo-ew;
+  if (moed==0 || (moew>=0 && moed<0))
+  {
+    xm <- mo
+    if(moed==0)
+    {
+      e <- ed
+    }
+    if(moew>=0)
+    {
+      e <- ew
+    }
+  } else {
+    if( moed>0)
+    {
+      a1 <- rhf/100
+      e <- ed
+      moe <- moed
+    } else {
+      a1 <- (100.0-rhf)/100.0
+      e <- ew
+      moe <- moew
+    }
+    xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(wind)*(1-a1^8)))
+    xkd <- xkd*drf*exp(0.0365*tf)
+    # //   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
+    xm <- e+moe*exp(-1.0*log(10.0)*xkd*time)
+  }
+  return(xm)
 }
 
 
@@ -529,7 +529,7 @@ grassFWI <- Vectorize(function(gsi, load)
 .stnHFWI <- function(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured,
 ########################################################################################################
 ############################### DMC- UPDATE ###########################################################
-## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach             
+## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach
                      PET_DMC = F)
 ############################### DMC- UPDATE ###########################################################
 {
@@ -554,16 +554,16 @@ grassFWI <- Vectorize(function(gsi, load)
   dates <- as_datetime(unique(w$TIMESTAMP))
   latitude <- w$LAT[[1]]
   longitude <- w$LONG[[1]]
-  
+
   ###########################################################################################
   ##################################### DMC-UPDATE ##########################################
   ## To calculate solar radiation using Hargreaves Model we need daily temperature range to
   ## be pasted to getSunlight function
   ## See: https://github.com/derekvanderkampcfs/open_solar_model#conclusions
-  
+
   r[, temprange := diff(range(TEMP)), by = c("DATE")]
   sunlight <- getSunlight(dates, temprange = r$temprange,timezone, latitude, longitude)
-  
+
   ###########################################################################################
   ###########################################################################################
   setnames(sunlight, c("DATE"), c("TIMESTAMP"))
@@ -576,11 +576,11 @@ grassFWI <- Vectorize(function(gsi, load)
   # print("FFMC")
   r$FFMC <- rep(1,nrow(r))#.hffmc(r, ffmc_old)
   # print("DMC")
-  
+
   r$DMC <- .hdmc(r, dmc_old,
  ########################################################################################################
  ############################### DMC- UPDATE ###########################################################
-## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach             
+## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach
                  PET_DMC = PET_DMC)
   ############################### DMC- UPDATE ###########################################################
   # print("DC")
@@ -597,17 +597,17 @@ grassFWI <- Vectorize(function(gsi, load)
   r[, SOLPROP := ifelse(MIN_RH > 30, (1.27 - 0.0111 * MIN_RH), 1)]
   r[, SOLPROP := ifelse(SOLPROP < 0, 0, maxsolprop * SOLPROP)]
   r[, SOLRAD := SOLRAD * SOLPROP]
-  # lastmcgmc <- 101-ffmc_old # approximation for a start up
-  # r$MCGMC <- reduce_by_row(
-  #   function(lastmcgmc, n){
-  #     row <- r[n,]
-  #     return(hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0))
-  #     },
-  #   r,
-  #   lastmcgmc)
-  # r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
-  # r[, GSI := grassISI(WS, MCGMC, percent_cured)]
-  # r[, GFWI := grassFWI(GSI, grassfuelload)]
+  lastmcgmc <- 101-ffmc_old # approximation for a start up
+  r$MCGMC <- reduce_by_row(
+    function(lastmcgmc, n){
+      row <- r[n,]
+      return(hourly_gfmc(row$TEMP, row$RH, row$WS, row$PREC, lastmcgmc, row$SOLRAD, 1.0))
+      },
+    r,
+    lastmcgmc)
+  r[, GFMC := 59.5 * (250 - MCGMC) / (147.2772277 + MCGMC)]
+  r[, GSI := grassISI(WS, MCGMC, percent_cured)]
+  r[, GFWI := grassFWI(GSI, grassfuelload)]
   return(r)
 }
 
@@ -625,7 +625,7 @@ grassFWI <- Vectorize(function(gsi, load)
 hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, percent_cured=100.0,
  ########################################################################################################
 ############################### DMC- UPDATE ###########################################################
-## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach             
+## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach
                  PET_DMC = F)
   ############################### DMC- UPDATE ###########################################################
 {
@@ -708,7 +708,7 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
       r <- .stnHFWI(by_year, timezone, ffmc_old, dmc_old, dc_old, percent_cured,
  ########################################################################################################
 ############################### DMC- UPDATE ###########################################################
-## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach             
+## Pass logical dictating whether to caclulate DMC with new PET-based approach or original approach
                     PET_DMC = PET_DMC)
 ############################### DMC- UPDATE ###########################################################)
       results <- rbind(results, r)
@@ -761,4 +761,3 @@ hFWI <- function(weatherstream, timezone, ffmc_old=85, dmc_old=6, dc_old=15, per
   # should have gotten rid of all the fields we added to make the processing work
   return(results)
 }
-

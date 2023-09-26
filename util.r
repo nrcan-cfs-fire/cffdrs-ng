@@ -91,13 +91,13 @@ getSunlight <- function(dates, temprange,timezone, latitude, longitude)
   df[, tst := as.numeric(hr)*60.0+timeoffset]
   df[, hourangle := tst/4-180]
   df[, zenith := acos(sin(latitude*pi/180)*sin(decl)+cos(latitude*pi/180)*cos(decl)*cos(hourangle*pi/180) )]
-  
+
   ###########################################################################################
   ##################################### DMC-UPDATE ##########################################
-  ## calculateing solar radiation using Hargraeves model suggested at: 
+  ## calculateing solar radiation using Hargraeves model suggested at:
   ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
   ## And calculate atm. transmissivity (for calculation of downwelling longwave )
-  
+
   df[, zenith := ifelse(zenith >= pi/2,pi/2,zenith)]
   df[, solradExt := 1.367*cos(zenith)] ## Extraterrestrial solar radiation in kW m-2
   df[, solradExtDaySum := sum(solradExt)*3600,by = c("d")] ## Daily total of Extra. Solar Rad in kJ m-2 day-1
@@ -168,7 +168,7 @@ toDaily <- function(w, all=FALSE)
 #'
 #' @param dmc             dmc dataframe
 getPET <- function(dmc) {
-  
+
   C_TO_K <- 273
   LofVap <- 2260 # latent heat of vaporisation (kJ/kg) (from https://link.springer.com/referenceworkentry/10.1007%2F978-90-481-2642-2_327)
   psychro <- 64 # Psychometric constant (Pa/C) (taken from the 500 m elevation value from Table 2.2 of https://www.fao.org/3/x0490e/x0490e0j.htm#annex%202.%20meteorological%20tables)
@@ -182,22 +182,22 @@ getPET <- function(dmc) {
   e_veg = 0.95  # emissivity of vegetation used for downwelling canopy longwave and upwelling surface longwave
   albedo = 0.23
   time_res = 3600
-  
+
   ##############################################
   ## Calculate the sub-canopy solar radiation using the model developed here:
-  ## https://github.com/nrcan-cfs-fire/DMC-update/tree/Version_2#subcanopoy-shortwave-radiation-model 
+  ## https://github.com/nrcan-cfs-fire/DMC-update/tree/Version_2#subcanopoy-shortwave-radiation-model
   ## and stored here:
   ## https://github.com/nrcan-cfs-fire/DMC-update/blob/Version_2/data/final_shortwave_model.rda
-  
+
   dmc[,altitude := pi/2 - ZENITH]
   dmc[,subSolar :=  0.353253 * SOLRADHAR^2.818619 + -0.058822 * SOLRADHAR +     0.001206  * altitude/pi*180]
-  
-  ############################################## 
+
+  ##############################################
   ## Caculate subcanopy RH using the model developed here:
   ## https://github.com/nrcan-cfs-fire/DMC-update/tree/Version_2#subcanpoy-rh-and-temperature-models
   ## and stored here:
   ## https://github.com/nrcan-cfs-fire/DMC-update/blob/Version_2/data/final_rh_model.rda
-  
+
   rh_bias_df <- data.frame(
     HR = 0:23,
     RHBias = c(-2.2847941,
@@ -225,18 +225,18 @@ getPET <- function(dmc) {
                -1.7829464,
                -2.2175595)
   )
-  
+
   ##############################################
   ## Caculate subcanopy temp using the model developed here:
   ## https://github.com/nrcan-cfs-fire/DMC-update/tree/Version_2#subcanpoy-rh-and-temperature-models
   ## and stored here:
   ## https://github.com/nrcan-cfs-fire/DMC-update/blob/Version_2/data/final_airtemp_model.rda
-  
+
   dmc <- merge(dmc,rh_bias_df,by = "HR")
   dmc[,RH_sub:= RH + RHBias]
   dmc[,RH_sub:= ifelse(RH_sub<0,0,RH_sub)]
   dmc[,RH_sub:=  ifelse(RH_sub>100,100,RH_sub)]
-  
+
   TEMP_bias_df <- data.frame(
     HR = 0:23,
     TEMPBias = c(   0.19805294,
@@ -265,7 +265,7 @@ getPET <- function(dmc) {
                  0.22197024)
   )
 
-  
+
   dmc <- merge(dmc,TEMP_bias_df,by = "HR")
   dmc[,TEMP_sub:= TEMP + TEMPBias]
 
@@ -274,10 +274,10 @@ getPET <- function(dmc) {
   ## https://github.com/derekvanderkampcfs/WAF_Data
   ## and stored here:
   ## ???????
-  
+
   ## Convert ftrom km/hr to m/s
  # dmc[,WS := WS/3.6]
-  
+
   wind_thresh <- 2.78
   PAI <- 1.73 ## PAI for "JPP2" site at the Petawawa site ??? ACTUAL SOURCE ???
 
@@ -294,7 +294,7 @@ getPET <- function(dmc) {
 
   # #############################################
   # ## PM - PET MODEL
-  # 
+  #
   dmc[,SVP_sub := 0.6108*exp(17.27*TEMP_sub/(237.3+TEMP_sub))*1000] # Sat vapour pressure (Pa) (factor of 1000 required to convert from kPa to Pa) from: https://www.fao.org/3/x0490e/x0490e0j.htm#annex%202.%20meteorological%20tables
   dmc[,satSlope_sub := 4098*(SVP_sub)/(TEMP_sub + 237.3)^2] # slope of VP curve (Pa/C) from: https://www.fao.org/3/x0490e/x0490e0j.htm#annex%202.%20meteorological%20tables
   dmc[,VP_sub := (RH_sub*SVP_sub)/100] #vapour pressure (Pa)
@@ -313,26 +313,26 @@ getPET <- function(dmc) {
   dmc[,T.daily := mean(subSolar)/mean(SOLRADHAR),by = c("YR","MON","DAY","LAT")] ## canopy transmission of solar radiation (frac)
   dmc[,Lsky := e.clear.daily*F.daily*SB*((TEMP+C_TO_K)^4)] ## downwelling sky longwave (kW m-2)
   dmc[,Ldown := T.daily*Lsky+(1-T.daily)*Canopy_L] # subcanopy downwelling longwave (kW m-2)
-  dmc[,`Q*` := subSolar-(subSolar*albedo)+(Ldown-Lup)]  # net radiation (kW m-2). 
+  dmc[,`Q*` := subSolar-(subSolar*albedo)+(Ldown-Lup)]  # net radiation (kW m-2).
   dmc[,radterm_sub  :=  satSlope_sub*`Q*`]
   dmc[,vpdterm_sub  :=  RHO_A*C_A*(VPD_sub)/ra_sub]
   dmc[,PET_sub  :=  (radterm_sub + vpdterm_sub)/(LofVap*(satSlope_sub + psychro ))]  ## potential evapotransp (kg/(m2·s)) (from https://en.wikipedia.org/wiki/Penman_equation)
   dmc[,PET_mm_sub  :=  PET_sub*time_res]  ## potential evapotransp (mm/time step)
   dmc[,PET_mm_sub_daily := sum(PET_mm_sub),by = c("YR","MON","DAY","LAT")]
-  
-  
+
+
   ##################################################
   ## Calculate PET-Based DMC log-drying rate using approach from
   ## ?????
   ## Specifically using regression model "RK_PET_lm.rda" stored at:
-  
+
   dmc[,DELTA_dry := (PET_mm_sub_daily -1.06394)/0.3597646*1.172863 + 2.201021	]
   write.table(dmc,file = "dmc_dump.csv",append = file.exists("dmc_dump.csv"),col.names = !file.exists("dmc_dump.csv"),quote = F, row.names = F,sep = ",")
   result = dmc[,c("TIMESTAMP","LAT", "LONG","PET_mm_sub","DELTA_dry")]
-  
+
   return(result)
-  
+
   #####################################################################################
   ######################################################################################
-  
+
 }

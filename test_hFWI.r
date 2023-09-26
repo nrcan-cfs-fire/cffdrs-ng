@@ -1,9 +1,9 @@
 #' Plots a comparison between hourly and daily values
-#source("NG_FWI.r")
-#source("old_cffdrs.r")
+source("NG_FWI.r")
+source("old_cffdrs.r")
 
 
-test_hfwi <- function(df=cffdrs::test_hffmc, timezone=-6,PET_DMC = F)
+test_hfwi <- function(df=read.csv('./test_hffmc.csv'), timezone=-6,PET_DMC = F)
 {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
