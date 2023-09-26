@@ -5,8 +5,7 @@ library(data.table)
 library(lubridate)
 bak <- as.data.table(read.csv("./bak_hourly.csv"))
 
-save_csv <- function(df, file)
-{
+save_csv <- function(df, file) {
   result <- copy(df)
   colnames(result) <- tolower(colnames(result))
   result[, mon := sprintf("%2d", mon)]
@@ -25,10 +24,18 @@ save_csv <- function(df, file)
   result[, gfmc := sprintf("%6.1f", round(gfmc, 1))]
   result[, gsi := sprintf("%6.1f", round(gsi, 1))]
   result[, gfwi := sprintf("%6.1f", round(gfwi, 1))]
-  write.csv(result[, c("year", "mon", "day", "hour", "temp", "rh", "wind", "rain", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi")], file, row.names=FALSE, quote=FALSE)
+  write.csv(
+    result[, c(
+      "year", "mon", "day", "hour", "temp", "rh", "wind", "rain", "ffmc",
+      "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi"
+    )],
+    file,
+    row.names = FALSE,
+    quote = FALSE
+  )
 }
 
-result <- hFWI(bak, timezone=-6)
+result <- hFWI(bak, timezone = -6)
 save_csv(result, "./result.csv")
 
 test_hffmc <- read.csv("test_hffmc.csv")
@@ -36,10 +43,10 @@ df <- data.table(test_hffmc)
 df[, lat := bak$lat[[1]]]
 df[, long := bak$long[[1]]]
 setnames(df, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))
-write.table(df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")], "./input_hffmc.csv", quote=FALSE, row.names=FALSE, sep=",")
+write.table(df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")], "./input_hffmc.csv", quote = FALSE, row.names = FALSE, sep = ",")
 df <- as.data.table(read.csv("./input_hffmc.csv"))
 
-result_hffmc <- hFWI(df, timezone=-6)
+result_hffmc <- hFWI(df, timezone = -6)
 save_csv(result_hffmc, "./result_hffmc.csv")
 
 source("make_daily.r")
@@ -52,7 +59,7 @@ df[, temp := sprintf("%.1f", round(temp, 1))]
 df[, rh := sprintf("%.0f", round(rh, 0))]
 df[, wind := sprintf("%.1f", round(wind, 1))]
 df[, rain := sprintf("%.1f", round(rain, 1))]
-write.table(df, "bak_daily.csv", quote=FALSE, sep=",", row.names=FALSE)
+write.table(df, "bak_daily.csv", quote = FALSE, sep = ",", row.names = FALSE)
 
 
 source("make_minmax.r")
@@ -68,13 +75,13 @@ df[, rh_min := sprintf("%.0f", rh_min)]
 df[, wind_max := sprintf("%.1f", wind_max)]
 df[, wind_min := sprintf("%.1f", wind_min)]
 df[, rain := sprintf("%.1f", rain)]
-write.table(df, "bak_minmax.csv", quote=FALSE, sep=",", row.names=FALSE)
+write.table(df, "bak_minmax.csv", quote = FALSE, sep = ",", row.names = FALSE)
 
 
 
 source("make_hourly.r")
 bak_minmax <- as.data.table(read.csv("./bak_minmax.csv"))
-df <- minmax_to_hourly(bak_minmax, timezone=-6)
+df <- minmax_to_hourly(bak_minmax, timezone = -6)
 df_hourly <- copy(df)
 df[, year := sprintf("%02d", year)]
 df[, mon := sprintf("%02d", mon)]
@@ -84,17 +91,17 @@ df[, temp := sprintf("%.1f", round(temp, 1))]
 df[, rh := sprintf("%.0f", round(rh, 0))]
 df[, wind := sprintf("%.1f", round(wind, 1))]
 df[, rain := sprintf("%.1f", round(rain, 1))]
-write.table(df, "bak_diurnal.csv", quote=FALSE, sep=",", row.names=FALSE)
+write.table(df, "bak_diurnal.csv", quote = FALSE, sep = ",", row.names = FALSE)
 
 
 bak_diurnal <- as.data.table(read.csv("./bak_diurnal.csv"))
-result3 <- hFWI(bak_diurnal, timezone=-6)
+result3 <- hFWI(bak_diurnal, timezone = -6)
 save_csv(result3, "./result3.csv")
 
 
 bak_windy <- as.data.table(read.csv("./bak_windy.csv"))
-result4 <- hFWI(bak_windy, timezone=-6)
+result4 <- hFWI(bak_windy, timezone = -6)
 save_csv(result4, "./result4.csv")
 
-save_csv(hFWI(as.data.table(read.csv("./bak_rh100.csv")), timezone=-6), "./result5.csv")
-save_csv(hFWI(as.data.table(read.csv("./bak_rh0.csv")), timezone=-6), "./result6.csv")
+save_csv(hFWI(as.data.table(read.csv("./bak_rh100.csv")), timezone = -6), "./result5.csv")
+save_csv(hFWI(as.data.table(read.csv("./bak_rh0.csv")), timezone = -6), "./result6.csv")
