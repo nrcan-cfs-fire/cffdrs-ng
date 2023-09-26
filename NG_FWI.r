@@ -199,12 +199,16 @@ vpd <- function(temperature, relative_humidity) {
     # full day of drying in old FWI/DMC
     if (is.na(DELTA_dry)) {
       DELTA_dry <- 1.894 * (tnoon + 1.1) * (100.0 - rhnoon) * el[mon] * 0.0001
+    } else {
+      # shouldn't use ratio on PET model
+      DryFrac <- 1.0
+      # # if PET model should still only apply to sunlight hours
+      # DryFrac <- ifelse(0 == DryFrac, 0.0, 1.0)
     }
-
+    dmc <- lastdmc + (DELTA_dry * DryFrac)
     ########################################################################################################
 
     # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
-    dmc <- lastdmc + (DELTA_dry * DryFrac)
     if (dmc < 0) {
       dmc <- 0
     }
