@@ -13,7 +13,8 @@
 /**
  * A row from the input file for an hourly weather stream
  */
-struct row {
+struct row
+{
   float lat, lon;
   int year, mon, day, hour;
   float temp, rh, wind, rain;
@@ -21,7 +22,8 @@ struct row {
 /**
  * A row from the input file for a min/max weather stream
  */
-struct row_minmax {
+struct row_minmax
+{
   float lat, lon;
   int year, mon, day, hour;
   float temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain;
@@ -29,11 +31,11 @@ struct row_minmax {
 /**
  * Read a row from a an hourly weather stream file
  */
-int read_row(FILE *inp, struct row* r);
+int read_row(FILE* inp, struct row* r);
 /**
  * Read a row from a min/max weather stream file
  */
-int read_row_minmax(FILE *inp, struct row_minmax* r);
+int read_row_minmax(FILE* inp, struct row_minmax* r);
 /**
  * Find specific humidity
  *
@@ -63,7 +65,7 @@ float findrh(float q, float temp);
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-float sun(float lat, float lon, int mon, int day, int hour, int timezone, float *sunrise, float *sunset);
+float sun(float lat, float lon, int mon, int day, int hour, int timezone, float* sunrise, float* sunset);
 /**
  * Find solar radiation at a give time and place
  *
@@ -76,7 +78,7 @@ float sun(float lat, float lon, int mon, int day, int hour, int timezone, float 
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-float sun_julian(float lat, float lon, int jd, int hour, int timezone, float *sunrise, float *sunset);
+float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* sunrise, float* sunset);
 /**
  * Find day of year. Does not properly deal with leap years.
  *

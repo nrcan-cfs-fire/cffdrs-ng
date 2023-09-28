@@ -8,8 +8,7 @@ source("util.r")
 #' @param df        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
 #' @return          daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
 #' @export daily_to_minmax
-daily_to_minmax <- function(df)
-{
+daily_to_minmax <- function(df) {
   df <- data.table(df)
   hadId <- FALSE
   if ("id" %in% tolower(colnames(df))) {
@@ -24,8 +23,7 @@ daily_to_minmax <- function(df)
   df[, rh_max := ifelse(rh_max > 100, 100, rh_max)]
   df[, wind_min := 0.15 * wind]
   df[, wind_max := 1.25 * wind]
-  if (hadId)
-  {
+  if (hadId) {
     df <- df[, c("id", "lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
   } else {
     df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]

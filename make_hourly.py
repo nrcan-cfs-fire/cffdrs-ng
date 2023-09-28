@@ -1,6 +1,8 @@
-import pandas as pd
 import datetime
-from math import pi, acos, cos, sin, tan, exp, log
+from math import acos, cos, exp, log, pi, sin, tan
+
+import pandas as pd
+
 import util
 
 C_TEMP = {"c_alpha": 0.2, "c_beta": 2.0, "c_gamma": -2.9}
@@ -325,8 +327,8 @@ def minmax_to_hourly(w, timezone, skip_invalid=False, verbose=False):
 
 
 if "__main__" == __file__:
-    import sys
     import os
+    import sys
 
     COLUMNS = [
         "lat",

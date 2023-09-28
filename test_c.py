@@ -1,8 +1,9 @@
-import NG_FWI
-import make_daily
-import make_minmax
-import make_hourly
 import pandas as pd
+
+import make_daily
+import make_hourly
+import make_minmax
+import NG_FWI
 
 
 def round_format(fmt, precision):

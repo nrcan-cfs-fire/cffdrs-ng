@@ -1,4 +1,5 @@
 import pandas as pd
+
 import util
 
 
@@ -43,8 +44,8 @@ def daily_to_minmax(df):
 
 
 if "__main__" == __file__:
-    import sys
     import os
+    import sys
 
     if 3 != len(sys.argv):
         print(f"Command line:   {sys.argv[0]} <input file> <output file>\n")
