@@ -164,3 +164,28 @@ int read_row_minmax(FILE* inp, struct row_minmax* r)
   }
   return err;
 }
+
+/* this is a simple piecewise tabular summary (10day) if DKT's NDVI based cure state analysis (smoothed)
+It is from central canada Boreal Plains
+
+It will be a DEFAULT greenness given NO other information ....Users should be encouraged to make ...
+these local observations each year themselves as such obs will be far superior to this average
+*/
+float seasonal_curing(int julian_date)
+{
+  static float PERCENT_CURED[38] = {96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 95.0, 93.0, 92.0, 90.5, 88.4, 84.4, 78.1, 68.7, 50.3, 32.9, 23.0, 22.0, 21.0, 20.0, 25.7, 35.0, 43.0, 49.8, 60.0, 68.0, 72.0, 75.0, 78.9, 86.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0};
+  /* these are data from DanT's 10 day average of curing for Boreal Plains ...they have been smoothed however
+  and the winter has been added at the max curing observed
+  the DATE array values is the first julian date (doy) in the 10 day window....its unnedded the way i did this now
+  A date past the end of year has been added to make the array search easier.
+
+  input julian date should be between 1 and 366
+  */
+  /* truncating the date divide by 10 to get in right range */
+  int jd_class = (int)(julian_date / 10.0);
+  /* should be the fractional position in the 10 day period  */
+  float period_frac = (julian_date - (jd_class * 10.0)) / 10.0;
+  float difference = PERCENT_CURED[jd_class + 1] - PERCENT_CURED[jd_class];
+  float cure = PERCENT_CURED[jd_class] + difference * period_frac;
+  return cure;
+}
