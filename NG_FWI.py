@@ -191,23 +191,25 @@ def _hffmc(w, ffmc_old):
 # @param dmc_old         Duff Moisture Code for previous hour
 # @return                Duff Moisture Codes for given data
 def _hdmc(w, dmc_old):
-    def hourly_dmc(
-        t, rh, ws, rain, mon, lastdmc, DryFrac, rain24, DELTA_MCrain, tnoon, rhnoon
-    ):
-        el = [6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6]
+    el = [6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6]
+
+    def hourly_dmc(t, rh, ws, rain, mon, lastdmc, drying_so_far, rain_so_far):
         # wetting FROM rain
-        if rain > 0 and DELTA_MCrain > 0.0:
+        if rain_so_far > 1.5:
+            reff = 0.92 * rain_so_far - 1.27
+            if lastdmc <= 33:
+                b = 100.0 / (0.5 + 0.3 * lastdmc)
+            elif lastdmc <= 65:
+                b = 14.0 - 1.3 * log(lastdmc)
+            else:
+                b = 6.2 * log(lastdmc) - 17.2
+            DELTA_MCrain = 1000.0 * reff / (48.77 + b * reff)
             # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
-            mc = 20.0 + 280.0 / exp(0.023 * lastdmc)
-            #  the MC increase by the rain in this hour...  total * rain_hour/rain24
-            mc = mc + DELTA_MCrain * (rain / rain24)
+            # moisture content increase since start of period
+            mc = 20.0 + 280.0 / exp(0.023 * lastdmc) + DELTA_MCrain
             lastdmc = 43.43 * (5.6348 - log(mc - 20))
-        # drying all day long too
-        tnoon = max(-1.1, tnoon)
-        # full day of drying in old FWI/DMC
-        DELTA_dry = 1.894 * (tnoon + 1.1) * (100.0 - rhnoon) * el[mon - 1] * 0.0001
         # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
-        dmc = lastdmc + (DELTA_dry * DryFrac)
+        dmc = lastdmc + drying_so_far
         dmc = max(0, dmc)
         return dmc
 
@@ -216,37 +218,26 @@ def _hdmc(w, dmc_old):
         raise RuntimeError("SUNSET column required")
     if "SUNRISE" not in dmc.columns:
         raise RuntimeError("SUNRISE column required")
-    dmc["VPD"] = dmc.apply(
-        lambda row: vpd(row["TEMP"], row["RH"])
-        if row["SUNRISE"] <= row["HR"] and row["HR"] <= row["SUNSET"]
-        else 0.0,
-        axis=1,
+    dmc["RAIN_SO_FAR"] = dmc.groupby("DATE")["PREC"].transform(pd.Series.cumsum)
+    dmc["IS_DRYING"] = dmc.apply(
+        lambda row: row["HR"] >= 12 and row["HR"] <= round(row["SUNSET"]), axis=1
     )
-    dmc = pd.merge(
-        dmc,
-        pd.DataFrame(
-            {
-                "RAIN24": dmc.groupby("DATE")["PREC"].sum(),
-                "MINRH": dmc.groupby("DATE")["RH"].min(),
-                "VPD24": dmc.groupby("DATE")["VPD"].sum(),
-            }
-        ),
-        on=["DATE"],
-    )
+    # if only drying in afternoon then just subtract from sunset to get # hours
+    dmc["HOURS_DRYING"] = dmc["SUNSET"].apply(lambda x: round(x) - 12 + 1)
+    # amount of total drying accomplished by this point
     dmc["DRYFRAC"] = dmc.apply(
         lambda row: (
-            (1 / (row["SUNSET"] - row["SUNRISE"]))
-            if 0 == row["VPD24"]
-            else (row["VPD"] / row["VPD24"])
-        )
-        if row["SUNRISE"] <= row["HR"] <= row["SUNSET"]
-        else 0.0,
+            (round(row["HR"] - 12 + 1) / row["HOURS_DRYING"])
+            if row["IS_DRYING"]
+            else (0 if row["HR"] < 12 else 1)
+        ),
         axis=1,
     )
     lastdmc = dmc_old
     dates = w["DATE"].unique()
     result = []
     for d in dates:
+        last_daily = lastdmc
         for_date = dmc[dmc["DATE"] == d]
         # HACK: fails if no noon for this day
         noons = for_date.loc[dmc["HR"] == 12]
@@ -255,19 +246,13 @@ def _hdmc(w, dmc_old):
         noon = noons.iloc[0]
         tnoon = float(noon["TEMP"])
         rhnoon = float(noon["RH"])
-        rain24 = for_date["RAIN24"].iloc[0]
-        if rain24 > 1.5:
-            reff = 0.92 * rain24 - 1.27
-            if lastdmc <= 33:
-                b = 100.0 / (0.5 + 0.3 * lastdmc)
-            elif lastdmc <= 65:
-                b = 14.0 - 1.3 * log(lastdmc)
-            else:
-                b = 6.2 * log(lastdmc) - 17.2
-            DELTA_mcddmcrain24 = 1000.0 * reff / (48.77 + b * reff)
-        else:
-            DELTA_mcddmcrain24 = 0.0
         hrs = for_date["HR"].unique()
+        # drying all day long too
+        tnoon = max(-1.1, tnoon)
+        # full day of drying in old FWI/DMC
+        DELTA_dry = (
+            1.894 * (tnoon + 1.1) * (100.0 - rhnoon) * el[noon["MON"] - 1] * 0.0001
+        )
         values = []
         for r in for_date.itertuples():
             lastdmc = hourly_dmc(
@@ -276,12 +261,9 @@ def _hdmc(w, dmc_old):
                 r.WS,
                 r.PREC,
                 r.MON,
-                lastdmc,
-                r.DRYFRAC,
-                r.RAIN24,
-                DELTA_mcddmcrain24,
-                tnoon,
-                rhnoon,
+                last_daily,
+                r.DRYFRAC * DELTA_dry,
+                r.RAIN_SO_FAR,
             )
             values.append(lastdmc)
         if len(values) != len(hrs):
@@ -297,17 +279,17 @@ def _hdmc(w, dmc_old):
 # @param dc_old          Drought Code for previous hour
 # @return                Drought Codes for given data
 def _hdc(w, dc_old):
-    def hourly_dc(t, rh, ws, rain, lastdc, mon, rain24, dryfrac, DELTArain24, temp12):
-        fl = [-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6]
-        if rain > 0 and DELTArain24 < 0.0:
+    fl = [-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6]
+
+    def hourly_dc(t, rh, ws, rain, lastdc, mon, drying_so_far, rain_so_far):
+        if rain_so_far > 2.8:
+            rw = 0.83 * rain_so_far - 1.27
+            smi = 800 * exp(-lastdc / 400)
+            # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
+            delta_dc_rain = -400.0 * log(1.0 + 3.937 * rw / smi)
             # (weight it by Rainhour/rain24 )
-            lastdc = lastdc + DELTArain24 * (rain / rain24)
-        # total dry for the DAY
-        DELTAdry24 = (0.36 * (temp12 + 2.8) + fl[mon - 1]) / 2.0
-        # ;    /* the fix for winter negative DC change...shoulders*/
-        DELTAdry24 = max(0.0, DELTAdry24)
-        # /* dry frac is VPD weighted value for the hour */
-        dc = lastdc + DELTAdry24 * dryfrac
+            lastdc = lastdc + delta_dc_rain
+        dc = lastdc + drying_so_far
         dc = max(0, dc)
         return dc
 
@@ -316,54 +298,34 @@ def _hdc(w, dc_old):
         raise RuntimeError("SUNSET column required")
     if "SUNRISE" not in dc.columns:
         raise RuntimeError("SUNRISE column required")
-    dc["VPD"] = dc.apply(
-        lambda row: vpd(row["TEMP"], row["RH"])
-        if row["SUNRISE"] <= row["HR"] and row["HR"] <= row["SUNSET"]
-        else 0.0,
-        axis=1,
+    dc["RAIN_SO_FAR"] = dc.groupby("DATE")["PREC"].transform(pd.Series.cumsum)
+    dc["IS_DRYING"] = dc.apply(
+        lambda row: row["HR"] >= 12 and row["HR"] <= round(row["SUNSET"]), axis=1
     )
-    dc = pd.merge(
-        dc,
-        pd.DataFrame(
-            {
-                "RAIN24": dc.groupby("DATE")["PREC"].sum(),
-                "MINRH": dc.groupby("DATE")["RH"].min(),
-                "VPD24": dc.groupby("DATE")["VPD"].sum(),
-            }
-        ),
-        on=["DATE"],
-    )
+    # if only drying in afternoon then just subtract from sunset to get # hours
+    dc["HOURS_DRYING"] = dc["SUNSET"].apply(lambda x: round(x) - 12 + 1)
+    # amount of total drying accomplished by this point
     dc["DRYFRAC"] = dc.apply(
         lambda row: (
-            (1 / (row["SUNSET"] - row["SUNRISE"]))
-            if 0 == row["VPD24"]
-            else (row["VPD"] / row["VPD24"])
-        )
-        if row["SUNRISE"] <= row["HR"] <= row["SUNSET"]
-        else 0.0,
+            (round(row["HR"] - 12 + 1) / row["HOURS_DRYING"])
+            if row["IS_DRYING"]
+            else (0 if row["HR"] < 12 else 1)
+        ),
         axis=1,
     )
-    # #>>>
-    # # FAILS when RH = 100 all day because fraction is divided weird and doesn't add up to 1 all the time
-    # dc[, SUMDRY := sum(DRYFRAC), by=c("DATE")]
-    # stopifnot(all(dmc$SUMDRY - 1 < 0.000001))
-    # #<<<
     lastdc = dc_old
     dates = w["DATE"].unique()
     result = []
     for d in dates:
+        last_daily = lastdc
         for_date = dc[dc["DATE"] == d]
         noon = for_date.loc[dc["HR"] == 12].iloc[0]
         tnoon = float(noon["TEMP"])
         rhnoon = float(noon["RH"])
-        rain24 = for_date["RAIN24"].iloc[0]
-        if rain24 > 2.8:
-            rw = 0.83 * rain24 - 1.27
-            smi = 800 * exp(-lastdc / 400)
-            # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
-            DELTA_DCrain24 = -400.0 * log(1.0 + 3.937 * rw / smi)
-        else:
-            DELTA_DCrain24 = 0.0
+        # total dry for the DAY
+        DELTAdry24 = (0.36 * (tnoon + 2.8) + fl[noon["MON"] - 1]) / 2.0
+        # ;    /* the fix for winter negative DC change...shoulders*/
+        DELTAdry24 = max(0.0, DELTAdry24)
         hrs = for_date["HR"].unique()
         values = []
         for r in for_date.itertuples():
@@ -372,12 +334,10 @@ def _hdc(w, dc_old):
                 r.RH,
                 r.WS,
                 r.PREC,
-                lastdc,
+                last_daily,
                 r.MON,
-                r.RAIN24,
-                r.DRYFRAC,
-                DELTA_DCrain24,
-                tnoon,
+                r.DRYFRAC * DELTAdry24,
+                r.RAIN_SO_FAR,
             )
             values.append(lastdc)
         if len(values) != len(hrs):

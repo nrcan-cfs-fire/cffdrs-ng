@@ -103,4 +103,6 @@ void check_header(FILE* input, const char* header);
  * @param rain        Rain (mm)
  */
 void check_inputs(float temp, float rh, float wind, float rain);
+
+float seasonal_curing(int julian_date);
 #endif
