@@ -17,16 +17,16 @@ outputs min/max weather stream
 */
 float temp_min_max(float temp_noon, float rh_noon, float* temp_min, float* temp_max)
 {
-  float range = 17 - 0.16 * rh_noon + 0.22 * temp_noon;
-  if ((temp_noon < 3 && rh_noon == 100) || range < 2)
+  float temp_range = 17 - 0.16 * rh_noon + 0.22 * temp_noon;
+  if ((temp_noon < 3 && rh_noon == 100) || temp_range < 2)
   {
-    *temp_max = temp_noon + (range / 2.0);
-    *temp_min = temp_noon - (range / 2.0);
+    *temp_max = temp_noon + (temp_range / 2.0);
+    *temp_min = temp_noon - (temp_range / 2.0);
   }
-  else if (range > 2)
+  else
   {
     *temp_max = temp_noon + 2;
-    *temp_min = *temp_max - range;
+    *temp_min = *temp_max - temp_range;
   }
 }
 
