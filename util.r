@@ -77,7 +77,12 @@ getSunlight <- function(dates, timezone, latitude, longitude) {
   df[, decl := 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear)]
   df[, timeoffset := eqtime + 4 * longitude - 60 * timezone]
   df[, zenith := 90.833 * pi / 180.0]
-  df[, halfday := 180.0 / pi * acos(cos(zenith) / (cos(latitude * pi / 180.0) * cos(decl)) - tan(latitude * pi / 180.0) * tan(decl))]
+  # FIX: is this some kind of approximation that can be wrong?
+  #       breaks with (67.1520291504819, -132.37538245496188)
+  df[, x_tmp := cos(zenith) / (cos(latitude * pi / 180.0) * cos(decl)) - tan(latitude * pi / 180.0) * tan(decl)]
+  # HACK: keep in range
+  df[, x_tmp := pmax(-1, pmin(1, x_tmp))]
+  df[, halfday := 180.0 / pi * acos(x_tmp)]
   df[, sunrise := (720.0 - 4.0 * (longitude + halfday) - eqtime) / 60 + timezone]
   df[, sunset := (720.0 - 4.0 * (longitude - halfday) - eqtime) / 60 + timezone]
   df[, hr := hour(DATE)]

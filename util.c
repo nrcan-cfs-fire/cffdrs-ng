@@ -71,7 +71,21 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
          zenith,
          solrad);
   zenith = 90.833 * M_PI / 180.0;
-  float halfday = 180.0 / M_PI * acos(cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) - tan(lat * M_PI / 180.0) * tan(decl));
+  /*
+   * FIX: is this some kind of approximation that can be wrong?
+   *       breaks with (67.1520291504819, -132.37538245496188)
+   */
+  float x_tmp = cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) - tan(lat * M_PI / 180.0) * tan(decl);
+  /* HACK: keep in range */
+  if (x_tmp < -1)
+  {
+    x_tmp = -1;
+  }
+  else if (x_tmp > 1)
+  {
+    x_tmp = 1;
+  }
+  float halfday = 180.0 / M_PI * acos(x_tmp);
   *sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone;
   *sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone;
   return solrad;
