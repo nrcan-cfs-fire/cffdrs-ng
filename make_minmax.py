@@ -43,7 +43,7 @@ def daily_to_minmax(df):
     return df
 
 
-if "__main__" == __file__:
+if "__main__" == __name__:
     import os
     import sys
 

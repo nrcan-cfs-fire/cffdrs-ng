@@ -326,7 +326,7 @@ def minmax_to_hourly(w, timezone, skip_invalid=False, verbose=False):
     return result
 
 
-if "__main__" == __file__:
+if "__main__" == __name__:
     import os
     import sys
 
