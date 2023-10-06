@@ -92,7 +92,12 @@ void check_header(FILE* input, const char* header)
   /* do this one character at a time because unsure how long line would be if we used %s */
   for (i = 0; i < header_len; ++i)
   {
-    fscanf(input, "%c", a);
+    int err = fscanf(input, "%c", a);
+    if (0 == err)
+    {
+      printf("Error reading file\n");
+      exit(1);
+    }
     if (a[0] != header[i])
     {
       printf("Expected columns to be '%s'\n", header);
