@@ -18,6 +18,12 @@ struct row
   float lat, lon;
   int year, mon, day, hour;
   float temp, rh, wind, rain;
+  /* Either need solar radiation to be included, or calculated */
+  float solar;
+  /* derived from lat/lon/date/timezone */
+  float sunrise, sunset;
+  /* grass curing (%) [0-100]*/
+  float percent_cured;
 };
 /**
  * A row from the input file for a min/max weather stream

@@ -47,9 +47,36 @@ float fine_fuel_moisture_from_code(float moisture_code)
   return MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code);
 }
 
-float dmc_wetting(float rain24, float lastdmc)
+/*
+ * Calculate number of drying "units" this hour contributes
+ */
+float drying_units(float temp, float rh, float wind, float rain, float solar)
 {
-  if (rain24 <= 1.5)
+  /* for now, just add 1 drying "unit" per hour */
+  return 1.0;
+}
+
+float dmc_drying(float temp, float rh, float ws, float prec, int mon)
+{
+  if (temp <= 1.1)
+  {
+    return 0.0;
+  }
+  return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001;
+}
+
+float dc_drying(float temp, float rh, float ws, float prec, int mon)
+{
+  if (temp <= 2.8)
+  {
+    return 0.0;
+  }
+  return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0;
+}
+
+float dmc_wetting(float rain_total, float lastdmc)
+{
+  if (rain_total <= 1.5)
   {
     return 0.0;
   }
@@ -66,27 +93,40 @@ float dmc_wetting(float rain24, float lastdmc)
   {
     b = 6.2 * log(lastdmc) - 17.2;
   }
-  const float reff = (0.92 * rain24 - 1.27);
+  const float reff = (0.92 * rain_total - 1.27);
   /* This is the change in MC (moisturecontent)  from FULL DAY's rain  */
   return 1000.0 * reff / (48.77 + b * reff);
 }
 
-float dc_wetting(float rain24, float lastdc)
+float dc_wetting(float rain_total, float lastdc)
 {
-  if (rain24 <= 2.8)
+  if (rain_total <= 2.8)
   {
     return 0.0;
   }
-  const float rw = 0.83 * rain24 - 1.27;
+  const float rw = 0.83 * rain_total - 1.27;
   const float smi = 800 * exp(-lastdc / 400);
   /* TOTAL change for the TOTAL 24 hour rain from FWI1970 model  */
   return -400.0 * log(1.0 + 3.937 * rw / smi);
 }
 
+int populate_row(FILE* inp, struct row* cur, float TZadjust)
+{
+  const float MAX_SOLAR_PROPAGATION = 0.85;
+  int err = read_row(inp, cur);
+  float sunrise;
+  float sunset;
+  float solar = sun(cur->lat, cur->lon, cur->mon, cur->day, cur->hour, TZadjust, &(cur->sunrise), &(cur->sunset));
+  float julian_day = (cur->mon, cur->day);
+  /* assuming we want curing to change based on current day and not remain */
+  /* the same across entire period based on start date */
+  cur->percent_cured = seasonal_curing(julian_day);
+  return err;
+}
+
 void main(int argc, char* argv[])
 {
   const float grassfuelload = 0.35;
-  const float maxsolprop = 0.85;
   if (7 != argc)
   {
     printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <input file> <output file>\n\n", argv[0]);
@@ -121,20 +161,20 @@ void main(int argc, char* argv[])
     printf(" /n/n *****   FFMC must be between 0 and 101 \n");
     exit(1);
   }
-  float lastdmc = atof(argv[3]);
-  if (lastdmc < 0)
+  float dmc = atof(argv[3]);
+  if (dmc < 0)
   {
     printf(" /n/n *****  starting DMC must be >=0  \n");
     exit(1);
   }
-  float lastdc = atof(argv[4]);
-  if (lastdc < 0)
+  float dc = atof(argv[4]);
+  if (dc < 0)
   {
     printf(" /n/n *****   starting DC must be >=0\n");
     exit(1);
   }
 
-  printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, lastffmc, lastdmc);
+  printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, lastffmc, dmc);
   /* approximation for a start up*/
   float lastmcgmc = 101.0 - lastffmc;
   float lastmcffmc = fine_fuel_moisture_from_code(lastffmc);
@@ -143,19 +183,14 @@ void main(int argc, char* argv[])
   const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
   check_header(inp, header);
   struct row cur;
-  int err = read_row(inp, &cur);
+  int err = populate_row(inp, &cur, TZadjust);
   struct row old = cur;
-  float rain24 = 0.0;
-  float dmc_drying = 0.0;
-  float dc_drying = 0.0;
-  float minRH = 100.0;
-  float dmc = lastdmc;
-  float dc = lastdc;
+  float rain_total = 0.0;
+  float drying_since_intercept = 0.0;
+  /* for now, want 5 "units" of drying (which is 1 per hour to start) */
+  const float TARGET_DRYING_SINCE_INTERCEPT = 5;
   while (err > 0)
   {
-    float sunrise;
-    float sunset;
-    float solar = sun(cur.lat, cur.lon, cur.mon, cur.day, cur.hour, TZadjust, &sunrise, &sunset);
     if (cur.day != old.day || cur.mon != old.mon)
     {
       printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",
@@ -164,96 +199,45 @@ void main(int argc, char* argv[])
              cur.year,
              cur.mon,
              cur.day,
-             sunrise,
-             sunset);
+             cur.sunrise,
+             cur.sunset);
     }
-    if (0 == cur.hour)
+    if (0 < cur.rain)
     {
-      /* reset rain total at midnight */
-      /* alternatively, come up with some criteria to reset rain based on weather */
-      rain24 = 0.0;
-      /* FIX: original grass formula uses min RH in 24 hours for solar propagation */
-      /* if we can use minimum RH so far in the period then values can't change */
-      minRH = 100.0;
-      /* dmc and dc code rely on offset from previous daily value */
-      lastdmc = dmc;
-      lastdc = dc;
+      rain_total += cur.rain;
+      /* no drying if still raining */
+      drying_since_intercept = 0.0;
     }
-    rain24 += cur.rain;
-    if (cur.rh < minRH)
+    else
     {
-      minRH = cur.rh;
+      drying_since_intercept += drying_units(cur.temp, cur.rh, cur.wind, cur.rain, cur.solar);
+      if (drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
+      {
+        /* reset rain if intercept reset criteria met */
+        rain_total = 0.0;
+      }
     }
+    rain_total += cur.rain;
     /* apply rain intercept of 0.5mm to ffmc at start of period */
     const float rain_ffmc = cur.rain > 0.5 ? cur.rain - 0.5 : 0.0;
     float mcffmc = fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, lastmcffmc);
     /* convert to code for output, but keep using moisture % for precision */
     float ffmc = fine_fuel_moisture_code(mcffmc);
-    if (12 > cur.hour)
-    {
-      dmc_drying = 0.0;
-      dc_drying = 0.0;
-    }
-    else if (12 == cur.hour)
-    {
-      /* calculate daily drying once we have the noon values required */
-      /* full day of drying in old FWI/DMC  */
-      if (cur.temp > 1.1)
-      {
-        dmc_drying = 1.894 * (cur.temp + 1.1) * (100.0 - cur.rh) * EL_DMC[cur.mon - 1] * 0.0001;
-      }
-      if (cur.temp > 2.8)
-      {
-        dc_drying = (0.36 * (cur.temp + 2.8) + FL_DC[cur.mon - 1]) / 2.0;
-      }
-      /* if min temp not met then value is already 0 from previous hour */
-    }
-    /* apply drying to noon onward until sunset */
-    float drying_fraction = (cur.hour - 12 + 1) / (round(sunset) - 12 + 1);
-    if (0 > drying_fraction)
-    {
-      drying_fraction = 0.0;
-    }
-    else if (1 < drying_fraction)
-    {
-      drying_fraction = 1.0;
-    }
-    /* full amount of wetting because it uses rain so far, but divide drying across afternoon sunlight hours */
-    dmc = lastdmc + dmc_wetting(rain24, lastdmc) + drying_fraction * dmc_drying;
-    dc = lastdc + dmc_wetting(rain24, lastdc) + drying_fraction * dc_drying;
+    int sunlight_hours = round(cur.sunset) - round(cur.sunrise);
+    /* apply one hour of drying if during sunlight hours */
+    float drying_fraction = (cur.hour >= round(cur.sunset) && cur.hour < round(cur.sunrise))
+                            ? 1.0 / sunlight_hours
+                            : 0.0;
+    /* full amount of wetting because it uses rain so far, but just one hour of drying */
+    /* NOTE: this is going to have some compounding error vs daily function because it's based on previous hour's value and not the daily */
+    dmc = dmc + dmc_wetting(rain_total, dmc) + drying_fraction * dmc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
+    dc = dc + dmc_wetting(rain_total, dc) + drying_fraction * dc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float isi = initial_spread_index(cur.wind, ffmc);
     float bui = buildup_index(dmc, dc);
     float fwi = fire_weather_index(isi, bui);
-
-    /* grass */
-    if (minRH >= 100)
-    {
-      minRH = 99.5;
-    }
-    /* if min RH for the calendar date is >30 then calculate solar prop based on min rh for the day */
-    float solprop;
-    if (minRH > 30)
-    {
-      solprop = maxsolprop * (1.27 - 0.0111 * minRH);
-      /* is there some way to use the current rh or min rh so far instead of needing the future? */
-    }
-    else
-    {
-      solprop = maxsolprop;
-    }
-    if (solprop < 0)
-    {
-      solprop = 0;
-    }
-    /*  just reducing solar radiation a little off of full value */
-    solar = solar * solprop;
-    float mcgmc = grass_fuel_moisture(cur.temp, cur.rh, cur.wind, cur.rain, lastmcgmc, solar, 1.0);
+    float mcgmc = grass_fuel_moisture(cur.temp, cur.rh, cur.wind, cur.rain, lastmcgmc, cur.solar, 1.0);
     float gfmc = fine_fuel_moisture_from_code(mcgmc);
-    float julian_day = (cur.mon, cur.day);
-    /* assuming we want curing to change based on current day and not remain */
-    /* the same across entire period based on start date */
-    float percent_cured = seasonal_curing(julian_day);
-    float gsi = grass_spread_index(cur.wind, mcgmc, percent_cured);
+    float gsi = grass_spread_index(cur.wind, mcgmc, cur.percent_cured);
     float gfwi = grass_fire_weather_index(gsi, grassfuelload);
     fprintf(out,
             "%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
@@ -298,7 +282,7 @@ void main(int argc, char* argv[])
     lastmcffmc = mcffmc;
     lastmcgmc = mcgmc;
     old = cur;
-    err = read_row(inp, &cur);
+    err = populate_row(inp, &cur, TZadjust);
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
     {
       printf("Latitude and Longitude must be constant\n");
