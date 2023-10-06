@@ -3,6 +3,21 @@ import pandas as pd
 import util
 
 
+# This function is for the method that takes old traditional 1pm weather (labelled here as noon)
+# and estimates a diurnal temperature range to fit into the scheme that flows into the max/min method
+# Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
+# Written as a function to enable upgrading later if needs be
+def temp_min_max(temp_noon, rh_noon):
+    temp_range = 17 - 0.16 * rh_noon + 0.22 * temp_noon
+    if (temp_noon < 3 and rh_noon == 100) or temp_range < 2:
+        temp_max = temp_noon + (temp_range / 2.0)
+        temp_min = temp_noon - (temp_range / 2.0)
+    else:
+        temp_max = temp_noon + 2
+        temp_min = temp_max - temp_range
+    return [temp_min, temp_max]
+
+
 ##
 # Convert daily noon values stream to daily min/max values stream.
 # Uses values from statistics to do the conversion.
@@ -12,8 +27,12 @@ import util
 def daily_to_minmax(df):
     df = df.copy()
     had_id = "id" in map(str.lower, df.columns)
-    df["temp_min"] = df["temp"] - 15
-    df["temp_max"] = df["temp"] + 2
+    df.loc[:, ["temp_min", "temp_max"]] = df.apply(
+        lambda row: pd.Series(
+            data=temp_min_max(row["temp"], row["rh"]), index=["temp_min", "temp_max"]
+        ),
+        axis=1,
+    )
     df["q"] = df.apply(lambda row: util.find_q(row["temp"], row["rh"]), axis=1)
     df["rh_min"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_max"]), axis=1)
     df["rh_min"] = df["rh_min"].apply(lambda rh: max(0, rh))

@@ -2,6 +2,21 @@
 library(data.table)
 source("util.r")
 
+# This function is for the method that takes old traditional 1pm weather (labelled here as noon)
+# and estimates a diurnal temperature range to fit into the scheme that flows into the max/min method
+# Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
+# Written as a function to enable upgrading later if needs be
+temp_min_max <- function(temp_noon, rh_noon) {
+  temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
+  if ((temp_noon < 3 && rh_noon == 100) || temp_range < 2) {
+    temp_max <- temp_noon + (temp_range / 2.0)
+    temp_min <- temp_noon - (temp_range / 2.0)
+  } else {
+    temp_max <- temp_noon + 2
+    temp_min <- temp_max - temp_range
+  }
+  return(list(temp_min, temp_max))
+}
 #' Convert daily noon values stream to daily min/max values stream.
 #' Uses values from statistics to do the conversion.
 #'
@@ -14,8 +29,7 @@ daily_to_minmax <- function(df) {
   if ("id" %in% tolower(colnames(df))) {
     hadId <- TRUE
   }
-  df[, temp_min := temp - 15]
-  df[, temp_max := temp + 2]
+  df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
   df[, q := findQ(temp, rh)]
   df[, rh_min := findrh(q, temp_max)]
   df[, rh_min := ifelse(rh_min < 0, 0, rh_min)]
