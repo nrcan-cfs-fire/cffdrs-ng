@@ -54,15 +54,15 @@ def save_csv(df, file):
 
 
 def run_tests():
-    bak = pd.read_csv("./bak_hourly.csv")
-    result = NG_FWI.hFWI(bak, timezone=-6)
+    df_wx = pd.read_csv("./wx_hourly.csv")
+    result = NG_FWI.hFWI(df_wx, timezone=-6)
     save_csv(result, "./result_py.csv")
 
-    bak = pd.read_csv("./bak_hourly.csv")
+    df_wx = pd.read_csv("./wx_hourly.csv")
     test_hffmc = pd.read_csv("test_hffmc.csv")
     df = test_hffmc.copy()
-    df["lat"] = bak["lat"].iloc[0]
-    df["long"] = bak["long"].iloc[0]
+    df["lat"] = df_wx["lat"].iloc[0]
+    df["long"] = df_wx["long"].iloc[0]
     COLUMN_SYNONYMS = {"yr": "year", "hr": "hour", "ws": "wind", "prec": "rain"}
     df = df.rename(columns=COLUMN_SYNONYMS)
     df = df[["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]]
@@ -72,8 +72,8 @@ def run_tests():
     result_hffmc = NG_FWI.hFWI(df, timezone=-6)
     save_csv(result_hffmc, "./result_hffmc_py.csv")
 
-    bak = pd.read_csv("./bak_hourly.csv")
-    df = make_daily.hourly_to_daily(bak)
+    df_wx = pd.read_csv("./wx_hourly.csv")
+    df = make_daily.hourly_to_daily(df_wx)
     df["mon"] = df["mon"].apply("{:02d}".format)
     df["day"] = df["day"].apply("{:02d}".format)
     df["hour"] = df["hour"].apply("{:02d}".format)
@@ -82,10 +82,10 @@ def run_tests():
     df["wind"] = df["wind"].apply(round_format("{:.1f}", 1))
     df["rain"] = df["rain"].apply(round_format("{:.1f}", 1))
     df = df[["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]]
-    df.to_csv("bak_daily_py.csv", index=False)
+    df.to_csv("wx_daily_py.csv", index=False)
 
-    bak = pd.read_csv("./bak_daily_py.csv")
-    df = make_minmax.daily_to_minmax(bak)
+    df_wx = pd.read_csv("./wx_daily_py.csv")
+    df = make_minmax.daily_to_minmax(df_wx)
     df["mon"] = df["mon"].apply("{:02d}".format)
     df["day"] = df["day"].apply("{:02d}".format)
     df["hour"] = df["hour"].apply("{:02d}".format)
@@ -113,10 +113,10 @@ def run_tests():
             "rain",
         ]
     ]
-    df.to_csv("bak_minmax_py.csv", index=False)
+    df.to_csv("wx_minmax_py.csv", index=False)
 
-    bak_minmax = pd.read_csv("./bak_minmax_py.csv")
-    df = make_hourly.minmax_to_hourly(bak_minmax, timezone=-6)
+    wx_minmax = pd.read_csv("./wx_minmax_py.csv")
+    df = make_hourly.minmax_to_hourly(wx_minmax, timezone=-6)
     # FIX: this is just to match R code for now
     df["year"] = df["year"].apply("{:02d}".format)
     df["mon"] = df["mon"].apply("{:02d}".format)
@@ -127,20 +127,20 @@ def run_tests():
     df["wind"] = df["wind"].apply(round_format("{:.1f}", 1))
     df["rain"] = df["rain"].apply(round_format("{:.1f}", 1))
     df = df[["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]]
-    df.to_csv("bak_diurnal_py.csv", index=False)
+    df.to_csv("wx_diurnal_py.csv", index=False)
 
-    bak_diurnal = pd.read_csv("./bak_diurnal_py.csv")
-    result3 = NG_FWI.hFWI(bak_diurnal, timezone=-6)
+    wx_diurnal = pd.read_csv("./wx_diurnal_py.csv")
+    result3 = NG_FWI.hFWI(wx_diurnal, timezone=-6)
     save_csv(result3, "./result3_py.csv")
 
-    bak_windy = pd.read_csv("./bak_windy.csv")
-    result4 = NG_FWI.hFWI(bak_windy, timezone=-6)
+    wx_windy = pd.read_csv("./wx_windy.csv")
+    result4 = NG_FWI.hFWI(wx_windy, timezone=-6)
     save_csv(result4, "result4_py.csv")
 
     save_csv(
-        NG_FWI.hFWI(pd.read_csv("./bak_rh100.csv"), timezone=-6), "./result5_py.csv"
+        NG_FWI.hFWI(pd.read_csv("./wx_rh100.csv"), timezone=-6), "./result5_py.csv"
     )
-    save_csv(NG_FWI.hFWI(pd.read_csv("./bak_rh0.csv"), timezone=-6), "./result6_py.csv")
+    save_csv(NG_FWI.hFWI(pd.read_csv("./wx_rh0.csv"), timezone=-6), "./result6_py.csv")
 
 
 if __name__ == "__main__":

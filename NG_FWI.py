@@ -712,7 +712,7 @@ def hFWI(
 
 
 if "__main__" == __name__:
-    # sys.argv = ['NG_FWI.py', '-6', '85', '6', '15', './bak_diurnal.csv', 'test3_py.csv']
+    # sys.argv = ['NG_FWI.py', '-6', '85', '6', '15', './wx_diurnal.csv', 'test3_py.csv']
     # print(sys.argv)
     if len(sys.argv) != 7:
         logger.fatal(
