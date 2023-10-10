@@ -1,17 +1,20 @@
-cmake --configure . || exit
-cmake --build . || exit
+python3 make_inputs.py
 
-./ngfwi -6 85 6 15 ./wx_hourly.csv test.csv
-./ngfwi -6 85 6 15 ./input_hffmc.csv test2.csv
+cmake -S. -B./build || exit
+cmake --build ./build || exit
 
-./make_daily ./wx_hourly.csv wx_daily_c.csv
+mkdir -p ./out
+./bin/ngfwi -6 85 6 15 ./data/wx_hourly.csv ./out/test.csv
+./bin/ngfwi -6 85 6 15 ./data/test_hffmc.csv ./out/test2.csv
 
-./make_minmax ./wx_daily.csv wx_minmax_c.csv
+./bin/make_daily ./data/wx_hourly.csv ./out/wx_daily_c.csv
 
-./make_hourly -6 ./wx_minmax_c.csv wx_diurnal_c.csv
+./bin/make_minmax ./out/wx_daily_c.csv ./out/wx_minmax_c.csv
 
-./ngfwi -6 85 6 15 ./wx_diurnal.csv test3.csv
+./bin/make_hourly -6 ./out/wx_minmax_c.csv ./out/wx_diurnal_c.csv
 
-./ngfwi -6 85 6 15 ./wx_windy.csv test4.csv
-./ngfwi -6 85 6 15 ./wx_rh100.csv test5.csv
-./ngfwi -6 85 6 15 ./wx_rh0.csv test6.csv
+./bin/ngfwi -6 85 6 15 ./out/wx_diurnal_c.csv ./out/test3.csv
+
+./bin/ngfwi -6 85 6 15 ./data/wx_windy.csv ./out/test4.csv
+./bin/ngfwi -6 85 6 15 ./data/wx_rh100.csv ./out/test5.csv
+./bin/ngfwi -6 85 6 15 ./data/wx_rh0.csv ./out/test6.csv
