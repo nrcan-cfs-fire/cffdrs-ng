@@ -24,6 +24,8 @@ struct row
   float sunrise, sunset;
   /* grass curing (%) [0-100]*/
   float percent_cured;
+  /* grass fuel load (kg/m^2) */
+  float grass_fuel_load;
 };
 /**
  * A row from the input file for a min/max weather stream
