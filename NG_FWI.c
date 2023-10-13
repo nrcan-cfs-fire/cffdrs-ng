@@ -64,61 +64,36 @@ float fine_fuel_moisture(float temp, float rh, float wind, float rain, float mo)
 {
   /* this is the hourly ffmc routine given wx and previous ffmc */
   /* use moisture directly instead of converting to/from ffmc */
+  /* expects any rain intercept to alraedy be applied */
   if (rain != 0.0)
   {
     /* duplicated in both formulas, so calculate once */
-    float m = 42.5 * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain));
-    if (mo > 150)
-    {
-      mo += 0.0015 * pow(mo - 150, 2) * sqrt(rain);
-    }
-    mo += m;
+    /* only add second term if mo > 150 */
+    mo += (42.5 * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain))
+           + ((mo > 150) ? (0.0015 * pow(mo - 150, 2) * sqrt(rain)) : 0.0));
     if (mo > 250)
     {
       mo = 250;
     }
   }
-  /* default value */
-  float m = mo;
   /* duplicated in both formulas, so calculate once */
-  float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
-  float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
-  if (mo > ed)
+  const float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
+  const float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
+  /* (mo == ed) will result in just using mo */
+  float m = (mo > ed)
+            ? ed
+            : ((mo < ed)
+                 ? (0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1)
+                 : mo);
+  /* m is just mo if (mo == ed) */
+  if (mo != ed)
   {
-    float a1 = rh / 100;
-    float ka = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
-    float kd = 0.0579 * ka * exp(0.0365 * temp);
-    m = ed + (mo - ed) * exp(-2.303 * kd);
+    /* these are the same formulas with a different value for a1 */
+    const float a1 = (mo < ed) ? ((100.0 - rh) / 100.0) : (rh / 100.0);
+    const float ka_or_kb = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
+    const float kd_or_kw = 0.0579 * ka_or_kb * exp(0.0365 * temp);
+    m += (mo - m) * exp(-2.303 * kd_or_kw);
   }
-  else if (mo < ed)
-  {
-    float ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
-    if (mo < ew)
-    {
-      float a1 = (100.0 - rh) / 100.0;
-      float kb = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
-      float kw = 0.0579 * kb * exp(0.0365 * temp);
-      m = ew + (mo - ew) * exp(-2.303 * kw);
-    }
-    /* implicit */
-    /*
-    if (mo == ew)
-    {
-      m = mo;
-    }
-    if (ed > mo && mo > ew)
-    {
-      m = mo;
-    }
-    */
-  }
-  /* implicit */
-  /*
-  else if (mo == ed)
-  {
-    m = mo;
-  }
-  */
   return m;
 }
 
@@ -567,8 +542,8 @@ void main(int argc, char* argv[])
       }
     }
     rain_total += cur.rain;
-    /* apply rain intercept of 0.5mm to ffmc at start of period */
-    const float rain_ffmc = cur.rain > 0.5 ? cur.rain - 0.5 : 0.0;
+    /* use lesser of remaining intercept and current hour's rain */
+    float rain_ffmc = (rain_total <= 0.5) ? 0.0 : (((rain_total - 0.5) > cur.rain) ? cur.rain : (rain_total - 0.5));
     float mcffmc = fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, lastmcffmc);
     /* convert to code for output, but keep using moisture % for precision */
     float ffmc = fine_fuel_moisture_code(mcffmc);
