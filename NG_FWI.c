@@ -63,63 +63,63 @@ float fine_fuel_moisture_from_code(float moisture_code)
 float fine_fuel_moisture(float temp, float rh, float wind, float rain, float mo)
 {
   /* this is the hourly ffmc routine given wx and previous ffmc */
-  float rf = 42.5;
-  float drf = 0.0579;
-  float xm, a1, e, moe;
+  /* use moisture directly instead of converting to/from ffmc */
   if (rain != 0.0)
   {
     /* duplicated in both formulas, so calculate once */
-    float m = rf * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain));
+    float m = 42.5 * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain));
     if (mo > 150)
     {
-      mo += 0.0015 * (mo - 150) * (mo - 150) * sqrt(rain) + m;
+      mo += 0.0015 * pow(mo - 150, 2) * sqrt(rain);
     }
-    else
-    {
-      mo += m;
-    }
+    mo += m;
     if (mo > 250)
     {
       mo = 250;
     }
   }
+  /* default value */
+  float m = mo;
   /* duplicated in both formulas, so calculate once */
   float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
   float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
-  float moed = mo - ed;
-  float ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
-  float moew = mo - ew;
-  if (moed == 0 || (moew >= 0 && moed < 0))
+  if (mo > ed)
   {
-    xm = mo;
-    if (moed == 0)
-    {
-      e = ed;
-    }
-    if (moew >= 0)
-    {
-      e = ew;
-    }
+    float a1 = rh / 100;
+    float ka = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
+    float kd = 0.0579 * ka * exp(0.0365 * temp);
+    m = ed + (mo - ed) * exp(-2.303 * kd);
   }
-  else
+  else if (mo < ed)
   {
-    if (moed > 0)
+    float ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
+    if (mo < ew)
     {
-      a1 = rh / 100;
-      e = ed;
-      moe = moed;
+      float a1 = (100.0 - rh) / 100.0;
+      float kb = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
+      float kw = 0.0579 * kb * exp(0.0365 * temp);
+      m = ew + (mo - ew) * exp(-2.303 * kw);
     }
-    else
+    /* implicit */
+    /*
+    if (mo == ew)
     {
-      a1 = (100.0 - rh) / 100.0;
-      e = ew;
-      moe = moew;
+      m = mo;
     }
-    float xkd = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
-    xkd *= drf * exp(0.0365 * temp);
-    xm = e + moe * exp(-log(10.0) * xkd);
+    if (ed > mo && mo > ew)
+    {
+      m = mo;
+    }
+    */
   }
-  return xm;
+  /* implicit */
+  /*
+  else if (mo == ed)
+  {
+    m = mo;
+  }
+  */
+  return m;
 }
 
 /**
