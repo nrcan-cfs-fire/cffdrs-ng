@@ -60,6 +60,7 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
   {
     solrad = 0.0;
   }
+  /*
   printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",
          jd,
          hour,
@@ -70,6 +71,7 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
          hourangle,
          zenith,
          solrad);
+  */
   zenith = 90.833 * M_PI / 180.0;
   /*
    * FIX: is this some kind of approximation that can be wrong?
