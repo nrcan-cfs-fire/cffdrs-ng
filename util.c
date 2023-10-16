@@ -1,4 +1,6 @@
 #include "util.h"
+#include <stdlib.h>
+#include <string.h>
 
 float findQ(float temp, float rh)
 {
@@ -184,10 +186,10 @@ float seasonal_curing(int julian_date)
   input julian date should be between 1 and 366
   */
   /* truncating the date divide by 10 to get in right range */
-  int jd_class = (int)(julian_date / 10.0);
+  const int jd_class = julian_date / 10;
+  const float first = PERCENT_CURED[jd_class];
+  const float last = PERCENT_CURED[jd_class + 1];
   /* should be the fractional position in the 10 day period  */
-  float period_frac = (julian_date - (jd_class * 10.0)) / 10.0;
-  float difference = PERCENT_CURED[jd_class + 1] - PERCENT_CURED[jd_class];
-  float cure = PERCENT_CURED[jd_class] + difference * period_frac;
-  return cure;
+  const float period_frac = (julian_date % 10) / 10.0;
+  return (first + (last - first) * period_frac);
 }
