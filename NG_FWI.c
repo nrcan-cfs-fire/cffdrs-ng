@@ -43,7 +43,7 @@ float fine_fuel_moisture_code(float moisture_percent)
 }
 
 /*
- * Fine Fuel Moisture (%) from FFMC
+ * Fine Fuel Moisture (percent) from FFMC
  */
 float fine_fuel_moisture_from_code(float moisture_code)
 {
@@ -51,26 +51,36 @@ float fine_fuel_moisture_from_code(float moisture_code)
 }
 
 /**
- * Calculate hourly Fine Fuel Moisture (%) value
+ * Calculate hourly Fine Fuel Moisture (percent) value
  *
  * @param temp            Temperature (Celcius)
  * @param rh              Relative Humidity (percent, 0-100)
- * @param wind            Wind Speed (km/h)
+ * @param ws              Wind Speed (km/h)
  * @param rain            Precipitation (mm)
- * @param mo              Previous Fine Fuel Moisture (%)
- * @return                Hourly Fine Fuel Moisture (%)
+ * @param mo              Previous Fine Fuel Moisture (percent)
+ * @return                Hourly Fine Fuel Moisture (percent)
  */
-float fine_fuel_moisture(float temp, float rh, float wind, float rain, float mo)
+float hourly_fine_fuel_moisture(const float temp,
+                                const float rh,
+                                const float ws,
+                                const float rain,
+                                const float lastmc)
 {
-  /* this is the hourly ffmc routine given wx and previous ffmc */
+  static const float drf = 0.0579;
+  /* Time since last observation (hours) */
+  static const float time = 1.0;
   /* use moisture directly instead of converting to/from ffmc */
-  /* expects any rain intercept to alraedy be applied */
+  /* expects any rain intercept to already be applied */
+  float mo = lastmc;
   if (rain != 0.0)
   {
     /* duplicated in both formulas, so calculate once */
-    /* only add second term if mo > 150 */
-    mo += (42.5 * rain * exp(-100.0 / (251 - mo)) * (1.0 - exp(-6.93 / rain))
-           + ((mo > 150) ? (0.0015 * pow(mo - 150, 2) * sqrt(rain)) : 0.0));
+    /* lastmc == mo, but use lastmc since mo changes after first equation */
+    mo += 42.5 * rain * exp(-100.0 / (251 - lastmc)) * (1.0 - exp(-6.93 / rain));
+    if (lastmc > 150)
+    {
+      mo += 0.0015 * pow(lastmc - 150, 2) * sqrt(rain);
+    }
     if (mo > 250)
     {
       mo = 250;
@@ -79,20 +89,19 @@ float fine_fuel_moisture(float temp, float rh, float wind, float rain, float mo)
   /* duplicated in both formulas, so calculate once */
   const float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
   const float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
-  /* (mo == ed) will result in just using mo */
-  float m = (mo > ed)
-            ? ed
-            : ((mo < ed)
-                 ? (0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1)
-                 : mo);
-  /* m is just mo if (mo == ed) */
+  /* m = ed if mo >= ed else ew */
+  float m = mo < ed
+            ? 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
+            : ed;
   if (mo != ed)
   {
     /* these are the same formulas with a different value for a1 */
-    const float a1 = (mo < ed) ? ((100.0 - rh) / 100.0) : (rh / 100.0);
-    const float ka_or_kb = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
-    const float kd_or_kw = 0.0579 * ka_or_kb * exp(0.0365 * temp);
-    m += (mo - m) * exp(-2.303 * kd_or_kw);
+    const float a1 = mo < ed
+                     ? (100.0 - rh) / 100.0
+                     : rh / 100.0;
+    const float k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
+    const float kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
+    m += (mo - m) * pow(10, -kd_or_kw * time);
   }
   return m;
 }
@@ -100,24 +109,18 @@ float fine_fuel_moisture(float temp, float rh, float wind, float rain, float mo)
 /**
  * Calculate Initial Spread Index (ISI)
  *
- * @param wind            Wind Speed (km/h)
+ * @param ws              Wind Speed (km/h)
  * @param ffmc            Fine Fuel Moisure Code
  * @return                Initial Spread Index
  */
 float initial_spread_index(float ws, float ffmc)
 {
-  float fm = fine_fuel_moisture_from_code(ffmc);
-  float fw;
-  if (ws >= 40)
-  {
-    fw = 12 * (1 - exp(-0.0818 * (ws - 28)));
-  }
-  else
-  {
-    fw = exp(0.05039 * ws);
-  }
-  float sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
-  float isi = sf * fw;
+  const float fm = fine_fuel_moisture_from_code(ffmc);
+  const float fw = 40 <= ws
+                   ? 12 * (1 - exp(-0.0818 * (ws - 28)))
+                   : exp(0.05039 * ws);
+  const float sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
+  const float isi = sf * fw;
   return isi;
 }
 
@@ -130,19 +133,13 @@ float initial_spread_index(float ws, float ffmc)
  */
 float buildup_index(float dmc, float dc)
 {
-  float bui;
-  if (dmc == 0 && dc == 0)
-  {
-    bui = 0;
-  }
-  else
-  {
-    bui = 0.8 * dc * dmc / (dmc + 0.4 * dc);
-  }
+  float bui = 0 == dmc && 0 == dc
+              ? 0.0
+              : 0.8 * dc * dmc / (dmc + 0.4 * dc);
   if (bui < dmc)
   {
-    float p = (dmc - bui) / dmc;
-    float cc = 0.92 + pow((0.0114 * dmc), 1.7);
+    const float p = (dmc - bui) / dmc;
+    const float cc = 0.92 + pow(0.0114 * dmc, 1.7);
     bui = dmc - cc * p;
     if (bui < 0)
     {
@@ -161,23 +158,13 @@ float buildup_index(float dmc, float dc)
  */
 float fire_weather_index(float isi, float bui)
 {
-  float bb, fwi;
-  if (bui > 80)
-  {
-    bb = 0.1 * isi * (1000.0 / (25.0 + 108.64 / exp(0.023 * bui)));
-  }
-  else
-  {
-    bb = 0.1 * isi * (0.626 * pow(bui, 0.809) + 2.0);
-  }
-  if (bb <= 1)
-  {
-    fwi = bb;
-  }
-  else
-  {
-    fwi = exp(2.72 * pow(0.434 * log(bb), 0.647));
-  }
+  const float bb = 0.1 * isi
+                 * (bui > 80
+                      ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui))
+                      : 0.626 * pow(bui, 0.809) + 2.0);
+  const float fwi = bb <= 1
+                    ? bb
+                    : exp(2.72 * pow(0.434 * log(bb), 0.647));
   return fwi;
 }
 
@@ -186,26 +173,24 @@ float fire_weather_index(float isi, float bui)
  *
  * @param temp            Temperature (Celcius)
  * @param rh              Relative Humidity (percent, 0-100)
- * @param wind            Wind Speed (km/h)
+ * @param ws              Wind Speed (km/h)
  * @param rain            Precipitation (mm)
  * @param lastmc          Previous grass fuel moisture (percent)
  * @param solrad          Solar radiation (kW/m^2)
- * @param time            Time since last observation (hours)
  * @return                Grass Fuel Moisture (percent)
  */
-float grass_fuel_moisture(float temp,
-                          float rh,
-                          float wind,
-                          float rain,
-                          float lastmc,
-                          float solrad,
-                          float time)
+float hourly_grass_fuel_moisture(float temp,
+                                 float rh,
+                                 float ws,
+                                 float rain,
+                                 float lastmc,
+                                 float solrad)
 {
   /* MARK II of the model (2016) wth new solar rad model specific to grass
 
      Temp is temperature in C
      RH is relative humidty in %
-     wind is average wind speed in km/h
+     ws is average wind speed in km/h
      rain is rainfall in mm
      solrad is kW/m2  (radiaiton reaching fuel)
      mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
@@ -216,120 +201,78 @@ float grass_fuel_moisture(float temp,
 
   bmw
   */
-  float rhf, xm, e;
-  float drf = 0.389633;
+  static const float drf = 0.389633;
+  /* Time since last observation (hours) */
+  static const float time = 1.0;
   float mo = lastmc;
-  /* fuel temp from CEVW*/
-  float tf = temp + 17.9 * solrad * exp(-0.034 * wind);
-  /* fuel humidity */
-  if (tf > temp)
-  {
-    rhf = rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0))
-        / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0)));
-  }
-  else
-  {
-    rhf = rh;
-  }
   if (rain != 0)
   {
     /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/ /* old routine*/
     /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
     /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
-    mo = mo + rain / 0.3 * 100.0;
+    mo += rain / 0.3 * 100.0;
     if (mo > 250.0)
     {
       mo = 250.0;
     }
   }
+  /* fuel temp from CEVW*/
+  const float tf = temp + 17.9 * solrad * exp(-0.034 * ws);
+  /* fuel humidity */
+  const float rhf = tf > temp
+                    ? (rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0))
+                       / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0))))
+                    : rh;
+  /* duplicated in both formulas, so calculate once */
+  const float e1 = 0.27 * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
   /*GRASS EMC*/
-  float ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0))
-           + 0.27 * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
-  float moed = mo - ed;
-  /*GRASS EMC*/
-  float ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0))
-           + 0.27 * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
-  float moew = mo - ew;
-  if (moed == 0 || (moew >= 0 && moed < 0))
+  const float ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1;
+  const float ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1;
+  if (mo == ed || (mo > ew && ed > mo))
   {
-    xm = mo;
-    if (moed == 0)
-    {
-      e = ed;
-    }
-    if (moew >= 0)
-    {
-      e = ew;
-    }
+    return mo;
   }
-  else
-  {
-    float a1, moe;
-    if (moed > 0)
-    {
-      a1 = rhf / 100;
-      e = ed;
-      moe = moed;
-    }
-    else
-    {
-      a1 = (100.0 - rhf) / 100.0;
-      e = ew;
-      moe = moew;
-    }
-    float xkd = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(wind) * (1 - pow(a1, 8))));
-    xkd *= drf * exp(0.0365 * tf);
-    /* printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew); */
-    xm = e + moe * exp(-1.0 * log(10.0) * xkd * time);
-  }
-  return xm;
+  /* mo != ed */
+  /* these are the same formulas with a different value for a1 */
+  const float a1 = mo < ed
+                   ? (100.0 - rhf) / 100.0
+                   : rhf / 100.0;
+  const float k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
+  const float kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf);
+  /* m = ed if mo >= ed else ew */
+  const float m = mo < ed
+                  ? ew
+                  : ed;
+  return m + (mo - m) * pow(10, -kd_or_kw * time);
 }
 
 /**
  * Calculate Grass Spread Index (GSI)
  *
- * @param wind            Wind Speed (km/h)
+ * @param ws              Wind Speed (km/h)
  * @param mc              Grass moisture content (percent)
  * @param cur             Degree of curing (percent, 0-100)
  * @return                Grass Spread Index
  */
-float grass_spread_index(float wind, float mc, float cur)
+float grass_spread_index(float ws, float mc, float cur)
 {
-  float fw;
-  if (wind < 5)
-  {
-    fw = (0.054 + 0.209 * wind) * 16.67;
-  }
-  else
-  {
-    fw = (1.1 + 0.715 * (wind - 5.0) * 0.844) * 16.67;
-  }
-  float fm;
-  if (mc < 12)
-  {
-    fm = exp(-0.108 * mc);
-  }
-  else if (mc < 20.0 && wind < 10.0)
-  {
-    fm = 0.684 - 0.0342 * mc;
-  }
-  else if (mc < 23.9 && wind >= 10.0)
-  {
-    fm = 0.547 - 0.0228 * mc;
-  }
-  else
-  {
-    fm = 0;
-  }
-  float cf;
-  if (cur > 20)
-  {
-    cf = 1.034 / (1 + 104 * exp(-0.1 * (cur - 20)));
-  }
-  else
-  {
-    cf = 0.0;
-  }
+  const float cf = cur <= 20
+                   ? 0.0
+                   : 1.034 / (1 + 104 * exp(-0.1 * (cur - 20)));
+  const float fw = (ws < 5
+                      ? 0.054 + 0.209 * ws
+                      : 1.1 + 0.715 * (ws - 5.0) * 0.844)
+                 * 16.67;
+  /* NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10 */
+  /* using 0.6838 instead would mean this is always less than ws >= 10 */
+  /* mc < 23.9 because of check at start of function, so last expression is any ws >= 10 */
+  const float fm = mc < 12
+                   ? exp(-0.108 * mc)
+                   : (mc < 20.0 && ws < 10.0
+                        ? 0.684 - 0.0342 * mc
+                        : (mc < 23.9 && ws >= 10.0
+                             ? 0.547 - 0.0228 * mc
+                             : 0.0));
   return 1.11 * fw * fm * cf;
 }
 
@@ -343,18 +286,11 @@ float grass_spread_index(float wind, float mc, float cur)
 float grass_fire_weather_index(float gsi, float load)
 {
   /*  this just converts back to ROS in m/min*/
-  float ros = gsi / 1.11;
-  float Fint = 300.0 * load * ros;
-  float GFWI;
-  if (Fint > 100)
-  {
-    GFWI = log(Fint / 60.0) / 0.14;
-  }
-  else
-  {
-    GFWI = Fint / 25.0;
-  }
-  return GFWI;
+  const float ros = gsi / 1.11;
+  const float Fint = 300.0 * load * ros;
+  return Fint > 100
+         ? log(Fint / 60.0) / 0.14
+         : Fint / 25.0;
 }
 
 /*
@@ -390,20 +326,12 @@ float dmc_wetting(float rain_total, float lastdmc)
   {
     return 0.0;
   }
-  float b;
-  if (lastdmc <= 33)
-  {
-    b = 100.0 / (0.5 + 0.3 * lastdmc);
-  }
-  else if (lastdmc <= 65)
-  {
-    b = 14.0 - 1.3 * log(lastdmc);
-  }
-  else
-  {
-    b = 6.2 * log(lastdmc) - 17.2;
-  }
-  const float reff = (0.92 * rain_total - 1.27);
+  const float b = lastdmc <= 33
+                  ? 100.0 / (0.5 + 0.3 * lastdmc)
+                  : (lastdmc <= 65
+                       ? 14.0 - 1.3 * log(lastdmc)
+                       : 6.2 * log(lastdmc) - 17.2);
+  const float reff = 0.92 * rain_total - 1.27;
   /* This is the change in MC (moisturecontent)  from FULL DAY's rain  */
   return 1000.0 * reff / (48.77 + b * reff);
 }
@@ -471,16 +399,15 @@ void main(int argc, char* argv[])
   FILE* out = fopen(argv[6], "w");
 
   /*  CSV headers */
-  fprintf(out, "year,mon,day,hour,temp,rh,wind,rain,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi\n");
-
+  fprintf(out, "year,mon,day,hour,temp,rh,wind,rain,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi,mcffmc,mcgmc,percent_cured,grass_fuel_load\n");
   int TZadjust = atoi(argv[1]);
   if (TZadjust < -9 || TZadjust > -2)
   {
     printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n");
     exit(1);
   }
-  float lastffmc = atof(argv[2]);
-  if (lastffmc > 101 || lastffmc < 0)
+  float ffmc = atof(argv[2]);
+  if (ffmc > 101 || ffmc < 0)
   {
     printf(" /n/n *****   FFMC must be between 0 and 101 \n");
     exit(1);
@@ -498,10 +425,10 @@ void main(int argc, char* argv[])
     exit(1);
   }
 
-  printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, lastffmc, dmc);
+  printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, ffmc, dmc);
   /* approximation for a start up*/
-  float lastmcgmc = 101.0 - lastffmc;
-  float lastmcffmc = fine_fuel_moisture_from_code(lastffmc);
+  float mcgmc = 101.0 - ffmc;
+  float mcffmc = fine_fuel_moisture_from_code(ffmc);
 
   /* check that the header matches what is expected */
   const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
@@ -515,6 +442,7 @@ void main(int argc, char* argv[])
   const float TARGET_DRYING_SINCE_INTERCEPT = 5;
   while (err > 0)
   {
+    /*
     if (cur.day != old.day || cur.mon != old.mon)
     {
       printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",
@@ -526,6 +454,7 @@ void main(int argc, char* argv[])
              cur.sunrise,
              cur.sunset);
     }
+    */
     if (0 < cur.rain)
     {
       rain_total += cur.rain;
@@ -543,13 +472,17 @@ void main(int argc, char* argv[])
     }
     rain_total += cur.rain;
     /* use lesser of remaining intercept and current hour's rain */
-    float rain_ffmc = (rain_total <= 0.5) ? 0.0 : (((rain_total - 0.5) > cur.rain) ? cur.rain : (rain_total - 0.5));
-    float mcffmc = fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, lastmcffmc);
+    float rain_ffmc = rain_total <= 0.5
+                      ? 0.0
+                      : ((rain_total - 0.5) > cur.rain
+                           ? cur.rain
+                           : rain_total - 0.5);
+    mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, mcffmc);
     /* convert to code for output, but keep using moisture % for precision */
-    float ffmc = fine_fuel_moisture_code(mcffmc);
+    ffmc = fine_fuel_moisture_code(mcffmc);
     int sunlight_hours = round(cur.sunset) - round(cur.sunrise);
     /* apply one hour of drying if during sunlight hours */
-    float drying_fraction = (cur.hour >= round(cur.sunset) && cur.hour < round(cur.sunrise))
+    float drying_fraction = cur.hour >= round(cur.sunset) && cur.hour < round(cur.sunrise)
                             ? 1.0 / sunlight_hours
                             : 0.0;
     /* HACK: pass drying fraction instead of solar radiation for now */
@@ -558,12 +491,12 @@ void main(int argc, char* argv[])
     float isi = initial_spread_index(cur.wind, ffmc);
     float bui = buildup_index(dmc, dc);
     float fwi = fire_weather_index(isi, bui);
-    float mcgmc = grass_fuel_moisture(cur.temp, cur.rh, cur.wind, cur.rain, lastmcgmc, cur.solar, 1.0);
+    mcgmc = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.wind, cur.rain, mcgmc, cur.solar);
     float gfmc = fine_fuel_moisture_code(mcgmc);
     float gsi = grass_spread_index(cur.wind, mcgmc, cur.percent_cured);
     float gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     fprintf(out,
-            "%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f\n",
+            "%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.2f, %5.1f, %5.1f, %5.1f\n",
             old.year,
             old.mon,
             old.day,
@@ -580,9 +513,12 @@ void main(int argc, char* argv[])
             fwi,
             gfmc,
             gsi,
-            gfwi);
-
-    printf("%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f,     %5.2f, %5.2f, %5.2f, %5.1f, %5.1f, %5.1f | %5.1f, %5.1f, %5.1f  %5.2f\n",
+            gfwi,
+            mcffmc,
+            mcgmc,
+            cur.percent_cured,
+            cur.grass_fuel_load);
+    printf("%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.2f, %5.1f, %5.1f, %5.1f\n",
            old.year,
            old.mon,
            old.day,
@@ -600,10 +536,10 @@ void main(int argc, char* argv[])
            gfmc,
            gsi,
            gfwi,
-           mcgmc);
-    /* ffmc and gmc are calculated from previous hourly values */
-    lastmcffmc = mcffmc;
-    lastmcgmc = mcgmc;
+           mcffmc,
+           mcgmc,
+           cur.percent_cured,
+           cur.grass_fuel_load);
     old = cur;
     err = populate_row(inp, &cur, TZadjust);
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
