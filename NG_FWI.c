@@ -465,6 +465,23 @@ void main(int argc, char* argv[])
              cur.sunset);
     }
     */
+    if (0 < cur.rain)
+    {
+      /* no drying if still raining */
+      drying_since_intercept = 0.0;
+    }
+    else
+    {
+      drying_since_intercept += drying_units(cur.temp, cur.rh, cur.wind, cur.rain, cur.solar);
+      if (drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
+      {
+        /* reset rain if intercept reset criteria met */
+        rain_total = 0.0;
+        drying_since_intercept = 0.0;
+      }
+    }
+    rain_total_prev = rain_total;
+    rain_total += cur.rain;
     /* HACK: for some reason round() isn't working */
     int sunrise = (int)(cur.sunrise + 0.5);
     int sunset = (int)(cur.sunset + 0.5);
@@ -473,8 +490,16 @@ void main(int argc, char* argv[])
     double drying_fraction = cur.hour >= sunrise && cur.hour < sunset
                              ? (1.0 / sunlight_hours)
                              : 0.0;
-    rain_total_prev = rain_total;
-    rain_total += cur.rain;
+    if (rain_total <= DMC_INTERCEPT)
+    {
+      dmc_before_precip = dmc;
+      /* dmc_drying_since_wetting_start = 0; */
+    }
+    if (rain_total <= DC_INTERCEPT)
+    {
+      dc_before_precip = dc;
+      /* dc_drying_since_wetting_start = 0; */
+    }
     float dmc_daily = dmc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float dmc_hourly = drying_fraction * dmc_daily;
     dmc += dmc_hourly;
@@ -498,31 +523,6 @@ void main(int argc, char* argv[])
     }
     /* should be no way this is below 0 because we just made sure it wasn't > dmc */
     dc -= dc_wetting_hourly;
-    if (0 < cur.rain)
-    {
-      /* no drying if still raining */
-      drying_since_intercept = 0.0;
-    }
-    else
-    {
-      drying_since_intercept += drying_units(cur.temp, cur.rh, cur.wind, cur.rain, cur.solar);
-      if (drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
-      {
-        /* reset rain if intercept reset criteria met */
-        rain_total = 0.0;
-        drying_since_intercept = 0.0;
-      }
-    }
-    if (rain_total <= DMC_INTERCEPT)
-    {
-      dmc_before_precip = dmc;
-      /* dmc_drying_since_wetting_start = 0; */
-    }
-    if (rain_total <= DC_INTERCEPT)
-    {
-      dc_before_precip = dc;
-      /* dc_drying_since_wetting_start = 0; */
-    }
     /* printf("%0.2f, ", dmc_at_wetting_start); */
     /* printf("%0.2f, ", dmc_wetting_total); */
     /* rain_total += cur.rain; */
