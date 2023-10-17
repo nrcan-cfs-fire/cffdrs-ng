@@ -18,26 +18,6 @@ bmw/2021
 
 #include "util.h"
 
-#ifndef FLT_EPSILON
-#define FLT_EPSILON 1E-5
-#endif
-
-#define assert_equals(a, b)                      \
-  if (abs(a - b) <= FLT_EPSILON)                 \
-  {                                              \
-  }                                              \
-  else                                           \
-  {                                              \
-    printf("%s#L%d:\n\t%s != %s:\n\t\t%f != %f", \
-           __FILE__,                             \
-           __LINE__,                             \
-           #a,                                   \
-           #b,                                   \
-           a,                                    \
-           b);                                   \
-    exit(-1);                                    \
-  }
-
 /* Fuel Load (kg/m^2) */
 static const float DEFAULT_GRASS_FUEL_LOAD = 0.35;
 static const float MAX_SOLAR_PROPAGATION = 0.85;
@@ -343,8 +323,7 @@ float dc_drying(float temp, float rh, float ws, float prec, int mon)
 float dmc_wetting(float rain_total, float lastdmc)
 {
   /* compare floats by using tolerance */
-  if (rain_total <= (DMC_INTERCEPT + FLT_EPSILON))
-  /* if (rain_total <= DMC_INTERCEPT) */
+  if (rain_total <= DMC_INTERCEPT)
   {
     return 0.0;
   }
@@ -361,8 +340,7 @@ float dmc_wetting(float rain_total, float lastdmc)
 float dc_wetting(float rain_total, float lastdc)
 {
   /* compare floats by using tolerance */
-  if (rain_total <= (DC_INTERCEPT + FLT_EPSILON))
-  /* if (rain_total <= DC_INTERCEPT) */
+  if (rain_total <= DC_INTERCEPT)
   {
     return 0.0;
   }
@@ -444,17 +422,11 @@ void main(int argc, char* argv[])
   int err = populate_row(inp, &cur, TZadjust);
   struct row old = cur;
   float rain_total = 0.0;
-  float rain_prev = 0.0;
-  float dmc_running = dmc_startup;
-  float dmc_drying_total = 0.0;
+  float rain_total_prev = 0.0;
+  float dmc = dmc_startup;
   float dmc_before_precip = dmc_startup;
-  float dmc_wetting_since_precip = 0.0;
-  float dmc_wetting_total = 0.0;
-  float dc_running = dc_startup;
-  float dc_drying_total = 0.0;
+  float dc = dc_startup;
   float dc_before_precip = dc_startup;
-  float dc_wetting_since_precip = 0.0;
-  float dc_wetting_total = 0.0;
   float drying_since_intercept = 0.0;
   /* for now, want 5 "units" of drying (which is 1 per hour to start) */
   const float TARGET_DRYING_SINCE_INTERCEPT = 5;
@@ -481,85 +453,39 @@ void main(int argc, char* argv[])
     double drying_fraction = cur.hour >= sunrise && cur.hour < sunset
                              ? (1.0 / sunlight_hours)
                              : 0.0;
-    rain_prev = rain_total;
+    rain_total_prev = rain_total;
     rain_total += cur.rain;
     float dmc_daily = dmc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float dmc_hourly = drying_fraction * dmc_daily;
-    dmc_drying_total += dmc_hourly;
+    dmc += dmc_hourly;
     /* wetting is calculated based on initial dmc when rain started and rain since */
     /* full amount of wetting because it uses rain so far, but just one hour of drying */
     float dmc_wetting_current = dmc_wetting(rain_total, dmc_before_precip);
+    /* recalculate instead of storing so we don't need to reset this too */
+    /* NOTE: rain_total_prev != (rain_total - cur.rain) due to floating point math */
+    float dmc_wetting_prev = dmc_wetting(rain_total_prev, dmc_before_precip);
     /* apply wetting since last period */
-    float dmc_wetting_hourly = dmc_wetting_current - dmc_wetting_since_precip;
-    float dmc_wetting_prev = dmc_wetting(rain_total - cur.rain, dmc_before_precip);
-    float dmc_wetting_rain_prev = dmc_wetting(rain_prev, dmc_before_precip);
-    printf("%f, %f, %f\n", rain_prev, rain_total, rain_total - cur.rain);
-    if (rain_prev == (rain_total - cur.rain))
-    {
-      printf("%0.30f == %0.30f\n", rain_prev, (rain_total - cur.rain));
-    }
-    else
-    {
-      printf("%0.30f != %0.30f\n", rain_prev, (rain_total - cur.rain));
-    }
-    /* if (iseqsig((float_t)(rain_prev), (float_t)(rain_total - cur.rain))) */
-    if (abs(rain_prev - (rain_total - cur.rain)) <= FLT_EPSILON)
-    {
-      printf("%0.30f == %0.30f\n", rain_prev, (rain_total - cur.rain));
-    }
-    else
-    {
-      printf("%0.30f != %0.30f\n", rain_prev, (rain_total - cur.rain));
-    }
-    printf("%f, %f, %f\n", dmc_wetting_rain_prev, dmc_wetting_current, dmc_wetting_since_precip);
-    assert_equals(dmc_wetting_rain_prev, dmc_wetting_since_precip);
-    assert_equals(dmc_wetting_prev, dmc_wetting_rain_prev);
-    assert_equals(dmc_wetting_prev, dmc_wetting_since_precip);
-    float dmc_wetting_diff = dmc_wetting_current - dmc_wetting_prev;
-    assert_equals(dmc_wetting_diff, dmc_wetting_hourly);
-    /* dmc calculated from start of stream to just before this rain */
-    float dmc = dmc_startup + dmc_drying_total - dmc_wetting_total;
-    dmc_running += dmc_hourly;
-    assert_equals(dmc_running, dmc);
+    float dmc_wetting_hourly = dmc_wetting_current - dmc_wetting_prev;
     /* at most apply same wetting as current value (don't go below 0) */
     if (dmc_wetting_hourly > dmc)
     {
       dmc_wetting_hourly = dmc;
     }
-    dmc_wetting_total += dmc_wetting_hourly;
     /* should be no way this is below 0 because we just made sure it wasn't > dmc */
     dmc -= dmc_wetting_hourly;
-    dmc_running -= dmc_wetting_hourly;
-    assert_equals(dmc_running, dmc);
-    dmc_wetting_since_precip = dmc_wetting_current;
     float dc_daily = dc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float dc_hourly = drying_fraction * dc_daily;
-    dc_drying_total += dc_hourly;
+    dc += dc_hourly;
     float dc_wetting_current = dc_wetting(rain_total, dc_before_precip);
-    float dc_wetting_hourly = dc_wetting_current - dc_wetting_since_precip;
-    float dc_wetting_prev = dc_wetting(rain_total - cur.rain, dc_before_precip);
-    float dc_wetting_rain_prev = dc_wetting(rain_prev, dc_before_precip);
-    printf("%f, %f, %f\n", dc_wetting_rain_prev, dc_wetting_current, dc_wetting_since_precip);
-    assert_equals(dc_wetting_rain_prev, dc_wetting_since_precip);
-    assert_equals(dc_wetting_prev, dc_wetting_rain_prev);
-    assert_equals(dc_wetting_prev, dc_wetting_since_precip);
-    float dc_wetting_diff = dc_wetting_current - dc_wetting_prev;
-    assert_equals(dc_wetting_diff, dc_wetting_hourly);
-    float dc = dc_startup + dc_drying_total - dc_wetting_total;
-    dc_running += dc_hourly;
-    assert_equals(dc_running, dc);
+    float dc_wetting_prev = dc_wetting(rain_total_prev, dc_before_precip);
+    float dc_wetting_hourly = dc_wetting_current - dc_wetting_prev;
     /* at most apply same wetting as current value (don't go below 0) */
     if (dc_wetting_hourly > dc)
     {
       dc_wetting_hourly = dc;
     }
-    dc_wetting_total += dc_wetting_hourly;
     /* should be no way this is below 0 because we just made sure it wasn't > dmc */
     dc -= dc_wetting_hourly;
-    dc_running -= dc_wetting_hourly;
-    assert_equals(dc_running, dc);
-    /* printf("%0.2f - %0.2f = %0.2f, ", dc_hourly, dc_wetting_hourly, dc); */
-    dc_wetting_since_precip = dc_wetting_current;
     if (0 < cur.rain)
     {
       /* no drying if still raining */
@@ -578,13 +504,11 @@ void main(int argc, char* argv[])
     if (rain_total <= DMC_INTERCEPT)
     {
       dmc_before_precip = dmc;
-      dmc_wetting_since_precip = 0.0;
       /* dmc_drying_since_wetting_start = 0; */
     }
     if (rain_total <= DC_INTERCEPT)
     {
       dc_before_precip = dc;
-      dc_wetting_since_precip = 0.0;
       /* dc_drying_since_wetting_start = 0; */
     }
     /* printf("%0.2f, ", dmc_at_wetting_start); */
