@@ -293,15 +293,6 @@ float grass_fire_weather_index(float gsi, float load)
          : Fint / 25.0;
 }
 
-/*
- * Calculate number of drying "units" this hour contributes
- */
-float drying_units(float temp, float rh, float wind, float rain, float solar)
-{
-  /* for now, just add 1 drying "unit" per hour */
-  return 1.0;
-}
-
 float dmc_drying(float temp, float rh, float ws, float prec, int mon)
 {
   if (temp <= 1.1)
@@ -368,6 +359,103 @@ float dc_wetting_between(float rain_total_previous, float rain_total, float last
   /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
   const float previous = dc_wetting(rain_total_previous, lastdc);
   return current - previous;
+}
+
+float drying_fraction(struct row* cur)
+{
+  /* HACK: for some reason round() isn't working */
+  int sunrise = (int)(cur->sunrise + 0.5);
+  int sunset = (int)(cur->sunset + 0.5);
+  int sunlight_hours = sunset - sunrise;
+  /* apply one hour of drying if during sunlight hours */
+  return cur->hour >= sunrise && cur->hour < sunset
+         ? (1.0 / sunlight_hours)
+         : 0.0;
+}
+
+float duff_moisture_code(float last_dmc,
+                         struct row* cur,
+                         float* dmc_before_precip,
+                         float rain_total_prev,
+                         float rain_total)
+{
+  if (rain_total <= DMC_INTERCEPT)
+  {
+    *dmc_before_precip = last_dmc;
+  }
+  float dmc_daily = dmc_drying(cur->temp, cur->rh, cur->wind, cur->rain, cur->mon);
+  float dmc_hourly = drying_fraction(cur) * dmc_daily;
+  float dmc = last_dmc + dmc_hourly;
+  /* apply wetting since last period */
+  float dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, *dmc_before_precip);
+  /* at most apply same wetting as current value (don't go below 0) */
+  if (dmc_wetting_hourly > dmc)
+  {
+    dmc_wetting_hourly = dmc;
+  }
+  /* should be no way this is below 0 because we just made sure it wasn't > dmc */
+  return dmc - dmc_wetting_hourly;
+}
+
+float drought_code(float last_dc,
+                   struct row* cur,
+                   float* dc_before_precip,
+                   float rain_total_prev,
+                   float rain_total)
+{
+  if (rain_total <= DC_INTERCEPT)
+  {
+    *dc_before_precip = last_dc;
+  }
+  float dc_daily = dc_drying(cur->temp, cur->rh, cur->wind, cur->rain, cur->mon);
+  float dc_hourly = drying_fraction(cur) * dc_daily;
+  float dc = last_dc + dc_hourly;
+  /* apply wetting since last period */
+  float dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_precip);
+  /* at most apply same wetting as current value (don't go below 0) */
+  if (dc_wetting_hourly > dc)
+  {
+    dc_wetting_hourly = dc;
+  }
+  /* should be no way this is below 0 because we just made sure it wasn't > dc */
+  return dc - dc_wetting_hourly;
+}
+
+/*
+ * Calculate number of drying "units" this hour contributes
+ */
+float drying_units(float temp, float rh, float wind, float rain, float solar)
+{
+  /* for now, just add 1 drying "unit" per hour */
+  return 1.0;
+}
+
+float rain_since_intercept_reset(struct row* cur,
+                                 float* drying_since_intercept,
+                                 float* rain_total_prev,
+                                 float rain_total)
+{
+  /* for now, want 5 "units" of drying (which is 1 per hour to start) */
+  static const float TARGET_DRYING_SINCE_INTERCEPT = 5;
+  if (0 < cur->rain)
+  {
+    /* no drying if still raining */
+    *drying_since_intercept = 0.0;
+  }
+  else
+  {
+    *drying_since_intercept += drying_units(cur->temp, cur->rh, cur->wind, cur->rain, cur->solar);
+    if (*drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
+    {
+      /* reset rain if intercept reset criteria met */
+      rain_total = 0.0;
+      *drying_since_intercept = 0.0;
+    }
+  }
+  *rain_total_prev = rain_total;
+  rain_total += cur->rain;
+  /* could just pass pointer but want to make point of calculation more obvious */
+  return rain_total;
 }
 
 int populate_row(FILE* inp, struct row* cur, float TZadjust)
@@ -448,8 +536,6 @@ void main(int argc, char* argv[])
   float dc = dc_startup;
   float dc_before_precip = dc_startup;
   float drying_since_intercept = 0.0;
-  /* for now, want 5 "units" of drying (which is 1 per hour to start) */
-  const float TARGET_DRYING_SINCE_INTERCEPT = 5;
   while (err > 0)
   {
     /*
@@ -465,67 +551,7 @@ void main(int argc, char* argv[])
              cur.sunset);
     }
     */
-    if (0 < cur.rain)
-    {
-      /* no drying if still raining */
-      drying_since_intercept = 0.0;
-    }
-    else
-    {
-      drying_since_intercept += drying_units(cur.temp, cur.rh, cur.wind, cur.rain, cur.solar);
-      if (drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
-      {
-        /* reset rain if intercept reset criteria met */
-        rain_total = 0.0;
-        drying_since_intercept = 0.0;
-      }
-    }
-    rain_total_prev = rain_total;
-    rain_total += cur.rain;
-    /* HACK: for some reason round() isn't working */
-    int sunrise = (int)(cur.sunrise + 0.5);
-    int sunset = (int)(cur.sunset + 0.5);
-    int sunlight_hours = sunset - sunrise;
-    /* apply one hour of drying if during sunlight hours */
-    double drying_fraction = cur.hour >= sunrise && cur.hour < sunset
-                             ? (1.0 / sunlight_hours)
-                             : 0.0;
-    if (rain_total <= DMC_INTERCEPT)
-    {
-      dmc_before_precip = dmc;
-      /* dmc_drying_since_wetting_start = 0; */
-    }
-    if (rain_total <= DC_INTERCEPT)
-    {
-      dc_before_precip = dc;
-      /* dc_drying_since_wetting_start = 0; */
-    }
-    float dmc_daily = dmc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
-    float dmc_hourly = drying_fraction * dmc_daily;
-    dmc += dmc_hourly;
-    /* apply wetting since last period */
-    float dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, dmc_before_precip);
-    /* at most apply same wetting as current value (don't go below 0) */
-    if (dmc_wetting_hourly > dmc)
-    {
-      dmc_wetting_hourly = dmc;
-    }
-    /* should be no way this is below 0 because we just made sure it wasn't > dmc */
-    dmc -= dmc_wetting_hourly;
-    float dc_daily = dc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
-    float dc_hourly = drying_fraction * dc_daily;
-    dc += dc_hourly;
-    float dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_precip);
-    /* at most apply same wetting as current value (don't go below 0) */
-    if (dc_wetting_hourly > dc)
-    {
-      dc_wetting_hourly = dc;
-    }
-    /* should be no way this is below 0 because we just made sure it wasn't > dmc */
-    dc -= dc_wetting_hourly;
-    /* printf("%0.2f, ", dmc_at_wetting_start); */
-    /* printf("%0.2f, ", dmc_wetting_total); */
-    /* rain_total += cur.rain; */
+    rain_total = rain_since_intercept_reset(&cur, &drying_since_intercept, &rain_total_prev, rain_total);
     /* use lesser of remaining intercept and current hour's rain */
     float rain_ffmc = rain_total <= 0.5
                       ? 0.0
@@ -535,6 +561,9 @@ void main(int argc, char* argv[])
     mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, mcffmc);
     /* convert to code for output, but keep using moisture % for precision */
     ffmc = fine_fuel_moisture_code(mcffmc);
+    /* not ideal, but at least encapsulates the code for each index */
+    dmc = duff_moisture_code(dmc, &cur, &dmc_before_precip, rain_total_prev, rain_total);
+    dc = drought_code(dc, &cur, &dc_before_precip, rain_total_prev, rain_total);
     float isi = initial_spread_index(cur.wind, ffmc);
     float bui = buildup_index(dmc, dc);
     float fwi = fire_weather_index(isi, bui);
