@@ -350,6 +350,26 @@ float dc_wetting(float rain_total, float lastdc)
   return 400.0 * log(1.0 + 3.937 * rw / smi);
 }
 
+float dmc_wetting_between(float rain_total_previous, float rain_total, float lastdmc)
+{
+  /* wetting is calculated based on initial dmc when rain started and rain since */
+  const float current = dmc_wetting(rain_total, lastdmc);
+  /* recalculate instead of storing so we don't need to reset this too */
+  /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
+  const float previous = dmc_wetting(rain_total_previous, lastdmc);
+  return current - previous;
+}
+
+float dc_wetting_between(float rain_total_previous, float rain_total, float lastdc)
+{
+  /* wetting is calculated based on initial dc when rain started and rain since */
+  const float current = dc_wetting(rain_total, lastdc);
+  /* recalculate instead of storing so we don't need to reset this too */
+  /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
+  const float previous = dc_wetting(rain_total_previous, lastdc);
+  return current - previous;
+}
+
 int populate_row(FILE* inp, struct row* cur, float TZadjust)
 {
   int err = read_row(inp, cur);
@@ -458,14 +478,8 @@ void main(int argc, char* argv[])
     float dmc_daily = dmc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float dmc_hourly = drying_fraction * dmc_daily;
     dmc += dmc_hourly;
-    /* wetting is calculated based on initial dmc when rain started and rain since */
-    /* full amount of wetting because it uses rain so far, but just one hour of drying */
-    float dmc_wetting_current = dmc_wetting(rain_total, dmc_before_precip);
-    /* recalculate instead of storing so we don't need to reset this too */
-    /* NOTE: rain_total_prev != (rain_total - cur.rain) due to floating point math */
-    float dmc_wetting_prev = dmc_wetting(rain_total_prev, dmc_before_precip);
     /* apply wetting since last period */
-    float dmc_wetting_hourly = dmc_wetting_current - dmc_wetting_prev;
+    float dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, dmc_before_precip);
     /* at most apply same wetting as current value (don't go below 0) */
     if (dmc_wetting_hourly > dmc)
     {
@@ -476,9 +490,7 @@ void main(int argc, char* argv[])
     float dc_daily = dc_drying(cur.temp, cur.rh, cur.wind, cur.rain, cur.mon);
     float dc_hourly = drying_fraction * dc_daily;
     dc += dc_hourly;
-    float dc_wetting_current = dc_wetting(rain_total, dc_before_precip);
-    float dc_wetting_prev = dc_wetting(rain_total_prev, dc_before_precip);
-    float dc_wetting_hourly = dc_wetting_current - dc_wetting_prev;
+    float dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_precip);
     /* at most apply same wetting as current value (don't go below 0) */
     if (dc_wetting_hourly > dc)
     {
