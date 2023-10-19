@@ -12,16 +12,20 @@ outputs daily weather stream
 
 int main(int argc, char* argv[])
 {
-  float atemp[24] = {0.0};
-  float arh[24] = {0.0};
-  float awind[24] = {0.0};
-  float arain[24] = {0.0};
+  /*  CSV headers */
+  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char* header_out = "lat,long,yr,mon,day,temp,rh,ws,prec";
+  static const int LST_NOON = 12;
+  double atemp[24] = {0.0};
+  double arh[24] = {0.0};
+  double awind[24] = {0.0};
+  double arain[24] = {0.0};
 
   if (argc != 3)
   {
     printf("Command line:   %s <input file> <output file>\n\n", argv[0]);
     printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-    printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
+    printf("%s\n\n", header);
     printf("All times should be local standard time\n");
     exit(1);
   }
@@ -34,20 +38,18 @@ int main(int argc, char* argv[])
     exit(1);
   }
 
-  /*  CSV headers */
-  const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
   check_header(inp, header);
 
   FILE* out = fopen(argv[2], "w");
-  fprintf(out, "%s\n", header);
+  fprintf(out, "%s\n", header_out);
 
   struct row cur;
   struct row old;
   int err = read_row(inp, &cur);
 
-  float rain_pm = 0.0;
-  float rain_am = 0.0;
-  float rain_pm_old = 0.0;
+  double rain_pm = 0.0;
+  double rain_am = 0.0;
+  double rain_pm_old = 0.0;
   while (err > 0)
   {
     old = cur;
@@ -59,9 +61,9 @@ int main(int argc, char* argv[])
     {
       atemp[cur.hour] = cur.temp;
       arh[cur.hour] = cur.rh;
-      awind[cur.hour] = cur.wind;
+      awind[cur.hour] = cur.ws;
       arain[cur.hour] = cur.rain;
-      if (cur.hour <= 12)
+      if (cur.hour <= LST_NOON)
       {
         rain_am += cur.rain;
       }
@@ -71,20 +73,28 @@ int main(int argc, char* argv[])
       }
       err = read_row(inp, &cur);
     } /* end the while to read thru a day */
-    float rain24 = rain_am + rain_pm_old;
-    int h = 12;
-    fprintf(out, "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n", old.lat, old.lon, old.year, old.mon, old.day, h, atemp[h], arh[h], awind[h], rain24);
-    printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+    double rain24 = rain_am + rain_pm_old;
+    fprintf(out,
+            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+            old.lat,
+            old.lon,
+            old.year,
+            old.mon,
+            old.day,
+            _round(atemp[LST_NOON], 1),
+            _round(arh[LST_NOON], 0),
+            _round(awind[LST_NOON], 1),
+            _round(rain24, 1));
+    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
            old.lat,
            old.lon,
            old.year,
            old.mon,
            old.day,
-           h,
-           atemp[h],
-           arh[h],
-           awind[h],
-           rain24);
+           _round(atemp[LST_NOON], 1),
+           _round(arh[LST_NOON], 0),
+           _round(awind[LST_NOON], 1),
+           _round(rain24, 1));
   } /* end the main while(err>0)  */
   fclose(inp);
   fclose(out);

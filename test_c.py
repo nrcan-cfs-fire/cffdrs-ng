@@ -4,53 +4,11 @@ import make_daily
 import make_hourly
 import make_minmax
 import NG_FWI
+from util import save_csv
 
 
 def round_format(fmt, precision):
     return lambda x: fmt.format(round(x, precision))
-
-
-def save_csv(df, file):
-    result = df.copy()
-    result.columns = map(str.lower, result.columns)
-    result["mon"] = result["mon"].apply("{:2d}".format)
-    result["day"] = result["day"].apply("{:2d}".format)
-    result["hour"] = result["hour"].apply("{:2d}".format)
-    result["temp"] = result["temp"].apply(round_format("{:5.1f}", 1))
-    result["rh"] = result["rh"].apply(round_format("{:3.0f}", 0))
-    result["wind"] = result["wind"].apply(round_format("{:5.1f}", 1))
-    result["rain"] = result["rain"].apply(round_format("{:5.1f}", 2))
-    result["ffmc"] = result["ffmc"].apply(round_format("{:6.1f}", 1))
-    result["dmc"] = result["dmc"].apply(round_format("{:6.1f}", 1))
-    result["dc"] = result["dc"].apply(round_format("{:6.1f}", 1))
-    result["isi"] = result["isi"].apply(round_format("{:6.1f}", 1))
-    result["bui"] = result["bui"].apply(round_format("{:6.1f}", 1))
-    result["fwi"] = result["fwi"].apply(round_format("{:6.1f}", 1))
-    result["gfmc"] = result["gfmc"].apply(round_format("{:6.1f}", 1))
-    result["gsi"] = result["gsi"].apply(round_format("{:6.1f}", 1))
-    result["gfwi"] = result["gfwi"].apply(round_format("{:6.1f}", 1))
-    result = result[
-        [
-            "year",
-            "mon",
-            "day",
-            "hour",
-            "temp",
-            "rh",
-            "wind",
-            "rain",
-            "ffmc",
-            "dmc",
-            "dc",
-            "isi",
-            "bui",
-            "fwi",
-            "gfmc",
-            "gsi",
-            "gfwi",
-        ]
-    ]
-    result.to_csv(file, index=False)
 
 
 def run_tests():
@@ -93,8 +51,8 @@ def run_tests():
     df["temp_min"] = df["temp_min"].apply("{:.1f}".format)
     df["rh_max"] = df["rh_max"].apply("{:.0f}".format)
     df["rh_min"] = df["rh_min"].apply("{:.0f}".format)
-    df["wind_max"] = df["wind_max"].apply("{:.1f}".format)
-    df["wind_min"] = df["wind_min"].apply("{:.1f}".format)
+    df["ws_max"] = df["ws_max"].apply("{:.1f}".format)
+    df["ws_min"] = df["ws_min"].apply("{:.1f}".format)
     df["rain"] = df["rain"].apply("{:.1f}".format)
     df = df[
         [
@@ -108,8 +66,8 @@ def run_tests():
             "temp_max",
             "rh_min",
             "rh_max",
-            "wind_min",
-            "wind_max",
+            "ws_min",
+            "ws_max",
             "rain",
         ]
     ]

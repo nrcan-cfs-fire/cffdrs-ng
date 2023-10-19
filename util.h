@@ -12,26 +12,37 @@
  */
 struct row
 {
-  float lat, lon;
+  double lat, lon;
   int year, mon, day, hour;
-  float temp, rh, wind, rain;
+  double temp, rh, ws, rain;
   /* Either need solar radiation to be included, or calculated */
-  float solar;
+  double solrad;
   /* derived from lat/lon/date/timezone */
-  float sunrise, sunset;
+  double sunrise, sunset;
   /* grass curing (%) [0-100]*/
-  float percent_cured;
+  double percent_cured;
   /* grass fuel load (kg/m^2) */
-  float grass_fuel_load;
+  double grass_fuel_load;
 };
+
+/**
+ * A row from the input file for a daily weather stream
+ */
+struct row_daily
+{
+  double lat, lon;
+  int year, mon, day;
+  double temp, rh, wind, rain;
+};
+
 /**
  * A row from the input file for a min/max weather stream
  */
 struct row_minmax
 {
-  float lat, lon;
-  int year, mon, day, hour;
-  float temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain;
+  double lat, lon;
+  int year, mon, day;
+  double temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain;
 };
 /**
  * Read a row from a an hourly weather stream file
@@ -48,7 +59,7 @@ int read_row_minmax(FILE* inp, struct row_minmax* r);
  * @param rh          Relative humidity (percent, 0-100)
  * @return            Specific humidity (g/kg)
  */
-float findQ(float temp, float rh);
+double findQ(double temp, double rh);
 /**
  * Find relative humidity
  *
@@ -56,7 +67,7 @@ float findQ(float temp, float rh);
  * @param temp        Temperature (Celcius)
  * @return            Relative humidity (percent, 0-100)
  */
-float findrh(float q, float temp);
+double findrh(double q, double temp);
 /**
  * Find solar radiation at a give time and place
  *
@@ -70,7 +81,7 @@ float findrh(float q, float temp);
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-float sun(float lat, float lon, int mon, int day, int hour, int timezone, float* sunrise, float* sunset);
+double sun(double lat, double lon, int mon, int day, int hour, int timezone, double* sunrise, double* sunset);
 /**
  * Find solar radiation at a give time and place
  *
@@ -83,7 +94,7 @@ float sun(float lat, float lon, int mon, int day, int hour, int timezone, float*
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* sunrise, float* sunset);
+double sun_julian(double lat, double lon, int jd, int hour, int timezone, double* sunrise, double* sunset);
 /**
  * Find day of year. Does not properly deal with leap years.
  *
@@ -107,7 +118,10 @@ void check_header(FILE* input, const char* header);
  * @param wind        Wind speed (km/h)
  * @param rain        Rain (mm)
  */
-void check_inputs(float temp, float rh, float wind, float rain);
+void check_inputs(double temp, double rh, double wind, double rain);
 
-float seasonal_curing(int julian_date);
+double seasonal_curing(int julian_date);
+
+/* C90 round() only rounds to int but want digits */
+double _round(double x, int digits);
 #endif

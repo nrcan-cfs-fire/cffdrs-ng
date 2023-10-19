@@ -7,6 +7,7 @@ from math import exp, log
 import pandas as pd
 
 import util
+from util import save_csv
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
@@ -31,7 +32,7 @@ PERCENT_CURED = 100.0
 # @param wind            Wind Speed (km/h)
 # @param ffmc            Fine Fuel Moisure Code
 # @return                Initial Spread Index
-def isi_calc(ws, ffmc):
+def initial_spread_index(ws, ffmc):
     fm = 147.2773 * (101.0 - ffmc) / (59.5 + ffmc)
     fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if ws >= 40 else (exp(0.05039 * ws))
     sf = 19.1152 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
@@ -45,7 +46,7 @@ def isi_calc(ws, ffmc):
 # @param dmc             Duff Moisture Code
 # @param dc              Drought Code
 # @return                Build-up Index
-def bui_calc(dmc, dc):
+def buildup_index(dmc, dc):
     bui1 = 0 if (dmc == 0 and dc == 0) else (0.8 * dc * dmc / (dmc + 0.4 * dc))
     p = 0 if dmc == 0 else ((dmc - bui1) / dmc)
     cc = 0.92 * ((0.0114 * dmc) ** 1.7)
@@ -61,7 +62,7 @@ def bui_calc(dmc, dc):
 # @param isi             Initial Spread Index
 # @param bui             Build-up Index
 # @return                Fire Weather Index
-def fwi_calc(isi, bui):
+def fire_weather_index(isi, bui):
     bb = (
         (0.1 * isi * (1000 / (25 + 108.64 / exp(0.023 * bui))))
         if bui > 80
@@ -77,7 +78,7 @@ def fwi_calc(isi, bui):
 # @param weatherstream   Table of hourly weather data to use for calculations [TEMP, RH, WS, PREC]
 # @param ffmc_old        Fine Fuel Moisture Code for previous hour
 # @return                Fine Fuel Moisture Codes for given data
-def hourly_ffmc(weatherstream, ffmc_old=FFMC_DEFAULT):
+def hourly_fine_fuel_moisture_code(weatherstream, ffmc_old=FFMC_DEFAULT):
     def hffmc(temp, rh, ws, prec, ffmc_old):
         Fo = ffmc_old
         t0 = 1
@@ -178,7 +179,7 @@ def _hffmc(w, ffmc_old):
     for_ffmc["PREC"] = for_ffmc.apply(
         lambda row: row["PREC"] * row["FFMC_MULTIPLIER"], axis=1
     )
-    for_ffmc["FFMC"] = hourly_ffmc(for_ffmc, ffmc_old=ffmc_old)
+    for_ffmc["FFMC"] = hourly_fine_fuel_moisture_code(for_ffmc, ffmc_old=ffmc_old)
     # for_ffmc = for_ffmc[['TIMESTAMP', 'FFMC']]
     # NOTE: returning column doesn't assign anything if index doesn't match
     return list(for_ffmc["FFMC"])
@@ -472,13 +473,13 @@ def grass_fwi(gsi, load):
 # Calculate hourly Grass Fine Fuel Moisture Code (FFMC)
 #
 # @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, TEMP, RH, WS, PREC, SOLRAD]
-# @param lastmcgmc       Grass Fuel Moisture for previous hour
+# @param lastmcgfmc       Grass Fuel Moisture for previous hour
 # @return                Grass Fine Fuel Moisture Codes for given data
-def _hgffmc(w, lastmcgmc):
+def _hgffmc(w, lastmcgfmc):
     result = []
     for r in w[["TEMP", "RH", "WS", "PREC", "SOLRAD"]].itertuples():
-        lastmcgmc = hourly_gfmc(r.TEMP, r.RH, r.WS, r.PREC, lastmcgmc, r.SOLRAD, 1.0)
-        result.append(lastmcgmc)
+        lastmcgfmc = hourly_gfmc(r.TEMP, r.RH, r.WS, r.PREC, lastmcgfmc, r.SOLRAD, 1.0)
+        result.append(lastmcgfmc)
     return result
 
 
@@ -532,11 +533,12 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False
                 f"and not calculating for {[x.strftime('%Y-%m-%d') for x in missing_noon]}"
             )
     r["FFMC"] = _hffmc(r, ffmc_old)
+    r["MCFFMC"] = 0
     r["DMC"] = _hdmc(r, dmc_old)
     r["DC"] = _hdc(r, dc_old)
-    r["ISI"] = r.apply(lambda row: isi_calc(row["WS"], row["FFMC"]), axis=1)
-    r["BUI"] = r.apply(lambda row: bui_calc(row["DMC"], row["DC"]), axis=1)
-    r["FWI"] = r.apply(lambda row: fwi_calc(row["ISI"], row["BUI"]), axis=1)
+    r["ISI"] = r.apply(lambda row: initial_spread_index(row["WS"], row["FFMC"]), axis=1)
+    r["BUI"] = r.apply(lambda row: buildup_index(row["DMC"], row["DC"]), axis=1)
+    r["FWI"] = r.apply(lambda row: fire_weather_index(row["ISI"], row["BUI"]), axis=1)
     r["DSR"] = r.apply(lambda row: 0.0272 * (row["FWI"] ** 1.77), axis=1)
     r = pd.merge(
         r, pd.DataFrame({"MIN_RH": r.groupby("DATE")["RH"].min()}), on=["DATE"]
@@ -547,15 +549,17 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False
     )
     r["SOLPROP"] = r.apply(lambda row: max(0, MAX_SOL_PROP * row["SOLPROP"]), axis=1)
     r["SOLRAD"] = r.apply(lambda row: row["SOLRAD"] * row["SOLPROP"], axis=1)
-    lastmcgmc = 101.0 - ffmc_old  # approximation for a start up
-    r["MCGMC"] = _hgffmc(r, lastmcgmc)
+    lastmcgfmc = 101.0 - ffmc_old  # approximation for a start up
+    r["mcgfmc"] = _hgffmc(r, lastmcgfmc)
     r["GFMC"] = r.apply(
-        lambda row: 59.5 * (250 - row["MCGMC"]) / (147.2772277 + row["MCGMC"]), axis=1
+        lambda row: 59.5 * (250 - row["mcgfmc"]) / (147.2772277 + row["mcgfmc"]), axis=1
     )
     r["GSI"] = r.apply(
-        lambda row: grass_isi(row["WS"], row["MCGMC"], percent_cured), axis=1
+        lambda row: grass_isi(row["WS"], row["mcgfmc"], row["PERCENT_CURED"]), axis=1
     )
-    r["GFWI"] = r.apply(lambda row: grass_fwi(row["GSI"], GRASS_FUEL_LOAD), axis=1)
+    r["GFWI"] = r.apply(
+        lambda row: grass_fwi(row["GSI"], row["GRASS_FUEL_LOAD"]), axis=1
+    )
     # print(r)
     return r
 
@@ -576,7 +580,6 @@ def hFWI(
     ffmc_old=FFMC_DEFAULT,
     dmc_old=DMC_DEFAULT,
     dc_old=DC_DEFAULT,
-    percent_cured=PERCENT_CURED,
     silent=False,
 ):
     wx = weatherstream.loc[:]
@@ -590,8 +593,6 @@ def hFWI(
         raise RuntimeError("dmc_old must be >= 0")
     if not (0 <= dc_old):
         raise RuntimeError("dc_old must be >= 0")
-    if not (0 <= percent_cured <= 100):
-        raise RuntimeError("percent_cured must be 0-100")
     had_stn = "ID" in new_names
     had_minute = "MINUTE" in new_names
     had_date = "DATE" in new_names
@@ -648,7 +649,6 @@ def hFWI(
             ffmc_old,
             dmc_old,
             dc_old,
-            percent_cured,
             silent,
         )
         results = pd.concat([results, r])
@@ -661,13 +661,22 @@ def hFWI(
         del results["MINUTE"]
     if not had_date:
         del results["DATE"]
-    if not had_latitude:
-        del results["LAT"]
-    if not had_longitude:
-        del results["LONG"]
+    # if not had_latitude:
+    #     del results["LAT"]
+    # if not had_longitude:
+    #     del results["LONG"]
     if not had_timestamp:
         del results["TIMESTAMP"]
     results = results.rename(columns={v: k for k, v in COLUMN_SYNONYMS.items()})
+    # HACK: just do this for now to get right column names
+    results = results.rename(
+        columns={
+            "YEAR": "YR",
+            "HOUR": "HR",
+            "WIND": "WS",
+            "RAIN": "PREC",
+        }
+    )
     return results
 
 
@@ -710,14 +719,17 @@ if "__main__" == __name__:
         sys.exit(1)
     logger.debug(f"TZ={TZadjust}    start ffmc={lastffmc}  dmc={lastdmc}\n")
     colnames_out = [
-        "year",
+        "lat",
+        "long",
+        "yr",
         "mon",
         "day",
-        "hour",
+        "hr",
         "temp",
         "rh",
-        "wind",
-        "rain",
+        "ws",
+        "prec",
+        "solrad",
         "ffmc",
         "dmc",
         "dc",
@@ -727,6 +739,10 @@ if "__main__" == __name__:
         "gfmc",
         "gsi",
         "gfwi",
+        "mcffmc",
+        "mcgfmc",
+        "percent_cured",
+        "grass_fuel_load",
     ]
     # colnames_in = ["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]
     # df = pd.read_csv(infile, header=None, names=colnames_in)
@@ -740,5 +756,9 @@ if "__main__" == __name__:
     # dmc_old = lastdmc
     # dc_old = lastdc
     # percent_cured = PERCENT_CURED
-    df_fwi = hFWI(df, TZadjust, lastffmc, lastdmc, lastdc, PERCENT_CURED)
-    df_fwi.to_csv(outfile, index=False)
+    df["PERCENT_CURED"] = PERCENT_CURED
+    df["GRASS_FUEL_LOAD"] = GRASS_FUEL_LOAD
+    df_fwi = hFWI(df, TZadjust, lastffmc, lastdmc, lastdc)
+    df_fwi.columns = map(str.lower, df_fwi.columns)
+    df_fwi = df_fwi[colnames_out]
+    save_csv(df_fwi, outfile)

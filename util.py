@@ -142,3 +142,43 @@ def sun(lat, lon, mon, day, hour, timezone):
     sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone
     sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone
     return solrad, sunrise, sunset
+
+
+def save_csv(df, file):
+    COLS_LOC = ["lat", "long"]
+    COLS_DATE = ["yr", "mon", "day", "hr"]
+    COLS_RH = ["rh"]
+    COLS_WX = ["temp", "ws", "prec"]
+    COLS_SOLRAD = ["solrad"]
+    COLS_INDICES = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi"]
+    COLS_EXTRA = ["mcffmc", "mcgfmc"]
+    COLS_GFL = ["grass_fuel_load"]
+    COLS_PC = ["percent_cured"]
+    cols_used = []
+    result = df.copy()
+    result.columns = map(str.lower, result.columns)
+    print(df.columns)
+    print(result.columns)
+
+    def apply_format(cols, fmt, digits=0):
+        def fix_col(x):
+            return fmt.format(round(x, digits))
+
+        for col in result.columns:
+            # HACK: deal with min/max columns
+            col_root = col.replace("_min", "").replace("_max", "")
+            if col_root in cols:
+                cols_used.append(col)
+                result[col] = result[col].apply(fix_col)
+
+    apply_format(COLS_LOC, "{:.4f}", 4)
+    apply_format(COLS_DATE, "{:02d}")
+    apply_format(COLS_RH, "{:.0f}")
+    apply_format(COLS_WX, "{:.1f}", 1)
+    apply_format(COLS_SOLRAD, "{:.4f}", 4)
+    apply_format(COLS_INDICES, "{:.1f}", 1)
+    apply_format(COLS_EXTRA, "{:.4f}", 4)
+    apply_format(COLS_GFL, "{:.2f}", 2)
+    apply_format(COLS_PC, "{:.1f}")
+    result = result[[col for col in result.columns if col in cols_used]]
+    result.to_csv(file, index=False)

@@ -2,40 +2,20 @@
 source("NG_FWI.r")
 library(ggplot2)
 library(data.table)
+
 library(lubridate)
 df_wx <- as.data.table(read.csv("./data/wx_hourly.csv"))
-
-save_csv <- function(df, file) {
-  result <- copy(df)
-  colnames(result) <- tolower(colnames(result))
-  result[, mon := sprintf("%2d", mon)]
-  result[, day := sprintf("%2d", day)]
-  result[, hour := sprintf("%2d", hour)]
-  result[, temp := sprintf("%5.1f", round(temp, 1))]
-  result[, rh := sprintf("%3.0f", round(rh, 0))]
-  result[, wind := sprintf("%5.1f", round(wind, 1))]
-  result[, rain := sprintf("%5.1f", round(rain, 2))]
-  result[, ffmc := sprintf("%6.1f", round(ffmc, 1))]
-  result[, dmc := sprintf("%6.1f", round(dmc, 1))]
-  result[, dc := sprintf("%6.1f", round(dc, 1))]
-  result[, isi := sprintf("%6.1f", round(isi, 1))]
-  result[, bui := sprintf("%6.1f", round(bui, 1))]
-  result[, fwi := sprintf("%6.1f", round(fwi, 1))]
-  result[, gfmc := sprintf("%6.1f", round(gfmc, 1))]
-  result[, gsi := sprintf("%6.1f", round(gsi, 1))]
-  result[, gfwi := sprintf("%6.1f", round(gfwi, 1))]
-  write.csv(result[, c("year", "mon", "day", "hour", "temp", "rh", "wind", "rain", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi")], file, row.names = FALSE, quote = FALSE)
-}
-
 result <- hFWI(df_wx, timezone = -6)
 save_csv(result, "./result.csv")
 
-test_hffmc <- read.csv("test_hffmc.csv")
-df <- data.table(test_hffmc)
-df[, lat := df_wx$lat[[1]]]
-df[, long := df_wx$long[[1]]]
-setnames(df, c("yr", "hr", "ws", "prec"), c("year", "hour", "wind", "rain"))
-write.table(df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")], "./data/test_hffmc.csv", quote = FALSE, row.names = FALSE, sep = ",")
+# # create data file from cffdrs R package file
+# test_hffmc <- read.csv("test_hffmc.csv")
+# df <- data.table(test_hffmc)
+# df[, lat := df_wx$lat[[1]]]
+# df[, long := df_wx$long[[1]]]
+# write.table(df[, c("lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "rh")], "./data/test_hffmc.csv", quote = FALSE, row.names = FALSE, sep = ",")
+
+
 df <- as.data.table(read.csv("./data/test_hffmc.csv"))
 
 result_hffmc <- hFWI(df, timezone = -6)
@@ -64,8 +44,8 @@ df[, temp_max := sprintf("%.1f", temp_max)]
 df[, temp_min := sprintf("%.1f", temp_min)]
 df[, rh_max := sprintf("%.0f", rh_max)]
 df[, rh_min := sprintf("%.0f", rh_min)]
-df[, wind_max := sprintf("%.1f", wind_max)]
-df[, wind_min := sprintf("%.1f", wind_min)]
+df[, ws_max := sprintf("%.1f", ws_max)]
+df[, ws_min := sprintf("%.1f", ws_min)]
 df[, rain := sprintf("%.1f", rain)]
 write.table(df, "./data/wx_minmax.csv", quote = FALSE, sep = ",", row.names = FALSE)
 

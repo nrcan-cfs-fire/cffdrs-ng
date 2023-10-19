@@ -2,27 +2,52 @@
 #include <stdlib.h>
 #include <string.h>
 
-float findQ(float temp, float rh)
+/* abs() isn't working either */
+double _abs(double x)
+{
+  return (x < 0) ? -x : x;
+}
+
+/* copysign() doesn't seem to work for some reason */
+double _copysign(double x, double y)
+{
+  return _abs(x) * ((y < 0) ? -1 : 1);
+}
+
+double _round(double x, int digits)
+{
+  const int p = pow(10, digits);
+  /* want to move away from 0 */
+  const double o = _copysign(0.5, x);
+  const double y = (double)((int)(x * p + o)) / p;
+  /* if (0 == digits)
+  {
+    printf("round(%.8f,%d) -> %d,%.8f,%.8f\n", x, digits, p, o, y);
+  } */
+  return y;
+}
+
+double findQ(double temp, double rh)
 {
   /* find absolute humidity */
-  float svp = 6.108 * exp(17.27 * temp / (temp + 237.3));
-  float vp = svp * rh / 100.0;
+  double svp = 6.108 * exp(17.27 * temp / (temp + 237.3));
+  double vp = svp * rh / 100.0;
   return (217 * vp / (273.17 + temp));
 }
 
-float findrh(float q, float temp)
+double findrh(double q, double temp)
 {
-  float cur_vp = (273.17 + temp) * q / 217;
+  double cur_vp = (273.17 + temp) * q / 217;
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-float sun(float lat, float lon, int mon, int day, int hour, int timezone, float* sunrise, float* sunset)
+double sun(double lat, double lon, int mon, int day, int hour, int timezone, double* sunrise, double* sunset)
 {
   int jd = julian(mon, day);
   return sun_julian(lat, lon, jd, hour, timezone, sunrise, sunset);
 }
 
-float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* sunrise, float* sunset)
+double sun_julian(double lat, double lon, int jd, int hour, int timezone, double* sunrise, double* sunset)
 {
   /*
 
@@ -46,18 +71,18 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
 
   bmw
   */
-  float dechour = 12.0;
-  float fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
-  float eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
-  float decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
-             - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
-             - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
-  float timeoffset = eqtime + 4 * lon - 60 * timezone;
-  float tst = (float)hour * 60.0 + timeoffset;
-  float hourangle = tst / 4 - 180;
-  float zenith = acos(sin(lat * M_PI / 180) * sin(decl)
-                      + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180));
-  float solrad = 0.95 * cos(zenith);
+  double dechour = 12.0;
+  double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
+  double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
+  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
+              - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
+              - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
+  double timeoffset = eqtime + 4 * lon - 60 * timezone;
+  double tst = (float)hour * 60.0 + timeoffset;
+  double hourangle = tst / 4 - 180;
+  double zenith = acos(sin(lat * M_PI / 180) * sin(decl)
+                       + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180));
+  double solrad = 0.95 * cos(zenith);
   if (solrad < 0)
   {
     solrad = 0.0;
@@ -79,7 +104,7 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
    * FIX: is this some kind of approximation that can be wrong?
    *       breaks with (67.1520291504819, -132.37538245496188)
    */
-  float x_tmp = cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) - tan(lat * M_PI / 180.0) * tan(decl);
+  double x_tmp = cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) - tan(lat * M_PI / 180.0) * tan(decl);
   /* HACK: keep in range */
   if (x_tmp < -1)
   {
@@ -89,7 +114,7 @@ float sun_julian(float lat, float lon, int jd, int hour, int timezone, float* su
   {
     x_tmp = 1;
   }
-  float halfday = 180.0 / M_PI * acos(x_tmp);
+  double halfday = 180.0 / M_PI * acos(x_tmp);
   *sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone;
   *sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone;
   return solrad;
@@ -124,7 +149,7 @@ void check_header(FILE* input, const char* header)
   }
 }
 
-void check_inputs(float temp, float rh, float wind, float rain)
+void check_inputs(double temp, double rh, double wind, double rain)
 {
   /* just do basic checks, but use this so we can expand checks if desired */
   if (rh < 0 || rh > 100)
@@ -148,7 +173,57 @@ int read_row(FILE* inp, struct row* r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
-  int err = fscanf(inp, "%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f", &r->lat, a, &r->lon, a, &r->year, a, &r->mon, a, &r->day, a, &r->hour, a, &r->temp, a, &r->rh, a, &r->wind, a, &r->rain);
+  int err = fscanf(inp,
+                   "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf",
+                   &r->lat,
+                   a,
+                   &r->lon,
+                   a,
+                   &r->year,
+                   a,
+                   &r->mon,
+                   a,
+                   &r->day,
+                   a,
+                   &r->hour,
+                   a,
+                   &r->temp,
+                   a,
+                   &r->rh,
+                   a,
+                   &r->ws,
+                   a,
+                   &r->rain);
+  if (err > 0)
+  {
+    check_inputs(r->temp, r->rh, r->ws, r->rain);
+  }
+  return err;
+}
+
+int read_row_daily(FILE* inp, struct row_daily* r)
+{
+  /* this is declared as an array just to make it a pointer ...for reading commas easily*/
+  char a[1];
+  int err = fscanf(inp,
+                   "%lf%c%lf%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf",
+                   &r->lat,
+                   a,
+                   &r->lon,
+                   a,
+                   &r->year,
+                   a,
+                   &r->mon,
+                   a,
+                   &r->day,
+                   a,
+                   &r->temp,
+                   a,
+                   &r->rh,
+                   a,
+                   &r->wind,
+                   a,
+                   &r->rain);
   if (err > 0)
   {
     check_inputs(r->temp, r->rh, r->wind, r->rain);
@@ -160,11 +235,35 @@ int read_row_minmax(FILE* inp, struct row_minmax* r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
-  int err = fscanf(inp, "%f%c%f%c%d%c%d%c%d%c%d%c%f%c%f%c%f%c%f%c%f%c%f%c%f", &r->lat, a, &r->lon, a, &r->year, a, &r->mon, a, &r->day, a, &r->hour, a, &r->temp_min, a, &r->temp_max, a, &r->rh_min, a, &r->rh_max, a, &r->wind_min, a, &r->wind_max, a, &r->rain);
+  int err = fscanf(inp,
+                   "%lf%c%lf%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
+                   &r->lat,
+                   a,
+                   &r->lon,
+                   a,
+                   &r->year,
+                   a,
+                   &r->mon,
+                   a,
+                   &r->day,
+                   a,
+                   &r->temp_min,
+                   a,
+                   &r->temp_max,
+                   a,
+                   &r->rh_min,
+                   a,
+                   &r->rh_max,
+                   a,
+                   &r->ws_min,
+                   a,
+                   &r->ws_max,
+                   a,
+                   &r->rain);
   if (err > 0)
   {
-    check_inputs(r->temp_min, r->rh_min, r->wind_min, r->rain);
-    check_inputs(r->temp_max, r->rh_max, r->wind_max, r->rain);
+    check_inputs(r->temp_min, r->rh_min, r->ws_min, r->rain);
+    check_inputs(r->temp_max, r->rh_max, r->ws_max, r->rain);
   }
   return err;
 }
@@ -175,9 +274,9 @@ It is from central canada Boreal Plains
 It will be a DEFAULT greenness given NO other information ....Users should be encouraged to make ...
 these local observations each year themselves as such obs will be far superior to this average
 */
-float seasonal_curing(int julian_date)
+double seasonal_curing(int julian_date)
 {
-  static float PERCENT_CURED[38] = {96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 95.0, 93.0, 92.0, 90.5, 88.4, 84.4, 78.1, 68.7, 50.3, 32.9, 23.0, 22.0, 21.0, 20.0, 25.7, 35.0, 43.0, 49.8, 60.0, 68.0, 72.0, 75.0, 78.9, 86.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0};
+  static double PERCENT_CURED[38] = {96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 95.0, 93.0, 92.0, 90.5, 88.4, 84.4, 78.1, 68.7, 50.3, 32.9, 23.0, 22.0, 21.0, 20.0, 25.7, 35.0, 43.0, 49.8, 60.0, 68.0, 72.0, 75.0, 78.9, 86.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0};
   /* these are data from DanT's 10 day average of curing for Boreal Plains ...they have been smoothed however
   and the winter has been added at the max curing observed
   the DATE array values is the first julian date (doy) in the 10 day window....its unnedded the way i did this now
@@ -187,9 +286,9 @@ float seasonal_curing(int julian_date)
   */
   /* truncating the date divide by 10 to get in right range */
   const int jd_class = julian_date / 10;
-  const float first = PERCENT_CURED[jd_class];
-  const float last = PERCENT_CURED[jd_class + 1];
+  const double first = PERCENT_CURED[jd_class];
+  const double last = PERCENT_CURED[jd_class + 1];
   /* should be the fractional position in the 10 day period  */
-  const float period_frac = (julian_date % 10) / 10.0;
+  const double period_frac = (julian_date % 10) / 10.0;
   return (first + (last - first) * period_frac);
 }
