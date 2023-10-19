@@ -23,15 +23,15 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v = "TEMP", change_a
   # ~ fcsts[, `:=`(r2_time_min = data.table::shift(TIME_MIN, -1),
   # ~ r2_var_min = data.table::shift(get(var_min), -1))]
   stopifnot(1 == nrow(unique(fcsts$ID)))
-  hours <- data.table(HOUR = 0:23)
+  hours <- data.table(HR = 0:23)
   cross <- as.data.table(merge(as.data.frame(hours), as.data.frame(fcsts[, c("DATE")]), all = TRUE))
   minutes <- data.table(MINUTE = seq(0, 59, by = 60 / intervals))
   cross <- as.data.table(merge(as.data.frame(cross), as.data.frame(minutes), all = TRUE))
   cross[, ID := unique(fcsts$ID)]
-  setorder(cross, cols = "DATE", "HOUR", "MINUTE")
-  cross[, TIME := HOUR + MINUTE / 60.0]
-  # cross <- merge(cross, fcsts[, -c('HOUR', 'MINUTE', 'TIME')], by=c('ID', 'DATE'))
-  for (column in c("HOUR", "MINUTE", "TIME", "MON", "YEAR"))
+  setorder(cross, cols = "DATE", "HR", "MINUTE")
+  cross[, TIME := HR + MINUTE / 60.0]
+  # cross <- merge(cross, fcsts[, -c('HR', 'MINUTE', 'TIME')], by=c('ID', 'DATE'))
+  for (column in c("HR", "MINUTE", "TIME", "MON", "YR"))
   {
     if (column %in% colnames(fcsts)) {
       set(fcsts, , column, NULL)
@@ -59,8 +59,8 @@ makePrediction <- function(fcsts, c_alpha, c_beta, c_gamma, v = "TEMP", change_a
   falling[, eval(v) := VAR_G_MIN + (VAR_CHANGE - VAR_G_MIN) * exp(c_gamma * F_OR_G)]
   # combine and sort everything
   out <- rbind(rising, falling)
-  setorder(out, cols = "DATE", "HOUR")
-  out[, TIMESTAMP := as_datetime(paste0(as.character(DATE), " ", HOUR, ":", MINUTE, ":00"))]
+  setorder(out, cols = "DATE", "HR")
+  out[, TIMESTAMP := as_datetime(paste0(as.character(DATE), " ", HR, ":", MINUTE, ":00"))]
   out[, eval(v) := pmin(pmax(get(v), min_value), max_value)]
   # HACK: somehow this isn't returning unless we do something to it first
   out <- out[!is.na(get(v))]
@@ -73,20 +73,20 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals = 1, verbo
     print("Doing prediction")
   }
   v_temp <- makePrediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma, "TEMP", "SUNSET", intervals = intervals, verbose = verbose)
-  v_wind <- makePrediction(fcsts, row_wind$c_alpha, row_wind$c_beta, row_wind$c_gamma, "WIND", "SUNSET", min_value = 0, intervals = intervals, verbose = verbose)
-  t <- v_temp[, c("ID", "TIMESTAMP", "DATE", "HOUR", "LAT", "LONG", "TEMP")]
-  w <- v_wind[, c("ID", "TIMESTAMP", "DATE", "HOUR", "WIND")]
+  v_wind <- makePrediction(fcsts, row_wind$c_alpha, row_wind$c_beta, row_wind$c_gamma, "WS", "SUNSET", min_value = 0, intervals = intervals, verbose = verbose)
+  t <- v_temp[, c("ID", "TIMESTAMP", "DATE", "HR", "LAT", "LONG", "TEMP")]
+  w <- v_wind[, c("ID", "TIMESTAMP", "DATE", "HR", "WS")]
   out <- merge(t, w)
   RH <- makePrediction(fcsts, row_RH$c_alpha, row_RH$c_beta, row_RH$c_gamma, "RH_OPP", intervals = intervals, min_value = 0, max_value = 1, verbose = verbose)
   RH[, `:=`(RH = 100 * (1 - RH_OPP))]
   RH <- RH[, c("ID", "TIMESTAMP", "RH")]
   out <- merge(RH, out, by = c("ID", "TIMESTAMP"))
-  output <- out[, c("ID", "LAT", "LONG", "TIMESTAMP", "TEMP", "WIND", "RH")]
+  output <- out[, c("ID", "LAT", "LONG", "TIMESTAMP", "TEMP", "WS", "RH")]
   # ~ output <- fwi(output)
   if (verbose) {
     print("Assigning times")
   }
-  output[, HOUR := hour(TIMESTAMP)]
+  output[, HR := hour(TIMESTAMP)]
   output[, MINUTE := minute(TIMESTAMP)]
   if (verbose) {
     print("Converting date")
@@ -95,21 +95,21 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals = 1, verbo
   if (verbose) {
     print("Allocating rain")
   }
-  rain <- fcsts[, c("DATE", "RAIN")]
-  rain[, HOUR := 7]
-  rain[, MINUTE := 0]
+  prec <- fcsts[, c("DATE", "PREC")]
+  prec[, HR := 7]
+  prec[, MINUTE := 0]
   if (verbose) {
     print("Merging")
   }
-  cmp <- merge(output, rain, by = c("DATE", "HOUR", "MINUTE"), all = TRUE)[!is.na(TIMESTAMP)]
-  cmp$RAIN <- nafill(cmp$RAIN, fill = 0)
+  cmp <- merge(output, prec, by = c("DATE", "HR", "MINUTE"), all = TRUE)[!is.na(TIMESTAMP)]
+  cmp$PREC <- nafill(cmp$PREC, fill = 0)
   if (verbose) {
     print("Calculating times")
   }
-  cmp[, YEAR := year(TIMESTAMP)]
+  cmp[, YR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
   cmp[, DAY := day(TIMESTAMP)]
-  cmp[, TIME := HOUR + MINUTE / 60.0]
+  cmp[, TIME := HR + MINUTE / 60.0]
   if (verbose) {
     print("Done prediction")
   }
@@ -120,9 +120,9 @@ doPrediction <- function(fcsts, row_temp, row_wind, row_RH, intervals = 1, verbo
 #' Convert daily min/max values stream to hourly values stream.
 #' Uses Beck & Trevitt method with default A/B/G values.
 #'
-#' @param     w         daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
+#' @param     w         daily min/max values weather stream [lat, long, yr, mon, day, hr, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
 #' @param     timezone  integer offset from GMT to use for sun calculations
-#' @return              hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
+#' @return              hourly values weather stream [lat, long, yr, mon, day, hr, temp, rh, ws, prec]
 minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = FALSE) {
   r <- copy(w)
   colnames(r) <- toupper(colnames(r))
@@ -139,15 +139,16 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
   } else if (length(na.omit(unique(r$ID))) != 1) {
     stop("Expected a single ID value for input weather")
   }
-  if (length(na.omit(unique(r$YEAR))) != 1) {
-    stop("Expected a single YEAR value for input weather")
+  if (length(na.omit(unique(r$YR))) != 1) {
+    stop("Expected a single YR value for input weather")
   }
-  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YEAR, MON, DAY, HOUR, 0),
+  r$HR <- 12
+  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0),
     tz = paste0("Etc/GMT", ifelse(timezone > 0, "-", "+"), abs(timezone))
   )]
   if (!(nrow(r) > 1 && isSequential(as.Date(r$TIMESTAMP)))) {
     if (skipInvalid) {
-      warning(paste0(r$ID[[1]], " for ", r$YEAR[[1]], " - Expected input to be sequential daily weather"))
+      warning(paste0(r$ID[[1]], " for ", r$YR[[1]], " - Expected input to be sequential daily weather"))
       return(NULL)
     }
     stop("Expected input to be sequential daily weather")
@@ -160,10 +161,10 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
   tom[, TIMESTAMP := TIMESTAMP + days(1)]
   r <- rbind(yest, r, tom)
   r[, DATE := as_date(TIMESTAMP)]
-  r[, YEAR := year(TIMESTAMP)]
+  r[, YR := year(TIMESTAMP)]
   r[, MON := month(TIMESTAMP)]
   r[, DAY := day(TIMESTAMP)]
-  r[, HOUR := hour(TIMESTAMP)]
+  r[, HR := hour(TIMESTAMP)]
   dates <- as_datetime(unique(r$TIMESTAMP))
   latitude <- r$LAT[[1]]
   longitude <- r$LONG[[1]]
@@ -180,9 +181,9 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
   colnames(df) <- tolower(colnames(df))
   df <- merge(orig_dates, df, by = "date")
   if (hadId) {
-    df <- df[, c("id", "lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+    df <- df[, c("id", "lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec")]
   } else {
-    df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+    df <- df[, c("lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec")]
   }
   return(df)
 }
@@ -190,9 +191,9 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
 #' Convert daily min/max values stream to hourly values stream.
 #' Uses Beck & Trevitt method with default A/B/G values.
 #'
-#' @param     w         daily min/max values weather stream [id, lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
+#' @param     w         daily min/max values weather stream [id, lat, long, yr, mon, day, hr, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
 #' @param     timezone  integer offset from GMT to use for sun calculations
-#' @return              hourly values weather stream [id, lat, long, year, mon, day, hour, temp, rh, wind, rain]
+#' @return              hourly values weather stream [id, lat, long, yr, mon, day, hr, temp, rh, ws, prec]
 #' @export minmax_to_hourly
 minmax_to_hourly <- function(w, timezone, skipInvalid = FALSE, verbose = FALSE) {
   r <- copy(w)
@@ -206,16 +207,31 @@ minmax_to_hourly <- function(w, timezone, skipInvalid = FALSE, verbose = FALSE) 
   for (stn in unique(r$ID))
   {
     by_stn <- r[ID == stn, ]
-    for (yr in unique(by_stn$YEAR))
+    for (yr in unique(by_stn$YR))
     {
-      by_year <- by_stn[YEAR == yr, ]
+      by_year <- by_stn[YR == yr, ]
       print(paste0("Running ", stn, " for ", yr))
       df <- minmax_to_hourly_single(by_year, timezone, skipInvalid, verbose)
       result <- rbind(result, df)
     }
   }
   if (!hadId) {
-    result <- result[, c("lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain")]
+    result <- result[, c("lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec")]
   }
   return(result)
+}
+
+# so this can be run via Rscript
+if ("--args" %in% commandArgs()) {
+  args <- commandArgs(trailingOnly = TRUE)
+  if (3 == length(args)) {
+    timezone <- as.double(args[1])
+    inp <- args[2]
+    out <- args[3]
+    df <- as.data.table(read.csv(inp))
+    df_hourly <- minmax_to_hourly(df, timezone)
+    save_csv(df_hourly, out)
+  } else {
+    message("Wrong number of arguments")
+  }
 }

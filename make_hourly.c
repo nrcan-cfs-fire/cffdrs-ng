@@ -3,27 +3,25 @@ inputs min/max weather stream
 outputs hourly weather stream
 */
 
-#include <stdio.h>
-#include <math.h>
-#include <float.h>
 #include <stdlib.h>
-#include <string.h>
+#include <math.h>
 #include "util.h"
 
 /* Alpha/Beta/Gamma coefficients for Temperature, RH, and Wind Speed */
-const float C_TEMP[3] = {0.2, 2.0, -2.9};
-const float C_RH[3] = {0.4, 1.9, -2.9};
-const float C_WIND[3] = {1.2, 1.7, -1.5};
+const double C_TEMP[3] = {0.2, 2.0, -2.9};
+const double C_RH[3] = {0.4, 1.9, -2.9};
+const double C_WIND[3] = {1.2, 1.7, -1.5};
 
-float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sunrise, float sunset, float solarnoon_yest, float sunset_yest, float sunrise_tom, const float* abg, float* hourly);
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly);
 
 void main(int argc, char* argv[])
 {
-  const char* header = "lat,long,year,mon,day,hour,temp_min,temp_max,rh_min,rh_max,wind_min,wind_max,rain";
+  static const char* header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
+  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
   FILE *inp, *out;
   int err;
 
-  float TZadjust;
+  double TZadjust;
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
 
@@ -55,7 +53,7 @@ void main(int argc, char* argv[])
 
   check_header(inp, header);
   /*  CSV headers */
-  fprintf(out, "%s\n", "lat,long,year,mon,day,hour,temp,rh,wind,rain");
+  fprintf(out, "%s\n", header_out);
 
   struct row_minmax tom;
   struct row_minmax cur;
@@ -69,19 +67,14 @@ void main(int argc, char* argv[])
   }
   /* use today's values for yesterday because we need to do something */
   yday = cur;
-  float solarnoon_yest = 0.0;
-  float sunset_yest = 0.0;
-  float ytemp_sunset = 0.0;
-  float yrh_sunset = 0.0;
-  float ywind_sunset = 0.0;
+  double solarnoon_yest = 0.0;
+  double sunset_yest = 0.0;
+  double ytemp_sunset = 0.0;
+  double yrh_sunset = 0.0;
+  double ywind_sunset = 0.0;
   int done_first = 0;
   while (err > 0)
   {
-    if (12 != cur.hour)
-    {
-      printf("Expected daily weather (hour value should be 12 but got %d)\n", cur.hour);
-      exit(1);
-    }
     if (done_first)
     {
       err = read_row_minmax(inp, &tom);
@@ -96,43 +89,54 @@ void main(int argc, char* argv[])
       /* error but we still want to figure out today's values */
       tom = cur;
     }
-    printf("%d %d %d %d  %5.1f  %5.1f %5.1f %5.1f %5.1f %5.1f %5.1f\n",
+    printf("%d %d %d  %5.1f  %5.1f %5.1f %5.1f %5.1f %5.1f %5.1f\n",
            cur.year,
            cur.mon,
            cur.day,
-           cur.hour,
            cur.temp_min,
            cur.temp_max,
            cur.rh_min,
            cur.rh_max,
-           cur.wind_min,
-           cur.wind_max,
+           cur.ws_min,
+           cur.ws_max,
            cur.rain);
+    static const int LST_NOON = 12;
     int jd = julian(cur.mon, cur.day);
-    float sunrise, sunset;
-    float solar = sun_julian(cur.lat, cur.lon, jd, cur.hour, TZadjust, &sunrise, &sunset);
-    float solarnoon = (sunset - sunrise) / 2.0 + sunrise;
-    float sunrise_tom, sunset_tom;
-    float solar_tom = sun_julian(cur.lat, cur.lon, jd + 1, cur.hour, TZadjust, &sunrise_tom, &sunset_tom);
-    float atemp[24], arh[24], awind[24], arain[24];
+    double sunrise, sunset;
+    double solar = sun_julian(cur.lat, cur.lon, jd, LST_NOON, TZadjust, &sunrise, &sunset);
+    double solarnoon = (sunset - sunrise) / 2.0 + sunrise;
+    double sunrise_tom, sunset_tom;
+    double solar_tom = sun_julian(cur.lat, cur.lon, jd + 1, LST_NOON, TZadjust, &sunrise_tom, &sunset_tom);
+    double atemp[24], arh[24], aws[24], arain[24];
     int h;
     for (h = 0; h < 24; ++h)
     {
       atemp[h] = 0.0;
       arh[h] = 0.0;
-      awind[h] = 0.0;
+      aws[h] = 0.0;
       arain[h] = 0.0;
     }
     ytemp_sunset = diurnal(cur.temp_min, cur.temp_max, tom.temp_min, ytemp_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_TEMP, atemp);
     yrh_sunset = diurnal(1.0 - cur.rh_max / 100.0, 1.0 - cur.rh_min / 100.0, 1.0 - tom.rh_max / 100.0, yrh_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_RH, arh);
-    ywind_sunset = diurnal(cur.wind_min, cur.wind_max, tom.wind_min, ywind_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_WIND, awind);
+    ywind_sunset = diurnal(cur.ws_min, cur.ws_max, tom.ws_min, ywind_sunset, sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, C_WIND, aws);
     arain[7] = cur.rain;
     if (done_first)
     {
       for (h = 0; h < 24; ++h)
       {
         arh[h] = 100 * (1.0 - arh[h]);
-        fprintf(out, "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n", cur.lat, cur.lon, cur.year, cur.mon, cur.day, h, atemp[h], arh[h], awind[h], arain[h]);
+        fprintf(out,
+                "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+                cur.lat,
+                cur.lon,
+                cur.year,
+                cur.mon,
+                cur.day,
+                h,
+                _round(atemp[h], 1),
+                _round(arh[h], 0),
+                _round(aws[h], 1),
+                _round(arain[h], 1));
       }
     }
     else
@@ -168,17 +172,17 @@ void main(int argc, char* argv[])
  * @param hourly[24]          array of calculated output values by hour for today
  * @return                    value at sunset today
  */
-float diurnal(float v_min, float v_max, float tv_min, float yv_sunset, float sunrise, float sunset, float solarnoon_yest, float sunset_yest, float sunrise_tom, const float* abg, float* hourly)
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly)
 {
-  const float c_alpha = abg[0];
-  const float c_beta = abg[1];
-  const float c_gamma = abg[2];
-  const float solarnoon = (sunset - sunrise) / 2.0 + sunrise;
-  const float t_min = sunrise + c_alpha;
-  const float t_max = solarnoon + c_beta;
-  const float v_sunset = v_min + (v_max - v_min) * sin((M_PI / 2.0) * ((sunset - t_min) / (t_max - t_min)));
-  const float yt_min = solarnoon_yest + c_beta;
-  const float time_min_tom = sunrise_tom + c_alpha;
+  const double c_alpha = abg[0];
+  const double c_beta = abg[1];
+  const double c_gamma = abg[2];
+  const double solarnoon = (sunset - sunrise) / 2.0 + sunrise;
+  const double t_min = sunrise + c_alpha;
+  const double t_max = solarnoon + c_beta;
+  const double v_sunset = v_min + (v_max - v_min) * sin((M_PI / 2.0) * ((sunset - t_min) / (t_max - t_min)));
+  const double yt_min = solarnoon_yest + c_beta;
+  const double time_min_tom = sunrise_tom + c_alpha;
   int h;
   for (h = 0; h < 24; ++h)
   {

@@ -12,36 +12,33 @@ version 0.9    (still testing)
 bmw/2021
 */
 
-#include <math.h>
-#include <stdio.h>
+#include "util.h"
 #include <stdlib.h>
 
-#include "util.h"
-
 /* Fuel Load (kg/m^2) */
-static const float DEFAULT_GRASS_FUEL_LOAD = 0.35;
-static const float MAX_SOLAR_PROPAGATION = 0.85;
+static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
+static const double MAX_SOLAR_PROPAGATION = 0.85;
 
 /* default startup values */
-static const float FFMC_DEFAULT = 85;
-static const float DMC_DEFAULT = 6;
-static const float DC_DEFAULT = 15;
+static const double FFMC_DEFAULT = 85;
+static const double DMC_DEFAULT = 6;
+static const double DC_DEFAULT = 15;
 
 /* FIX: figure out what this should be */
-static const float DEFAULT_LATITUDE = 55.0;
-static const float DEFAULT_LONGITUDE = -120.0;
+static const double DEFAULT_LATITUDE = 55.0;
+static const double DEFAULT_LONGITUDE = -120.0;
 
-static const float EL_DMC[] = {6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0};
-static const float FL_DC[] = {-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6};
-static const float MPCT_TO_MC = 147.2772277;
-static const float FFMC_INTERCEPT = 0.5;
-static const float DMC_INTERCEPT = 1.5;
-static const float DC_INTERCEPT = 2.8;
+static const double EL_DMC[] = {6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0};
+static const double FL_DC[] = {-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6};
+static const double MPCT_TO_MC = 147.2772277;
+static const double FFMC_INTERCEPT = 0.5;
+static const double DMC_INTERCEPT = 1.5;
+static const double DC_INTERCEPT = 2.8;
 
 /*
  * Fine Fuel Moisture Code (FFMC) from moisture %
  */
-float fine_fuel_moisture_code(float moisture_percent)
+double fine_fuel_moisture_code(double moisture_percent)
 {
   return (59.5 * (250 - moisture_percent) / (MPCT_TO_MC + moisture_percent));
 }
@@ -49,7 +46,7 @@ float fine_fuel_moisture_code(float moisture_percent)
 /*
  * Fine Fuel Moisture (percent) from FFMC
  */
-float fine_fuel_moisture_from_code(float moisture_code)
+double fine_fuel_moisture_from_code(double moisture_code)
 {
   return MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code);
 }
@@ -64,19 +61,20 @@ float fine_fuel_moisture_from_code(float moisture_code)
  * @param lastmc          Previous Fine Fuel Moisture (percent)
  * @return                Hourly Fine Fuel Moisture (percent)
  */
-float hourly_fine_fuel_moisture(const float temp,
-                                const float rh,
-                                const float ws,
-                                const float rain,
-                                const float lastmc)
+double hourly_fine_fuel_moisture(const double temp,
+                                 const double rh,
+                                 const double ws,
+                                 const double rain,
+                                 const double lastmc)
 {
-  static const float rf = 42.5;
-  static const float drf = 0.0579;
+  printf("%.1f,%.1f,%.1f,%.1f,%.1f\n", temp, rh, ws, rain, lastmc);
+  static const double rf = 42.5;
+  static const double drf = 0.0579;
   /* Time since last observation (hours) */
-  static const float time = 1.0;
+  static const double time = 1.0;
   /* use moisture directly instead of converting to/from ffmc */
   /* expects any rain intercept to already be applied */
-  float mo = lastmc;
+  double mo = lastmc;
   if (rain != 0.0)
   {
     /* duplicated in both formulas, so calculate once */
@@ -92,22 +90,24 @@ float hourly_fine_fuel_moisture(const float temp,
     }
   }
   /* duplicated in both formulas, so calculate once */
-  const float e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
-  const float ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
-  const float ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
+  const double e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
+  const double ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
+  const double ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
   /* m = ed if mo >= ed else ew */
-  float m = mo < ed
-            ? ew
-            : ed;
+  double m = mo < ed
+             ? ew
+             : ed;
+  printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m);
   if (mo != ed)
   {
     /* these are the same formulas with a different value for a1 */
-    const float a1 = mo > ed
-                     ? rh / 100.0
-                     : (100.0 - rh) / 100.0;
-    const float k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
-    const float kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
+    const double a1 = mo > ed
+                      ? rh / 100.0
+                      : (100.0 - rh) / 100.0;
+    const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
+    const double kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
     m += (mo - m) * pow(10, -kd_or_kw * time);
+    printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m);
   }
   return m;
 }
@@ -119,14 +119,14 @@ float hourly_fine_fuel_moisture(const float temp,
  * @param ffmc            Fine Fuel Moisure Code
  * @return                Initial Spread Index
  */
-float initial_spread_index(float ws, float ffmc)
+double initial_spread_index(double ws, double ffmc)
 {
-  const float fm = fine_fuel_moisture_from_code(ffmc);
-  const float fw = 40 <= ws
-                   ? 12 * (1 - exp(-0.0818 * (ws - 28)))
-                   : exp(0.05039 * ws);
-  const float sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
-  const float isi = sf * fw;
+  const double fm = fine_fuel_moisture_from_code(ffmc);
+  const double fw = 40 <= ws
+                    ? 12 * (1 - exp(-0.0818 * (ws - 28)))
+                    : exp(0.05039 * ws);
+  const double sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
+  const double isi = sf * fw;
   return isi;
 }
 
@@ -137,15 +137,15 @@ float initial_spread_index(float ws, float ffmc)
  * @param dc              Drought Code
  * @return                Build-up Index
  */
-float buildup_index(float dmc, float dc)
+double buildup_index(double dmc, double dc)
 {
-  float bui = 0 == dmc && 0 == dc
-              ? 0.0
-              : 0.8 * dc * dmc / (dmc + 0.4 * dc);
+  double bui = 0 == dmc && 0 == dc
+               ? 0.0
+               : 0.8 * dc * dmc / (dmc + 0.4 * dc);
   if (bui < dmc)
   {
-    const float p = (dmc - bui) / dmc;
-    const float cc = 0.92 + pow(0.0114 * dmc, 1.7);
+    const double p = (dmc - bui) / dmc;
+    const double cc = 0.92 + pow(0.0114 * dmc, 1.7);
     bui = dmc - cc * p;
     if (bui < 0)
     {
@@ -162,15 +162,15 @@ float buildup_index(float dmc, float dc)
  * @param bui             Build-up Index
  * @return                Fire Weather Index
  */
-float fire_weather_index(float isi, float bui)
+double fire_weather_index(double isi, double bui)
 {
-  const float bb = 0.1 * isi
-                 * (bui > 80
-                      ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui))
-                      : 0.626 * pow(bui, 0.809) + 2.0);
-  const float fwi = bb <= 1
-                    ? bb
-                    : exp(2.72 * pow(0.434 * log(bb), 0.647));
+  const double bb = 0.1 * isi
+                  * (bui > 80
+                       ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui))
+                       : 0.626 * pow(bui, 0.809) + 2.0);
+  const double fwi = bb <= 1
+                     ? bb
+                     : exp(2.72 * pow(0.434 * log(bb), 0.647));
   return fwi;
 }
 
@@ -185,12 +185,12 @@ float fire_weather_index(float isi, float bui)
  * @param solrad          Solar radiation (kW/m^2)
  * @return                Grass Fuel Moisture (percent)
  */
-float hourly_grass_fuel_moisture(float temp,
-                                 float rh,
-                                 float ws,
-                                 float rain,
-                                 float solrad,
-                                 float lastmc)
+double hourly_grass_fuel_moisture(double temp,
+                                  double rh,
+                                  double ws,
+                                  double rain,
+                                  double solrad,
+                                  double lastmc)
 {
   /* MARK II of the model (2016) wth new solar rad model specific to grass
 
@@ -207,11 +207,11 @@ float hourly_grass_fuel_moisture(float temp,
 
   bmw
   */
-  static const float rf = 0.27;
-  static const float drf = 0.389633;
+  static const double rf = 0.27;
+  static const double drf = 0.389633;
   /* Time since last observation (hours) */
-  static const float time = 1.0;
-  float mo = lastmc;
+  static const double time = 1.0;
+  double mo = lastmc;
   if (rain != 0)
   {
     /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/ /* old routine*/
@@ -224,30 +224,33 @@ float hourly_grass_fuel_moisture(float temp,
     }
   }
   /* fuel temp from CEVW*/
-  const float tf = temp + 17.9 * solrad * exp(-0.034 * ws);
+  const double tf = temp + 17.9 * solrad * exp(-0.034 * ws);
   /* fuel humidity */
-  const float rhf = tf > temp
-                    ? (rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0))
-                       / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0))))
-                    : rh;
+  const double rhf = tf > temp
+                     ? (rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0))
+                        / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0))))
+                     : rh;
+  /* printf("%.1f,%.1f,%.1f,%.1f,%.8f,%.8f\n", temp, rh, ws, rain, tf, rhf); */
   /* duplicated in both formulas, so calculate once */
-  const float e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
+  const double e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
   /*GRASS EMC*/
-  const float ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1;
-  const float ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1;
+  const double ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1;
+  const double ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1;
   /* m = ed if mo >= ed else ew */
-  float m = (mo < ed && mo < ew)
-            ? ew
-            : ed;
+  double m = (mo < ed && mo < ew)
+             ? ew
+             : ed;
+  /* printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m); */
   if (mo > ed || (mo < ed && mo < ew))
   {
     /* these are the same formulas with a different value for a1 */
-    const float a1 = mo > ed
-                     ? rh / 100.0
-                     : (100.0 - rh) / 100.0;
-    const float k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
-    const float kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
+    const double a1 = mo > ed
+                      ? rhf / 100.0
+                      : (100.0 - rhf) / 100.0;
+    const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
+    const double kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf);
     m += (mo - m) * pow(10, -kd_or_kw * time);
+    /* printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m); */
   }
   return m;
 }
@@ -260,22 +263,22 @@ float hourly_grass_fuel_moisture(float temp,
  * @param cur             Degree of curing (percent, 0-100)
  * @return                Grass Spread Index
  */
-float grass_spread_index(float ws, float mc, float cur)
+double grass_spread_index(double ws, double mc, double cur)
 {
-  const float fw = 16.67 * (ws < 5 ? 0.054 + 0.209 * ws : 1.1 + 0.715 * (ws - 5.0) * 0.844);
+  const double fw = 16.67 * (ws < 5 ? 0.054 + 0.209 * ws : 1.1 + 0.715 * (ws - 5.0) * 0.844);
   /* NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10 */
   /* using 0.6838 instead would mean this is always less than ws >= 10 */
   /* mc < 23.9 because of check at start of function, so last expression is any ws >= 10 */
-  const float fm = mc < 12
-                   ? exp(-0.108 * mc)
-                   : (mc < 20.0 && ws < 10.0
-                        ? 0.684 - 0.0342 * mc
-                        : (mc < 23.9 && ws >= 10.0
-                             ? 0.547 - 0.0228 * mc
-                             : 0.0));
-  const float cf = cur > 20
-                   ? 1.034 / (1 + 104 * exp(-0.1 * (cur - 20)))
-                   : 0.0;
+  const double fm = mc < 12
+                    ? exp(-0.108 * mc)
+                    : (mc < 20.0 && ws < 10.0
+                         ? 0.684 - 0.0342 * mc
+                         : (mc < 23.9 && ws >= 10.0
+                              ? 0.547 - 0.0228 * mc
+                              : 0.0));
+  const double cf = cur > 20
+                    ? 1.034 / (1 + 104 * exp(-0.1 * (cur - 20)))
+                    : 0.0;
   return 1.11 * fw * fm * cf;
 }
 
@@ -286,17 +289,17 @@ float grass_spread_index(float ws, float mc, float cur)
  * @param load              Fuel Load (kg/m^2)
  * @return                  Grass Fire Weather Index
  */
-float grass_fire_weather_index(float gsi, float load)
+double grass_fire_weather_index(double gsi, double load)
 {
   /*  this just converts back to ROS in m/min*/
-  const float ros = gsi / 1.11;
-  const float Fint = 300.0 * load * ros;
+  const double ros = gsi / 1.11;
+  const double Fint = 300.0 * load * ros;
   return Fint > 100
          ? log(Fint / 60.0) / 0.14
          : Fint / 25.0;
 }
 
-float dmc_drying(float temp, float rh, float ws, float prec, int mon)
+double dmc_drying(double temp, double rh, double ws, double prec, int mon)
 {
   if (temp <= 1.1)
   {
@@ -305,7 +308,7 @@ float dmc_drying(float temp, float rh, float ws, float prec, int mon)
   return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001;
 }
 
-float dc_drying(float temp, float rh, float ws, float prec, int mon)
+double dc_drying(double temp, double rh, double ws, double prec, int mon)
 {
   if (temp <= 2.8)
   {
@@ -314,131 +317,152 @@ float dc_drying(float temp, float rh, float ws, float prec, int mon)
   return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0;
 }
 
-float dmc_wetting(float rain_total, float lastdmc)
+double dmc_wetting(double rain_total, double lastdmc)
 {
   /* compare floats by using tolerance */
   if (rain_total <= DMC_INTERCEPT)
   {
     return 0.0;
   }
-  const float b = lastdmc <= 33
-                  ? 100.0 / (0.5 + 0.3 * lastdmc)
-                  : (lastdmc <= 65
-                       ? 14.0 - 1.3 * log(lastdmc)
-                       : 6.2 * log(lastdmc) - 17.2);
-  const float reff = 0.92 * rain_total - 1.27;
+  const double b = lastdmc <= 33
+                   ? 100.0 / (0.5 + 0.3 * lastdmc)
+                   : (lastdmc <= 65
+                        ? 14.0 - 1.3 * log(lastdmc)
+                        : 6.2 * log(lastdmc) - 17.2);
+  const double reff = 0.92 * rain_total - 1.27;
   /* This is the change in MC (moisturecontent)  from FULL DAY's rain  */
   return 1000.0 * reff / (48.77 + b * reff);
 }
 
-float dc_wetting(float rain_total, float lastdc)
+double dc_wetting(double rain_total, double lastdc)
 {
   /* compare floats by using tolerance */
   if (rain_total <= DC_INTERCEPT)
   {
     return 0.0;
   }
-  const float rw = 0.83 * rain_total - 1.27;
-  const float smi = 800 * exp(-lastdc / 400);
+  const double rw = 0.83 * rain_total - 1.27;
+  const double smi = 800 * exp(-lastdc / 400);
   /* TOTAL change for the TOTAL 24 hour rain from FWI1970 model  */
   return 400.0 * log(1.0 + 3.937 * rw / smi);
 }
 
-float dmc_wetting_between(float rain_total_previous, float rain_total, float lastdmc)
+double dmc_wetting_between(double rain_total_previous, double rain_total, double lastdmc)
 {
+  if (rain_total_previous >= rain_total)
+  {
+    return 0.0;
+  }
   /* wetting is calculated based on initial dmc when rain started and rain since */
-  const float current = dmc_wetting(rain_total, lastdmc);
+  const double current = dmc_wetting(rain_total, lastdmc);
   /* recalculate instead of storing so we don't need to reset this too */
   /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
-  const float previous = dmc_wetting(rain_total_previous, lastdmc);
+  const double previous = dmc_wetting(rain_total_previous, lastdmc);
   return current - previous;
 }
 
-float dc_wetting_between(float rain_total_previous, float rain_total, float lastdc)
+double dc_wetting_between(double rain_total_previous, double rain_total, double lastdc)
 {
+  if (rain_total_previous >= rain_total)
+  {
+    return 0.0;
+  }
   /* wetting is calculated based on initial dc when rain started and rain since */
-  const float current = dc_wetting(rain_total, lastdc);
+  const double current = dc_wetting(rain_total, lastdc);
   /* recalculate instead of storing so we don't need to reset this too */
   /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
-  const float previous = dc_wetting(rain_total_previous, lastdc);
+  const double previous = dc_wetting(rain_total_previous, lastdc);
   return current - previous;
 }
 
-float drying_fraction(float temp,
-                      float rh,
-                      float ws,
-                      float rain,
-                      float mon,
-                      float hour,
-                      float solar,
-                      float sunrise,
-                      float sunset)
+double drying_fraction(double temp,
+                       double rh,
+                       double ws,
+                       double rain,
+                       int mon,
+                       int hour,
+                       double solar,
+                       double sunrise,
+                       double sunset)
 {
+  /* drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset); */
   /* define with all parameters so we can easily sub in something better later */
-  int sunrise_start = round(sunrise);
-  int sunset_start = round(sunset);
+  int sunrise_start = _round(sunrise, 0);
+  int sunset_start = _round(sunset, 0);
   int sunlight_hours = sunset_start - sunrise_start;
   /* apply one hour of drying if during sunlight hours */
-  return hour >= sunrise_start && hour < sunset_start
-         ? (1.0 / sunlight_hours)
-         : 0.0;
+  const double f = (hour >= sunrise_start && hour < sunset_start)
+                   ? (1.0 / sunlight_hours)
+                   : 0.0;
+  /* printf("S:%d, %d, %d, %f\n", sunrise_start, sunset_start, sunlight_hours, f); */
+  return f;
 }
 
-float duff_moisture_code(float last_dmc,
-                         float temp,
-                         float rh,
-                         float ws,
-                         float rain,
-                         float mon,
-                         float hour,
-                         float solar,
-                         float sunrise,
-                         float sunset,
-                         float* dmc_before_precip,
-                         float rain_total_prev,
-                         float rain_total)
+double duff_moisture_code(double last_dmc,
+                          double temp,
+                          double rh,
+                          double ws,
+                          double rain,
+                          int mon,
+                          int hour,
+                          double solar,
+                          double sunrise,
+                          double sunset,
+                          double* dmc_before_rain,
+                          double rain_total_prev,
+                          double rain_total)
 {
-  if (rain_total <= DMC_INTERCEPT)
+  /* printf("%.1f,%.1f,%.1f,%.1f,%d,%d\n", temp, rh, ws, rain, mon, hour); */
+  if (0 == rain_total)
   {
-    *dmc_before_precip = last_dmc;
+    *dmc_before_rain = last_dmc;
   }
-  float dmc_daily = dmc_drying(temp, rh, ws, rain, mon);
-  float dmc_hourly = dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset);
-  float dmc = last_dmc + dmc_hourly;
+  double dmc_daily = dmc_drying(temp, rh, ws, rain, mon);
+  double df = drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset);
+  double dmc_hourly = dmc_daily * df;
+  double dmc = last_dmc + dmc_hourly;
   /* apply wetting since last period */
-  float dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, *dmc_before_precip);
+  double dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, *dmc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
   if (dmc_wetting_hourly > dmc)
   {
     dmc_wetting_hourly = dmc;
   }
+  /* printf("%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
+         *dmc_before_rain,
+         last_dmc,
+         dmc,
+         dmc_daily,
+         df,
+         dmc_hourly,
+         dmc_wetting_hourly); */
   /* should be no way this is below 0 because we just made sure it wasn't > dmc */
   return dmc - dmc_wetting_hourly;
 }
 
-float drought_code(float last_dc,
-                   float temp,
-                   float rh,
-                   float ws,
-                   float rain,
-                   float mon,
-                   float hour,
-                   float solar,
-                   float sunrise,
-                   float sunset,
-                   float* dc_before_precip,
-                   float rain_total_prev,
-                   float rain_total)
+double drought_code(double last_dc,
+                    double temp,
+                    double rh,
+                    double ws,
+                    double rain,
+                    int mon,
+                    int hour,
+                    double solrad,
+                    double sunrise,
+                    double sunset,
+                    double* dc_before_rain,
+                    double rain_total_prev,
+                    double rain_total)
 {
-  if (rain_total <= DC_INTERCEPT)
+  if (0 == rain_total)
   {
-    *dc_before_precip = last_dc;
+    *dc_before_rain = last_dc;
   }
-  float dc_daily = dc_drying(temp, rh, ws, rain, mon);
-  float dc_hourly = dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset);
-  float dc = last_dc + dc_hourly;
+  double dc_daily = dc_drying(temp, rh, ws, rain, mon);
+  double dc_hourly = dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset);
+  double dc = last_dc + dc_hourly;
   /* apply wetting since last period */
-  float dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_precip);
+  double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
   if (dc_wetting_hourly > dc)
   {
@@ -451,53 +475,56 @@ float drought_code(float last_dc,
 /*
  * Calculate number of drying "units" this hour contributes
  */
-float drying_units(float temp, float rh, float wind, float rain, float solar)
+double drying_units(double temp, double rh, double wind, double rain, double solar)
 {
   /* for now, just add 1 drying "unit" per hour */
   return 1.0;
 }
+struct rain_intercept
+{
+  double rain_total;
+  double rain_total_prev;
+  double drying_since_intercept;
+};
 
-float rain_since_intercept_reset(float temp,
-                                 float rh,
-                                 float ws,
-                                 float rain,
-                                 float mon,
-                                 float hour,
-                                 float solar,
-                                 float sunrise,
-                                 float sunset,
-                                 float* drying_since_intercept,
-                                 float* rain_total_prev,
-                                 float rain_total)
+/* HACK: use struct so it's closer to how R can return multiple values */
+void rain_since_intercept_reset(double temp,
+                                double rh,
+                                double ws,
+                                double rain,
+                                int mon,
+                                int hour,
+                                double solrad,
+                                double sunrise,
+                                double sunset,
+                                struct rain_intercept* canopy)
 {
   /* for now, want 5 "units" of drying (which is 1 per hour to start) */
-  static const float TARGET_DRYING_SINCE_INTERCEPT = 5;
+  static const double TARGET_DRYING_SINCE_INTERCEPT = 5;
   if (0 < rain)
   {
     /* no drying if still raining */
-    *drying_since_intercept = 0.0;
+    canopy->drying_since_intercept = 0.0;
   }
   else
   {
-    *drying_since_intercept += drying_units(temp, rh, ws, rain, solar);
-    if (*drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
+    canopy->drying_since_intercept += drying_units(temp, rh, ws, rain, solrad);
+    if (canopy->drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
     {
       /* reset rain if intercept reset criteria met */
-      rain_total = 0.0;
-      *drying_since_intercept = 0.0;
+      canopy->rain_total = 0.0;
+      canopy->drying_since_intercept = 0.0;
     }
   }
-  *rain_total_prev = rain_total;
-  rain_total += rain;
-  /* could just pass pointer but want to make point of calculation more obvious */
-  return rain_total;
+  canopy->rain_total_prev = canopy->rain_total;
+  canopy->rain_total += rain;
 }
 
-int populate_row(FILE* inp, struct row* cur, float TZadjust)
+int populate_row(FILE* inp, struct row* cur, double TZadjust)
 {
   int err = read_row(inp, cur);
-  cur->solar = sun(cur->lat, cur->lon, cur->mon, cur->day, cur->hour, TZadjust, &(cur->sunrise), &(cur->sunset));
-  float julian_day = julian(cur->mon, cur->day);
+  cur->solrad = sun(cur->lat, cur->lon, cur->mon, cur->day, cur->hour, TZadjust, &(cur->sunrise), &(cur->sunset));
+  double julian_day = julian(cur->mon, cur->day);
   /* assuming we want curing to change based on current day and not remain */
   /* the same across entire period based on start date */
   cur->percent_cured = seasonal_curing(julian_day);
@@ -508,13 +535,16 @@ int populate_row(FILE* inp, struct row* cur, float TZadjust)
 
 void main(int argc, char* argv[])
 {
+  /*  CSV headers */
+  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load";
   if (7 != argc)
   {
     printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <input file> <output file>\n\n", argv[0]);
     printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
     printf("All times should be local standard time\n");
     printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-    printf("Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humidity(%%),Wind_speed(km/h),Rainfall(mm)\n\n");
+    printf("%s\n\n", header);
     exit(1);
   }
 
@@ -525,54 +555,49 @@ void main(int argc, char* argv[])
     printf("\n\n ***** FILE  %s  does not exist\n", argv[5]);
     exit(1);
   }
-  FILE* out = fopen(argv[6], "w");
-
-  /*  CSV headers */
-  fprintf(out, "year,mon,day,hour,temp,rh,wind,rain,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi,mcffmc,mcgmc,percent_cured,grass_fuel_load\n");
   int TZadjust = atoi(argv[1]);
   if (TZadjust < -9 || TZadjust > -2)
   {
     printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n");
     exit(1);
   }
-  float ffmc = atof(argv[2]);
+  double ffmc = atof(argv[2]);
   if (ffmc > 101 || ffmc < 0)
   {
     printf(" /n/n *****   FFMC must be between 0 and 101 \n");
     exit(1);
   }
-  const float dmc_startup = atof(argv[3]);
+  const double dmc_startup = atof(argv[3]);
   if (dmc_startup < 0)
   {
     printf(" /n/n *****  starting DMC must be >=0  \n");
     exit(1);
   }
-  float dc_startup = atof(argv[4]);
+  double dc_startup = atof(argv[4]);
   if (dc_startup < 0)
   {
     printf(" /n/n *****   starting DC must be >=0\n");
     exit(1);
   }
   /* printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, ffmc, dmc_startup); */
-  float mcffmc = fine_fuel_moisture_from_code(ffmc);
+  double mcffmc = fine_fuel_moisture_from_code(ffmc);
   /* approximation for a start up*/
-  /* float mcgmc = 101.0 - ffmc; */
+  /* double mcgfmc = 101.0 - ffmc; */
   /* assuming this is fine because swiss sfms uses it now */
-  float mcgmc = mcffmc;
+  double mcgfmc = mcffmc;
 
   /* check that the header matches what is expected */
-  const char* header = "lat,long,year,mon,day,hour,temp,rh,wind,rain";
   check_header(inp, header);
   struct row cur;
   int err = populate_row(inp, &cur, TZadjust);
   struct row old = cur;
-  float rain_total = 0.0;
-  float rain_total_prev = 0.0;
-  float dmc = dmc_startup;
-  float dmc_before_precip = dmc_startup;
-  float dc = dc_startup;
-  float dc_before_precip = dc_startup;
-  float drying_since_intercept = 0.0;
+  double dmc = dmc_startup;
+  double dmc_before_rain = dmc_startup;
+  double dc = dc_startup;
+  double dc_before_rain = dc_startup;
+  struct rain_intercept canopy = {0.0, 0.0, 0.0};
+  FILE* out = fopen(argv[6], "w");
+  fprintf(out, "%s\n", header_out);
   while (err > 0)
   {
     /*
@@ -588,72 +613,76 @@ void main(int argc, char* argv[])
              cur.sunset);
     }
     */
-    rain_total = rain_since_intercept_reset(cur.temp,
-                                            cur.rh,
-                                            cur.wind,
-                                            cur.rain,
-                                            cur.mon,
-                                            cur.hour,
-                                            cur.solar,
-                                            cur.sunrise,
-                                            cur.sunset,
-                                            &drying_since_intercept,
-                                            &rain_total_prev,
-                                            rain_total);
+    rain_since_intercept_reset(
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain,
+      cur.mon,
+      cur.hour,
+      cur.solrad,
+      cur.sunrise,
+      cur.sunset,
+      &canopy);
     /* use lesser of remaining intercept and current hour's rain */
-    float rain_ffmc = rain_total <= FFMC_INTERCEPT
-                      ? 0.0
-                      : ((rain_total - FFMC_INTERCEPT) > cur.rain
-                           ? cur.rain
-                           : rain_total - FFMC_INTERCEPT);
-    mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.wind, rain_ffmc, mcffmc);
+    double rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT
+                       ? 0.0
+                       : ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain
+                            ? cur.rain
+                            : canopy.rain_total - FFMC_INTERCEPT);
+    mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.ws, rain_ffmc, mcffmc);
     /* convert to code for output, but keep using moisture % for precision */
     ffmc = fine_fuel_moisture_code(mcffmc);
     /* not ideal, but at least encapsulates the code for each index */
-    dmc = duff_moisture_code(dmc,
-                             cur.temp,
-                             cur.rh,
-                             cur.wind,
-                             cur.rain,
-                             cur.mon,
-                             cur.hour,
-                             cur.solar,
-                             cur.sunrise,
-                             cur.sunset,
-                             &dmc_before_precip,
-                             rain_total_prev,
-                             rain_total);
-    dc = drought_code(dc,
-                      cur.temp,
-                      cur.rh,
-                      cur.wind,
-                      cur.rain,
-                      cur.mon,
-                      cur.hour,
-                      cur.solar,
-                      cur.sunrise,
-                      cur.sunset,
-                      &dc_before_precip,
-                      rain_total_prev,
-                      rain_total);
-    float isi = initial_spread_index(cur.wind, ffmc);
-    float bui = buildup_index(dmc, dc);
-    float fwi = fire_weather_index(isi, bui);
-    mcgmc = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.wind, cur.rain, cur.solar, mcgmc);
-    float gfmc = fine_fuel_moisture_code(mcgmc);
-    float gsi = grass_spread_index(cur.wind, mcgmc, cur.percent_cured);
-    float gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
+    dmc = duff_moisture_code(
+      dmc,
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain,
+      cur.mon,
+      cur.hour,
+      cur.solrad,
+      cur.sunrise,
+      cur.sunset,
+      &dmc_before_rain,
+      canopy.rain_total_prev,
+      canopy.rain_total);
+    dc = drought_code(
+      dc,
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain,
+      cur.mon,
+      cur.hour,
+      cur.solrad,
+      cur.sunrise,
+      cur.sunset,
+      &dc_before_rain,
+      canopy.rain_total_prev,
+      canopy.rain_total);
+    double isi = initial_spread_index(cur.ws, ffmc);
+    double bui = buildup_index(dmc, dc);
+    double fwi = fire_weather_index(isi, bui);
+    mcgfmc = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc);
+    double gfmc = fine_fuel_moisture_code(mcgfmc);
+    double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured);
+    double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     /* printf("\n"); */
     fprintf(out,
-            "%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.2f, %5.1f, %5.1f, %5.1f\n",
-            old.year,
-            old.mon,
-            old.day,
+            "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+            cur.lat,
+            cur.lon,
+            cur.year,
+            cur.mon,
+            cur.day,
             cur.hour,
             cur.temp,
             cur.rh,
-            cur.wind,
+            cur.ws,
             cur.rain,
+            cur.solrad,
             ffmc,
             dmc,
             dc,
@@ -664,18 +693,21 @@ void main(int argc, char* argv[])
             gsi,
             gfwi,
             mcffmc,
-            mcgmc,
+            mcgfmc,
             cur.percent_cured,
             cur.grass_fuel_load);
-    printf("%4d,%2d,%2d,%2d,%5.1f,%3.0f,%5.1f,%5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.1f, %5.2f, %5.1f, %5.1f, %5.1f\n",
-           old.year,
-           old.mon,
-           old.day,
+    printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+           cur.lat,
+           cur.lon,
+           cur.year,
+           cur.mon,
+           cur.day,
            cur.hour,
            cur.temp,
            cur.rh,
-           cur.wind,
+           cur.ws,
            cur.rain,
+           cur.solrad,
            ffmc,
            dmc,
            dc,
@@ -686,7 +718,7 @@ void main(int argc, char* argv[])
            gsi,
            gfwi,
            mcffmc,
-           mcgmc,
+           mcgfmc,
            cur.percent_cured,
            cur.grass_fuel_load);
     old = cur;

@@ -137,3 +137,57 @@ toDaily <- function(w, all = FALSE) {
   }
   return(merged)
 }
+
+seasonal_curing <- function(julian_date) {
+  PERCENT_CURED <- c(96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0, 95.0, 93.0, 92.0, 90.5, 88.4, 84.4, 78.1, 68.7, 50.3, 32.9, 23.0, 22.0, 21.0, 20.0, 25.7, 35.0, 43.0, 49.8, 60.0, 68.0, 72.0, 75.0, 78.9, 86.0, 96.0, 96.0, 96.0, 96.0, 96.0, 96.0)
+  jd_class <- (julian_date %/% 10) + 1
+  first <- PERCENT_CURED[jd_class]
+  last <- PERCENT_CURED[jd_class + 1]
+  period_frac <- (julian_date %% 10) / 10.0
+  return(first + (last - first) * period_frac)
+}
+
+save_csv <- function(df, file) {
+  COLS_LOC <- c("lat", "long")
+  COLS_DATE <- c("yr", "mon", "day", "hr")
+  COLS_RH <- c("rh")
+  COLS_WX <- c("temp", "ws", "prec")
+  COLS_SOLRAD <- c("solrad")
+  COLS_INDICES <- c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi")
+  COLS_EXTRA <- c("mcffmc", "mcgfmc")
+  COLS_GFL <- c("grass_fuel_load")
+  COLS_PC <- c("percent_cured")
+  cols_used <- c()
+  result <- copy(df)
+  colnames(result) <- tolower(colnames(result))
+  apply_format <- function(cols, fmt, digits = 0) {
+    fix_col <- Vectorize(function(x) {
+      y <- round(x, digits)
+      # HACK: deal with negative 0
+      y <- ifelse(0 == y, 0.0, y)
+      return(sprintf(fmt, y))
+    })
+
+    for (col in names(result)) {
+      # HACK: deal with min/max columns
+      col_root <- gsub("_max", "", gsub("_min", "", col))
+      if (col_root %in% cols) {
+        cols_used <<- append(cols_used, col)
+        result[[col]] <<- fix_col(result[[col]])
+      }
+    }
+  }
+  apply_format(COLS_LOC, "%.4f", 4)
+  apply_format(COLS_DATE, "%02d")
+  apply_format(COLS_RH, "%.0f")
+  apply_format(COLS_WX, "%.1f", 1)
+  apply_format(COLS_SOLRAD, "%.4f", 4)
+  apply_format(COLS_INDICES, "%.1f", 1)
+  apply_format(COLS_EXTRA, "%.4f", 4)
+  apply_format(COLS_GFL, "%.2f", 2)
+  apply_format(COLS_PC, "%.1f", 1)
+  # order used columns based on original ordering
+  cols <- intersect(names(result), cols_used)
+  result <- result[, ..cols]
+  write.csv(result, file, row.names = FALSE, quote = FALSE)
+}

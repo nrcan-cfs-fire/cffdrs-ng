@@ -2,11 +2,13 @@ import datetime
 
 import pandas as pd
 
+from util import save_csv
+
 
 ##
 # Convert hourly values stream to daily noon values stream.
 # Expected columns are:
-#   [lat, long, year, mon, day, hour, temp, rh, wind, rain]
+#   [lat, long, yr, mon, day, hr, temp, rh, ws, prec]
 #
 # @param   df    hourly values weather stream
 # @return        daily noon values weather stream
@@ -17,21 +19,23 @@ def hourly_to_daily(df):
         return f"{int(year):4d}-{int(mon):02d}-{int(day):02d}"
 
     df["DATE"] = df.apply(
-        lambda row: fmt_ymd(row["year"], row["mon"], row["day"]),
+        lambda row: fmt_ymd(row["yr"], row["mon"], row["day"]),
         axis=1,
     )
     df["FOR_DATE"] = df.apply(
         lambda row: (
             pd.to_datetime(row["DATE"])
-            if row["hour"] <= 12
+            if row["hr"] <= 12
             else (pd.to_datetime(row["DATE"]) + datetime.timedelta(days=1))
         ).date(),
         axis=1,
     )
-    rain = df.groupby("FOR_DATE")["rain"].sum()
-    del df["rain"]
-    df = df.loc[df["hour"] == 12]
-    df = pd.merge(df, pd.DataFrame({"rain": rain}), on=["FOR_DATE"])
+    rain = df.groupby("FOR_DATE")["prec"].sum()
+    del df["prec"]
+    df = pd.merge(df, pd.DataFrame({"prec": rain}), on=["FOR_DATE"])
+    df = df.loc[12 == df["hr"]]
+    del df["hr"]
+    df = df[["lat", "long", "yr", "mon", "day", "temp", "rh", "ws", "prec"]]
     return df
 
 
@@ -59,14 +63,14 @@ if "__main__" == __name__:
     COLUMNS = [
         "lat",
         "long",
-        "year",
+        "yr",
         "mon",
         "day",
-        "hour",
+        "hr",
         "temp",
         "rh",
-        "wind",
-        "rain",
+        "ws",
+        "prec",
     ]
     try:
         df = df[COLUMNS]
@@ -74,4 +78,4 @@ if "__main__" == __name__:
         print(f"Expected columns to be {COLUMNS}")
         raise ex
     daily = hourly_to_daily(df)
-    daily.to_csv(out, index=False)
+    save_csv(daily, out)

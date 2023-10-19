@@ -20,8 +20,8 @@ temp_min_max <- function(temp_noon, rh_noon) {
 #' Convert daily noon values stream to daily min/max values stream.
 #' Uses values from statistics to do the conversion.
 #'
-#' @param df        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-#' @return          daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
+#' @param df        daily noon values weather stream [lat, long, yr, mon, day, temp, rh, ws, prec]
+#' @return          daily min/max values weather stream [lat, long, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
 #' @export daily_to_minmax
 daily_to_minmax <- function(df) {
   df <- data.table(df)
@@ -35,12 +35,26 @@ daily_to_minmax <- function(df) {
   df[, rh_min := ifelse(rh_min < 0, 0, rh_min)]
   df[, rh_max := findrh(q, temp_min)]
   df[, rh_max := ifelse(rh_max > 100, 100, rh_max)]
-  df[, wind_min := 0.15 * wind]
-  df[, wind_max := 1.25 * wind]
+  df[, ws_min := 0.15 * ws]
+  df[, ws_max := 1.25 * ws]
   if (hadId) {
-    df <- df[, c("id", "lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
+    df <- df[, c("id", "lat", "long", "yr", "mon", "day", "temp_min", "temp_max", "rh_min", "rh_max", "ws_min", "ws_max", "prec")]
   } else {
-    df <- df[, c("lat", "long", "year", "mon", "day", "hour", "temp_min", "temp_max", "rh_min", "rh_max", "wind_min", "wind_max", "rain")]
+    df <- df[, c("lat", "long", "yr", "mon", "day", "temp_min", "temp_max", "rh_min", "rh_max", "ws_min", "ws_max", "prec")]
   }
   return(df)
+}
+
+# so this can be run via Rscript
+if ("--args" %in% commandArgs()) {
+  args <- commandArgs(trailingOnly = TRUE)
+  if (2 == length(args)) {
+    inp <- args[1]
+    out <- args[2]
+    df <- as.data.table(read.csv(inp))
+    df_minmax <- daily_to_minmax(df)
+    save_csv(df_minmax, out)
+  } else {
+    message("Wrong number of arguments")
+  }
 }

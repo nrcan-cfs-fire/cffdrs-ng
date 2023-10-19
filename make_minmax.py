@@ -1,6 +1,7 @@
 import pandas as pd
 
 import util
+from util import save_csv
 
 
 # This function is for the method that takes old traditional 1pm weather (labelled here as noon)
@@ -23,7 +24,7 @@ def temp_min_max(temp_noon, rh_noon):
 # Uses values from statistics to do the conversion.
 #
 # @param df        daily noon values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-# @return          daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, wind_min, wind_max, rain]
+# @return          daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain]
 def daily_to_minmax(df):
     df = df.copy()
     had_id = "id" in map(str.lower, df.columns)
@@ -38,22 +39,21 @@ def daily_to_minmax(df):
     df["rh_min"] = df["rh_min"].apply(lambda rh: max(0, rh))
     df["rh_max"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_min"]), axis=1)
     df["rh_max"] = df["rh_max"].apply(lambda rh: min(100, rh))
-    df["wind_min"] = 0.15 * df["wind"]
-    df["wind_max"] = 1.25 * df["wind"]
+    df["ws_min"] = 0.15 * df["ws"]
+    df["ws_max"] = 1.25 * df["ws"]
     columns = [
         "lat",
         "long",
-        "year",
+        "yr",
         "mon",
         "day",
-        "hour",
         "temp_min",
         "temp_max",
         "rh_min",
         "rh_max",
-        "wind_min",
-        "wind_max",
-        "rain",
+        "ws_min",
+        "ws_max",
+        "prec",
     ]
     if had_id:
         df = df[["id"] + columns]
@@ -86,14 +86,13 @@ if "__main__" == __name__:
     COLUMNS = [
         "lat",
         "long",
-        "year",
+        "yr",
         "mon",
         "day",
-        "hour",
         "temp",
         "rh",
-        "wind",
-        "rain",
+        "ws",
+        "prec",
     ]
     try:
         df = df[COLUMNS]
@@ -101,4 +100,4 @@ if "__main__" == __name__:
         print(f"Expected columns to be {COLUMNS}")
         sys.exit(1)
     minmax = daily_to_minmax(df)
-    minmax.to_csv(out, index=False)
+    save_csv(minmax, out)

@@ -1,7 +1,7 @@
 # HACK: include code we use from cffdrs library so it doesn't add dependency for terra
 source("NG_FWI.r")
 
-FFMCcalc <- function(ffmc_yda, temp, rh, ws, prec) {
+fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
   wmo <- 147.27723 * (101 - ffmc_yda) / (59.5 + ffmc_yda)
   ra <- ifelse(prec > 0.5, prec - 0.5, prec)
   wmo <- ifelse(prec > 0.5, ifelse(wmo > 150, wmo + 0.0015 *
@@ -29,7 +29,7 @@ FFMCcalc <- function(ffmc_yda, temp, rh, ws, prec) {
   return(ffmc1)
 }
 
-DMCcalc <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
+duff_moisture_code <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   ell01 <- c(
     6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4,
     8, 7, 6
@@ -75,7 +75,7 @@ DMCcalc <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   return(dmc1)
 }
 
-DCcalc <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
+drought_code <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   fl01 <- c(
     -1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4,
     -1.6, -1.6
@@ -220,18 +220,18 @@ fwi <- function(input, init = data.frame(
   for (i in 1:n0) {
     k <- ((i - 1) * n + 1):(i * n)
     rh[k] <- ifelse(rh[k] >= 100, 99.9999, rh[k])
-    ffmc1 <- FFMCcalc(ffmc_yda, temp[k], rh[k], ws[k], prec[k])
-    dmc1 <- DMCcalc(
+    ffmc1 <- fine_fuel_moisture_code(ffmc_yda, temp[k], rh[k], ws[k], prec[k])
+    dmc1 <- duff_moisture_code(
       dmc_yda, temp[k], rh[k], prec[k], lat[k],
       mon[k], lat.adjust
     )
-    dc1 <- DCcalc(
+    dc1 <- drought_code(
       dc_yda, temp[k], rh[k], prec[k], lat[k],
       mon[k], lat.adjust
     )
-    isi1 <- ISIcalc(ffmc1, ws[k])
-    bui1 <- BUIcalc(dmc1, dc1)
-    fwi1 <- FWIcalc(isi1, bui1)
+    isi1 <- initial_spread_index(ffmc1, ws[k])
+    bui1 <- buildup_index(dmc1, dc1)
+    fwi1 <- fire_weather_index(isi1, bui1)
     dsr1 <- 0.0272 * (fwi1^1.77)
     ffmc <- c(ffmc, ffmc1)
     dmc <- c(dmc, dmc1)
