@@ -147,6 +147,10 @@ fire_weather_index <- function(isi, bui) {
   return(fwi)
 }
 
+daily_severity_rating <- function(fwi) {
+  return(0.0272 * (fwi^1.77))
+}
+
 #' Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
 #'
 #' @param temp            Temperature (Celcius)
@@ -539,7 +543,7 @@ rain_since_intercept_reset <- function(temp,
     cur$isi <- initial_spread_index(cur$ws, cur$ffmc)
     cur$bui <- buildup_index(cur$dmc, cur$dc)
     cur$fwi <- fire_weather_index(cur$isi, cur$bui)
-    cur$dsr <- 0.0272 * (cur$fwi^1.77)
+    cur$dsr <- daily_severity_rating(cur$fwi)
     mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
     cur$mcgfmc <- mcgfmc
     cur$gfmc <- fine_fuel_moisture_code(mcgfmc)
@@ -566,6 +570,7 @@ rain_since_intercept_reset <- function(temp,
     "isi",
     "bui",
     "fwi",
+    "dsr",
     "gfmc",
     "gsi",
     "gfwi",

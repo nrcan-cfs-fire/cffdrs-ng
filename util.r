@@ -153,7 +153,18 @@ save_csv <- function(df, file) {
   COLS_RH <- c("rh")
   COLS_WX <- c("temp", "ws", "prec")
   COLS_SOLRAD <- c("solrad")
-  COLS_INDICES <- c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi")
+  COLS_INDICES <- c(
+    "ffmc",
+    "dmc",
+    "dc",
+    "isi",
+    "bui",
+    "fwi",
+    "dsr",
+    "gfmc",
+    "gsi",
+    "gfwi"
+  )
   COLS_EXTRA <- c("mcffmc", "mcgfmc")
   COLS_GFL <- c("grass_fuel_load")
   COLS_PC <- c("percent_cured")
