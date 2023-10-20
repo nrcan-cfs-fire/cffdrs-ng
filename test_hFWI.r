@@ -8,28 +8,29 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6) {
   r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT)
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
-  w[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", yr, mon, day, hr, 0))]
-  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", yr, mon, day, hr, 0))]
   colnames(w) <- toupper(colnames(w))
   colnames(r) <- toupper(colnames(r))
+  w[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0))]
+  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0))]
   d <- toDaily(w)
   d[, LAT := DEFAULT_LATITUDE]
   d[, LONG := DEFAULT_LONGITUDE]
-  daily <- fwi(d, init = c(FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT))
+  daily <- daily_fwi(d, init = c(FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT))
   setnames(
     daily,
     c("FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR"),
     c("DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")
   )
+  daily <- daily[, daily[, c("YR", "MON", "DAY", "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")]]
   r <- merge(r,
-    daily[, c("YR", "MON", "DAY", "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")],
+    daily,
     by = c("YR", "MON", "DAY")
   )
-  r[, DISI := ISIcalc(DFFMC, WS, fbpMod = FALSE)]
-  r[, DBUI := BUIcalc(DDMC, DDC)]
-  r[, DFWI := FWIcalc(DISI, DBUI)]
+  r[, DISI := Vectorize(initial_spread_index)(WS, DFFMC)]
+  r[, DBUI := Vectorize(buildup_index)(DDMC, DDC)]
+  r[, DFWI := Vectorize(fire_weather_index)(DISI, DBUI)]
   # taken from package code
-  r[, DDSR := 0.0272 * (DFWI^1.77)]
+  r[, DDSR := Vectorize(daily_severity_rating)(DFWI^1.77)]
   # output input and FWI columns so git can tell us if they change
   r <- r[, c(
     "TIMESTAMP", "TEMP", "WS", "RH", "PREC",
