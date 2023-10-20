@@ -550,38 +550,6 @@ rain_since_intercept_reset <- function(temp,
     cur$gfwi <- grass_fire_weather_index(cur$gsi, cur$grass_fuel_load)
     results <- rbind(results, cur)
   }
-  # reorganize columns
-  colnames_out <- c(
-    "lat",
-    "long",
-    "yr",
-    "mon",
-    "day",
-    "hr",
-    "temp",
-    "rh",
-    "ws",
-    "prec",
-    "solrad",
-    "ffmc",
-    "dmc",
-    "dc",
-    "isi",
-    "bui",
-    "fwi",
-    "dsr",
-    "gfmc",
-    "gsi",
-    "gfwi",
-    "mcffmc",
-    "mcgfmc",
-    "percent_cured",
-    "grass_fuel_load"
-  )
-  if ("id" %in% names(results)) {
-    colnames_out <- cbind("id", colnames_out)
-  }
-  results <- results[, ..colnames_out]
   return(results)
 }
 
@@ -740,6 +708,38 @@ if ("--args" %in% commandArgs()) {
       dmc_old = dmc_old,
       dc_old = dc_old
     )
+    # reorganize columns
+    colnames_out <- c(
+      "lat",
+      "long",
+      "yr",
+      "mon",
+      "day",
+      "hr",
+      "temp",
+      "rh",
+      "ws",
+      "prec",
+      "solrad",
+      "ffmc",
+      "dmc",
+      "dc",
+      "isi",
+      "bui",
+      "fwi",
+      "dsr",
+      "gfmc",
+      "gsi",
+      "gfwi",
+      "mcffmc",
+      "mcgfmc",
+      "percent_cured",
+      "grass_fuel_load"
+    )
+    if ("id" %in% names(df_fwi)) {
+      colnames_out <- c("id", colnames_out)
+    }
+    df_fwi <- df_fwi[, ..colnames_out]
     save_csv(df_fwi, file_out)
   } else {
     message("Wrong number of arguments")
