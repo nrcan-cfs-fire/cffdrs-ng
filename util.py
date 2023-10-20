@@ -150,7 +150,18 @@ def save_csv(df, file):
     COLS_RH = ["rh"]
     COLS_WX = ["temp", "ws", "prec"]
     COLS_SOLRAD = ["solrad"]
-    COLS_INDICES = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "gfmc", "gsi", "gfwi"]
+    COLS_INDICES = [
+        "ffmc",
+        "dmc",
+        "dc",
+        "isi",
+        "bui",
+        "fwi",
+        "dsr",
+        "gfmc",
+        "gsi",
+        "gfwi",
+    ]
     COLS_EXTRA = ["mcffmc", "mcgfmc"]
     COLS_GFL = ["grass_fuel_load"]
     COLS_PC = ["percent_cured"]

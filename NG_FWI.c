@@ -174,6 +174,11 @@ double fire_weather_index(double isi, double bui)
   return fwi;
 }
 
+double daily_severity_rating(double fwi)
+{
+  return 0.0272 * pow(fwi, 1.77);
+}
+
 /**
  * Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
  *
@@ -537,7 +542,7 @@ void main(int argc, char* argv[])
 {
   /*  CSV headers */
   static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
-  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,ffmc,dmc,dc,isi,bui,fwi,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load";
+  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load";
   if (7 != argc)
   {
     printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <input file> <output file>\n\n", argv[0]);
@@ -665,13 +670,14 @@ void main(int argc, char* argv[])
     double isi = initial_spread_index(cur.ws, ffmc);
     double bui = buildup_index(dmc, dc);
     double fwi = fire_weather_index(isi, bui);
+    double dsr = daily_severity_rating(fwi);
     mcgfmc = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc);
     double gfmc = fine_fuel_moisture_code(mcgfmc);
     double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured);
     double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     /* printf("\n"); */
     fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+            "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
             cur.lat,
             cur.lon,
             cur.year,
@@ -689,6 +695,7 @@ void main(int argc, char* argv[])
             isi,
             bui,
             fwi,
+            dsr,
             gfmc,
             gsi,
             gfwi,
@@ -697,6 +704,7 @@ void main(int argc, char* argv[])
             cur.percent_cured,
             cur.grass_fuel_load);
     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+           "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
            cur.lat,
            cur.lon,
            cur.year,
@@ -714,6 +722,7 @@ void main(int argc, char* argv[])
            isi,
            bui,
            fwi,
+           dsr,
            gfmc,
            gsi,
            gfwi,

@@ -72,6 +72,10 @@ def fire_weather_index(isi, bui):
     return fwi
 
 
+def daily_severity_rating(fwi):
+    return 0.0272 * pow(fwi, 1.77)
+
+
 ##
 # Calculate hourly Fine Fuel Moisture Code (FFMC)
 #
@@ -539,7 +543,7 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False
     r["ISI"] = r.apply(lambda row: initial_spread_index(row["WS"], row["FFMC"]), axis=1)
     r["BUI"] = r.apply(lambda row: buildup_index(row["DMC"], row["DC"]), axis=1)
     r["FWI"] = r.apply(lambda row: fire_weather_index(row["ISI"], row["BUI"]), axis=1)
-    r["DSR"] = r.apply(lambda row: 0.0272 * (row["FWI"] ** 1.77), axis=1)
+    r["DSR"] = r.apply(lambda row: daily_severity_rating(row["FWI"]), axis=1)
     r = pd.merge(
         r, pd.DataFrame({"MIN_RH": r.groupby("DATE")["RH"].min()}), on=["DATE"]
     )
