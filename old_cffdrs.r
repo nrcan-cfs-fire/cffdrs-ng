@@ -1,7 +1,7 @@
 # HACK: include code we use from cffdrs library so it doesn't add dependency for terra
 source("NG_FWI.r")
 
-fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
+daily_fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
   wmo <- 147.27723 * (101 - ffmc_yda) / (59.5 + ffmc_yda)
   ra <- ifelse(prec > 0.5, prec - 0.5, prec)
   wmo <- ifelse(prec > 0.5, ifelse(wmo > 150, wmo + 0.0015 *
@@ -29,7 +29,7 @@ fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
   return(ffmc1)
 }
 
-duff_moisture_code <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
+daily_duff_moisture_code <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   ell01 <- c(
     6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4,
     8, 7, 6
@@ -75,7 +75,7 @@ duff_moisture_code <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adjust = T
   return(dmc1)
 }
 
-drought_code <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
+daily_drought_code <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   fl01 <- c(
     -1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4,
     -1.6, -1.6
@@ -105,11 +105,11 @@ drought_code <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TRUE) {
   return(dc1)
 }
 
-fwi <- function(input, init = data.frame(
-                  ffmc = 85, dmc = 6, dc = 15,
-                  lat = 55
-                ), batch = TRUE, out = "all", lat.adjust = TRUE,
-                uppercase = TRUE) {
+daily_fwi <- function(input, init = data.frame(
+                        ffmc = 85, dmc = 6, dc = 15,
+                        lat = 55
+                      ), batch = TRUE, out = "all", lat.adjust = TRUE,
+                      uppercase = TRUE) {
   if (!is.na(charmatch("input", search()))) {
     detach(input)
   }
@@ -220,12 +220,12 @@ fwi <- function(input, init = data.frame(
   for (i in 1:n0) {
     k <- ((i - 1) * n + 1):(i * n)
     rh[k] <- ifelse(rh[k] >= 100, 99.9999, rh[k])
-    ffmc1 <- fine_fuel_moisture_code(ffmc_yda, temp[k], rh[k], ws[k], prec[k])
-    dmc1 <- duff_moisture_code(
+    ffmc1 <- daily_fine_fuel_moisture_code(ffmc_yda, temp[k], rh[k], ws[k], prec[k])
+    dmc1 <- daily_duff_moisture_code(
       dmc_yda, temp[k], rh[k], prec[k], lat[k],
       mon[k], lat.adjust
     )
-    dc1 <- drought_code(
+    dc1 <- daily_drought_code(
       dc_yda, temp[k], rh[k], prec[k], lat[k],
       mon[k], lat.adjust
     )
