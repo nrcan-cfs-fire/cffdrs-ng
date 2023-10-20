@@ -2,7 +2,7 @@
 source("NG_FWI.r")
 source("old_cffdrs.r")
 
-test_hfwi <- function(df = read.csv("./test_hffmc.csv"), timezone = -6) {
+test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6) {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
   r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT)
@@ -49,7 +49,7 @@ plot_comparison <- function(r) {
     geom_point(aes(TIMESTAMP, DDC), data = r[hour(TIMESTAMP) == 16]))
 }
 
-plot_test <- function(df = read.csv("./test_hffmc.csv")) {
+plot_test <- function(df = read.csv("./data/test_hffmc.csv")) {
   r <- test_hfwi(df)
   plot_comparison(r)
 }
