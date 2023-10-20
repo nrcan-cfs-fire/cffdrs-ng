@@ -2,7 +2,7 @@ import datetime
 import logging
 import os.path
 import sys
-from math import exp, log
+from math import exp, log, pow, sqrt
 
 import pandas as pd
 
@@ -11,19 +11,75 @@ from util import save_csv
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
-# FIX: figure out what this should be
-DEFAULT_LATITUDE = 55.0
-DEFAULT_LONGITUDE = -120.0
+
+# Fuel Load (kg/m^2)
+DEFAULT_GRASS_FUEL_LOAD = 0.35
+MAX_SOLAR_PROPAGATION = 0.85
 
 # default startup values
 FFMC_DEFAULT = 85
 DMC_DEFAULT = 6
 DC_DEFAULT = 15
 
-# constants used in grass calculations
-GRASS_FUEL_LOAD = 0.35
-MAX_SOL_PROP = 0.85
-PERCENT_CURED = 100.0
+# FIX: figure out what this should be
+DEFAULT_LATITUDE = 55.0
+DEFAULT_LONGITUDE = -120.0
+
+EL_DMC = [6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0]
+FL_DC = [-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6]
+MPCT_TO_MC = 147.2772277
+FFMC_INTERCEPT = 0.5
+DMC_INTERCEPT = 1.5
+DC_INTERCEPT = 2.8
+
+
+# Fine Fuel Moisture Code (FFMC) from moisture %
+def fine_fuel_moisture_code(moisture_percent):
+    return 59.5 * (250 - moisture_percent) / (MPCT_TO_MC + moisture_percent)
+
+
+# Fine Fuel Moisture (%) from FFMC
+def fine_fuel_moisture_from_code(moisture_code):
+    return MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code)
+
+
+# Calculate hourly Fine Fuel Moisture Code (FFMC)
+#
+# @param temp            Temperature (Celcius)
+# @param rh              Relative Humidity (percent, 0-100)
+# @param ws              Wind Speed (km/h)
+# @param rain            Rainfall (mm)
+# @param lastmc          Previous Fine Fuel Moisture (%)
+# @return                Hourly Fine Fuel Moisture (%)
+def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
+    rf = 42.5
+    drf = 0.0579
+    # Time since last observation (hours)
+    time = 1.0
+    # use moisture directly instead of converting to/from ffmc
+    # expects any rain intercept to already be applied
+    mo = lastmc
+    if rain != 0.0:
+        # duplicated in both formulas, so calculate once
+        # lastmc == mo, but use lastmc since mo changes after first equation
+        mo += rf * rain * exp(-100.0 / (251 - lastmc)) * (1.0 - exp(-6.93 / rain))
+        if lastmc > 150:
+            mo += 0.0015 * pow(lastmc - 150, 2) * sqrt(rain)
+        if mo > 250:
+            mo = 250
+    # duplicated in both formulas, so calculate once
+    e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)))
+    ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1
+    ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
+    # m = ed if mo >= ed else ew
+    m = ew if (mo < ed) else ed
+    if mo != ed:
+        # these are the same formulas with a different value for a1
+        a1 = (rh / 100.0) if (mo > ed) else ((100.0 - rh) / 100.0)
+        k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
+        kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp)
+        m += (mo - m) * pow(10, (-kd_or_kw * time))
+    return m
 
 
 ##
@@ -33,8 +89,8 @@ PERCENT_CURED = 100.0
 # @param ffmc            Fine Fuel Moisure Code
 # @return                Initial Spread Index
 def initial_spread_index(ws, ffmc):
-    fm = 147.2773 * (101.0 - ffmc) / (59.5 + ffmc)
-    fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if ws >= 40 else (exp(0.05039 * ws))
+    fm = fine_fuel_moisture_from_code(ffmc)
+    fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= ws) else exp(0.05039 * ws)
     sf = 19.1152 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
     isi = sf * fw
     return isi
@@ -47,13 +103,14 @@ def initial_spread_index(ws, ffmc):
 # @param dc              Drought Code
 # @return                Build-up Index
 def buildup_index(dmc, dc):
-    bui1 = 0 if (dmc == 0 and dc == 0) else (0.8 * dc * dmc / (dmc + 0.4 * dc))
-    p = 0 if dmc == 0 else ((dmc - bui1) / dmc)
-    cc = 0.92 * ((0.0114 * dmc) ** 1.7)
-    bui0 = dmc - cc * p
-    bui0 = max(0, bui0)
-    bui1 = bui0 if bui1 < dmc else bui1
-    return bui1
+    bui = 0.0 if (0 == dmc and 0 == dc) else (0.8 * dc * dmc / (dmc + 0.4 * dc))
+    if bui < dmc:
+        p = (dmc - bui) / dmc
+        cc = 0.92 * pow(0.0114 * dmc, 1.7)
+        bui = dmc - cc * p
+        if bui < 0:
+            bui = 0.0
+    return bui
 
 
 ##
@@ -64,11 +121,15 @@ def buildup_index(dmc, dc):
 # @return                Fire Weather Index
 def fire_weather_index(isi, bui):
     bb = (
-        (0.1 * isi * (1000 / (25 + 108.64 / exp(0.023 * bui))))
-        if bui > 80
-        else (0.1 * isi * (0.626 * (bui**0.809) + 2))
+        0.1
+        * isi
+        * (
+            ((1000 / (25 + 108.64 / exp(0.023 * bui))))
+            if bui > 80
+            else ((0.626 * pow(bui, 0.809) + 2))
+        )
     )
-    fwi = bb if bb <= 1 else exp(2.72 * ((0.434 * log(bb)) ** 0.647))
+    fwi = bb if bb <= 1 else exp(2.72 * pow(0.434 * log(bb), 0.647))
     return fwi
 
 
@@ -76,387 +137,85 @@ def daily_severity_rating(fwi):
     return 0.0272 * pow(fwi, 1.77)
 
 
-##
-# Calculate hourly Fine Fuel Moisture Code (FFMC)
-#
-# @param weatherstream   Table of hourly weather data to use for calculations [TEMP, RH, WS, PREC]
-# @param ffmc_old        Fine Fuel Moisture Code for previous hour
-# @return                Fine Fuel Moisture Codes for given data
-def hourly_fine_fuel_moisture_code(weatherstream, ffmc_old=FFMC_DEFAULT):
-    def hffmc(temp, rh, ws, prec, ffmc_old):
-        Fo = ffmc_old
-        t0 = 1
-        mo = 147.27723 * (101 - Fo) / (59.5 + Fo)
-        mr = (
-            mo
-            if 0 == prec
-            else (mo + 42.5 * prec * exp(-100 / (251 - mo)) * (1 - exp(-6.93 / prec)))
-            if mo <= 150
-            else (
-                mo
-                + 42.5 * prec * exp(-100 / (251 - mo)) * (1 - exp(-6.93 / prec))
-                + 0.0015 * ((mo - 150) ** 2) * (prec**0.5)
-            )
-        )
-        mr = min(250, mr)
-        mo = mr if prec > 0 else mo
-        Ed = (
-            0.942 * (rh**0.679)
-            + 11 * exp((rh - 100) / 10)
-            + 0.18 * (21.1 - temp) * (1 - exp(-0.115 * rh))
-        )
-        ko = 0.424 * (1 - (rh / 100) ** 1.7) + 0.0694 * (ws**0.5) * (
-            1 - (rh / 100) ** 8
-        )
-        kd = ko * 0.0579 * exp(0.0365 * temp)
-        md = Ed + (mo - Ed) * (10 ** (-kd * t0))
-        Ew = (
-            0.618 * (rh**0.753)
-            + 10 * exp((rh - 100) / 10)
-            + 0.18 * (21.1 - temp) * (1 - exp(-0.115 * rh))
-        )
-        k1 = 0.424 * (1 - ((100 - rh) / 100) ** 1.7) + 0.0694 * (ws**0.5) * (
-            1 - ((100 - rh) / 100) ** 8
-        )
-        kw = k1 * 0.0579 * exp(0.0365 * temp)
-        mw = Ew - (Ew - mo) * (10 ** (-kw * t0))
-        m = md if mo > Ed else mw
-        m = mo if Ed >= mo and mo >= Ew else m
-        Fo = 59.5 * (250 - m) / (147.27723 + m)
-        Fo = max(0, Fo)
-        return Fo
-
-    ffmc = []
-    for row in weatherstream[["TEMP", "RH", "WS", "PREC"]].itertuples():
-        i, temp, rh, ws, prec = row
-        ffmc_old = hffmc(temp, rh, ws, prec, ffmc_old)
-        ffmc.append(ffmc_old)
-    return ffmc
-
-
-##
-# Calculate vapour pressure deficit
-#
-# @param temperature         Temperature (Celcius)
-# @param relative_humidity   Relative Humidity (percent, 0-100)
-# @return                    Vapour Pressure Deficit (kPa)
-def vpd(temperature, relative_humidity):
-    vapour_pressure_saturation = 0.61078 * exp(
-        17.269 * temperature / (temperature + 237.3)
-    )
-    vapour_pressure_deficit = vapour_pressure_saturation * (
-        1.0 - relative_humidity / 100.0
-    )
-    return vapour_pressure_deficit
-
-
-##
-# Calculate hourly Fine Fuel Moisture Code (FFMC)
-#
-# @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, TEMP, RH, WS, PREC]
-# @param ffmc_old        Fine Fuel Moisture Code for previous hour
-# @return                Fine Fuel Moisture Codes for given data
-def _hffmc(w, ffmc_old):
-    # get daily values but still get for days we don't have noon for because we want PREC total
-    # daily <- toDaily(w, all=TRUE)
-    # w[, FOR_DATE := ifelse(hour(TIMESTAMP) < 13, DATE, as.character(as.Date(DATE) + 1))]
-    # daily$FOR_DATE <- daily$DATE
-    #
-    # FFMC uses the hourly FFMC calculation, but reduces the overall rain received by
-    # 0.5mm. This is done by figuring out what fraction of the period's rain occurs in
-    # each hour and then taking that fraction of 0.5mm off of that hour.
-    #
-    # want to take 0.5 mm off of the total but proportional to amounts per hour
-    # CHECK: does this make more sense than just removing the first 0.5mm?
-    # figure out what fraction of the total rain to be counted 1mm is
-    # daily[, FFMC_MULTIPLIER := ifelse(0.5 >= PREC, 0, (PREC - 0.5) / PREC)]
-    # for_ffmc <- merge(w, daily[, c('FOR_DATE', 'FFMC_MULTIPLIER')], by=c('FOR_DATE'))
-    for_ffmc = w.loc[:]
-    sum_prec = pd.DataFrame({"SUM_PREC": for_ffmc.groupby("DATE")["PREC"].sum()})
-    for_ffmc = pd.merge(for_ffmc, sum_prec, on=["DATE"])
-    for_ffmc["FFMC_MULTIPLIER"] = for_ffmc.apply(
-        lambda row: 0
-        if 0.5 >= row["SUM_PREC"]
-        else (row["SUM_PREC"] - 0.5) / row["SUM_PREC"],
-        axis=1,
-    )
-    for_ffmc["PREC"] = for_ffmc.apply(
-        lambda row: row["PREC"] * row["FFMC_MULTIPLIER"], axis=1
-    )
-    for_ffmc["FFMC"] = hourly_fine_fuel_moisture_code(for_ffmc, ffmc_old=ffmc_old)
-    # for_ffmc = for_ffmc[['TIMESTAMP', 'FFMC']]
-    # NOTE: returning column doesn't assign anything if index doesn't match
-    return list(for_ffmc["FFMC"])
-
-
-##
-# Calculate hourly Duff Moisture Code (DMC)
-#
-# @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, SUNRISE, SUNSET, MON, TEMP, RH, PREC]
-# @param dmc_old         Duff Moisture Code for previous hour
-# @return                Duff Moisture Codes for given data
-def _hdmc(w, dmc_old):
-    el = [6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6]
-
-    def hourly_dmc(t, rh, ws, rain, mon, lastdmc, drying_so_far, rain_so_far):
-        # wetting FROM rain
-        if rain_so_far > 1.5:
-            reff = 0.92 * rain_so_far - 1.27
-            if lastdmc <= 33:
-                b = 100.0 / (0.5 + 0.3 * lastdmc)
-            elif lastdmc <= 65:
-                b = 14.0 - 1.3 * log(lastdmc)
-            else:
-                b = 6.2 * log(lastdmc) - 17.2
-            DELTA_MCrain = 1000.0 * reff / (48.77 + b * reff)
-            # printf("rain=%f  change=%f lastdmc=%f\n",rain, DELTA_MCrain, lastdmc);
-            # moisture content increase since start of period
-            mc = 20.0 + 280.0 / exp(0.023 * lastdmc) + DELTA_MCrain
-            lastdmc = 43.43 * (5.6348 - log(mc - 20))
-        # printf("delta dmc, %f ,lastDMC,%f , frac,%f , fractional,%f\n",DELTA_mcrain,lastdmc, DryFrac, (DELTA_dry*DryFrac));
-        dmc = lastdmc + drying_so_far
-        dmc = max(0, dmc)
-        return dmc
-
-    dmc = w.loc[:]
-    if "SUNSET" not in dmc.columns:
-        raise RuntimeError("SUNSET column required")
-    if "SUNRISE" not in dmc.columns:
-        raise RuntimeError("SUNRISE column required")
-    dmc["RAIN_SO_FAR"] = dmc.groupby("DATE")["PREC"].transform(pd.Series.cumsum)
-    dmc["IS_DRYING"] = dmc.apply(
-        lambda row: row["HR"] >= 12 and row["HR"] <= round(row["SUNSET"]), axis=1
-    )
-    # if only drying in afternoon then just subtract from sunset to get # hours
-    dmc["HOURS_DRYING"] = dmc["SUNSET"].apply(lambda x: round(x) - 12 + 1)
-    # amount of total drying accomplished by this point
-    dmc["DRYFRAC"] = dmc.apply(
-        lambda row: (
-            (round(row["HR"] - 12 + 1) / row["HOURS_DRYING"])
-            if row["IS_DRYING"]
-            else (0 if row["HR"] < 12 else 1)
-        ),
-        axis=1,
-    )
-    lastdmc = dmc_old
-    dates = w["DATE"].unique()
-    result = []
-    for d in dates:
-        last_daily = lastdmc
-        for_date = dmc[dmc["DATE"] == d]
-        # HACK: fails if no noon for this day
-        noons = for_date.loc[dmc["HR"] == 12]
-        if 0 == len(noons):
-            raise RuntimeError("Excpected noon value for every day provided")
-        noon = noons.iloc[0]
-        tnoon = float(noon["TEMP"])
-        rhnoon = float(noon["RH"])
-        hrs = for_date["HR"].unique()
-        # drying all day long too
-        tnoon = max(-1.1, tnoon)
-        # full day of drying in old FWI/DMC
-        DELTA_dry = (
-            1.894 * (tnoon + 1.1) * (100.0 - rhnoon) * el[noon["MON"] - 1] * 0.0001
-        )
-        values = []
-        for r in for_date.itertuples():
-            lastdmc = hourly_dmc(
-                r.TEMP,
-                r.RH,
-                r.WS,
-                r.PREC,
-                r.MON,
-                last_daily,
-                r.DRYFRAC * DELTA_dry,
-                r.RAIN_SO_FAR,
-            )
-            values.append(lastdmc)
-        if len(values) != len(hrs):
-            raise RuntimeError("Expected one output value per input hour")
-        result.extend(values)
-    return result
-
-
-##
-# Calculate hourly Drought Code (DC)
-#
-# @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, SUNRISE, SUNSET, MON, TEMP, RH, PREC]
-# @param dc_old          Drought Code for previous hour
-# @return                Drought Codes for given data
-def _hdc(w, dc_old):
-    fl = [-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6]
-
-    def hourly_dc(t, rh, ws, rain, lastdc, mon, drying_so_far, rain_so_far):
-        if rain_so_far > 2.8:
-            rw = 0.83 * rain_so_far - 1.27
-            smi = 800 * exp(-lastdc / 400)
-            # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
-            delta_dc_rain = -400.0 * log(1.0 + 3.937 * rw / smi)
-            # (weight it by Rainhour/rain24 )
-            lastdc = lastdc + delta_dc_rain
-        dc = lastdc + drying_so_far
-        dc = max(0, dc)
-        return dc
-
-    dc = w.loc[:]
-    if "SUNSET" not in dc.columns:
-        raise RuntimeError("SUNSET column required")
-    if "SUNRISE" not in dc.columns:
-        raise RuntimeError("SUNRISE column required")
-    dc["RAIN_SO_FAR"] = dc.groupby("DATE")["PREC"].transform(pd.Series.cumsum)
-    dc["IS_DRYING"] = dc.apply(
-        lambda row: row["HR"] >= 12 and row["HR"] <= round(row["SUNSET"]), axis=1
-    )
-    # if only drying in afternoon then just subtract from sunset to get # hours
-    dc["HOURS_DRYING"] = dc["SUNSET"].apply(lambda x: round(x) - 12 + 1)
-    # amount of total drying accomplished by this point
-    dc["DRYFRAC"] = dc.apply(
-        lambda row: (
-            (round(row["HR"] - 12 + 1) / row["HOURS_DRYING"])
-            if row["IS_DRYING"]
-            else (0 if row["HR"] < 12 else 1)
-        ),
-        axis=1,
-    )
-    lastdc = dc_old
-    dates = w["DATE"].unique()
-    result = []
-    for d in dates:
-        last_daily = lastdc
-        for_date = dc[dc["DATE"] == d]
-        noon = for_date.loc[dc["HR"] == 12].iloc[0]
-        tnoon = float(noon["TEMP"])
-        rhnoon = float(noon["RH"])
-        # total dry for the DAY
-        DELTAdry24 = (0.36 * (tnoon + 2.8) + fl[noon["MON"] - 1]) / 2.0
-        # ;    /* the fix for winter negative DC change...shoulders*/
-        DELTAdry24 = max(0.0, DELTAdry24)
-        hrs = for_date["HR"].unique()
-        values = []
-        for r in for_date.itertuples():
-            lastdc = hourly_dc(
-                r.TEMP,
-                r.RH,
-                r.WS,
-                r.PREC,
-                last_daily,
-                r.MON,
-                r.DRYFRAC * DELTAdry24,
-                r.RAIN_SO_FAR,
-            )
-            values.append(lastdc)
-        if len(values) != len(hrs):
-            raise RuntimeError("Expected one output value per input hour")
-        result.extend(values)
-    return result
-
-
-##
 # Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
 #
 # @param temp            Temperature (Celcius)
 # @param rh              Relative Humidity (percent, 0-100)
-# @param wind            Wind Speed (km/h)
-# @param rain            Precipitation (mm)
+# @param ws              Wind Speed (km/h)
+# @param rain            Rainfall (mm)
 # @param lastmc          Previous grass fuel moisture (percent)
 # @param solrad          Solar radiation (kW/m^2)
-# @param time            Time since last observation (hours)
 # @return                Grass Fuel Moisture (percent)
-def hourly_gfmc(temp, rh, wind, rain, lastmc, solrad, time):
-    # MARK II of the model (2016) wth new solar rad model specific to grass
-    #
-    # Temp is temperature in C
-    # RH is realtive humidty in %
-    # wind is average wind speed in km/h
-    # rain is rainfall in mm
-    # solrad is kW/m2  (radiaiton reaching fuel)
-    # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-    # time - time between obs in HOURS
-    #
-    #
-    # DRF of 1/16.1 comes from reducting the standard response time curve
-    # at 26.7C, 20%RH, 2 km/h to 0.85hr.
-    #
-    #
-    #
-    # bmw
+def hourly_grass_fuel_moisture(temp, rh, ws, rain, solrad, lastmc):
+    rf = 0.27
     drf = 0.389633
+    # Time since last observation (hours)
+    time = 1.0
+    # use moisture directly instead of converting to/from ffmc
+    # expects any rain intercept to already be applied
     mo = lastmc
-    # fuel temperature/humidity
-    tf = temp + 17.9 * solrad * exp(-0.034 * wind)  # fuel temp from CEVW
+    if rain != 0.0:
+        #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
+        # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
+        # *100 to convert to %...  *1/.3 because of 0.3mm=100%
+        mo += rain / 0.3 * 100.0
+        if mo > 250:
+            mo = 250
+    # fuel temp from CEVW*/
+    tf = temp + 17.9 * solrad * exp(-0.034 * ws)
+    # fuel humidity
     rhf = (
         (
             rh
             * 6.107
-            * 10.0 ** (7.5 * temp / (temp + 237.0))
-            / (6.107 * 10.0 ** (7.5 * tf / (tf + 237.0)))
+            * pow(10.0, 7.5 * temp / (temp + 237.0))
+            / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0)))
         )
-        if tf > temp
+        if (tf > temp)
         else rh
     )
-    if rain != 0:
-        # /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/  /* old routine*/
-        # /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-        mo = (
-            mo + rain / 0.3 * 100.0
-        )  # /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
-        mo = min(250.0, mo)
-    ed = (
-        1.62 * rhf**0.532
-        + (13.7 * exp((rhf - 100) / 13.0))
-        + 0.27 * (26.7 - tf) * (1.0 - 1.0 / exp(0.115 * rhf))
-    )  # GRASS EMC
-    moed = mo - ed
-    ew = (
-        1.42 * rhf**0.512
-        + (12.0 * exp((rhf - 100) / 18.0))
-        + 0.27 * (26.7 - tf) * (1.0 - 1.0 / exp(0.115 * rhf))
-    )  # GRASS EMC
-    moew = mo - ew
-    if moed == 0 or (moew >= 0 and moed < 0):
-        xm = mo
-        if moed == 0:
-            e = ed
-        if moew >= 0:
-            e = ew
-    else:
-        if moed > 0:
-            a1 = rhf / 100
-            e = ed
-            moe = moed
-        else:
-            a1 = (100.0 - rhf) / 100.0
-            e = ew
-            moe = moew
-        xkd = 0.424 * (1 - a1**1.7) + (0.0694 * wind**0.5 * (1 - a1**8))
-        xkd = xkd * drf * exp(0.0365 * tf)
-        # //   printf("tf=%8.4f rhf=%6.2f e=%4.1f mo=%5.2f xkd=%6.4f moed=%5.1f moew=%5.1f\n",tf,rhf,e,mo,xkd,moed,moew);
-        xm = e + moe * exp(-1.0 * log(10.0) * xkd * time)
-    return xm
+    # 18.85749879,18.85749879,7.77659602,21.24361786,19.22479551,19.22479551
+    # duplicated in both formulas, so calculate once
+    e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)))
+    # GRASS EMC
+    ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1
+    ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1
+    m = ew if (mo < ed and mo < ew) else ed
+    if mo > ed or (mo < ed and mo < ew):
+        # these are the same formulas with a different value for a1
+        a1 = (rhf / 100.0) if (mo > ed) else ((100.0 - rhf) / 100.0)
+        k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
+        kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf)
+        m += (mo - m) * pow(10, -kd_or_kw * time)
+    return m
 
 
 ##
 # Calculate Grass Spread Index (GSI)
 #
-# @param wind            Wind Speed (km/h)
+# @param ws              Wind Speed (km/h)
 # @param mc              Grass moisture content (percent)
 # @param cur             Degree of curing (percent, 0-100)
 # @return                Grass Spread Index
-def grass_isi(wind, mc, cur):
-    fw = (
-        ((0.054 + 0.209 * wind) * 16.67)
-        if wind < 5
-        else ((1.1 + 0.715 * (wind - 5.0) * 0.844) * 16.67)
+def grass_spread_index(ws, mc, cur):
+    fw = 16.67 * (
+        (0.054 + 0.209 * ws) if (ws < 5) else (1.1 + 0.715 * (ws - 5.0) * 0.844)
     )
-    if mc < 12:
-        fm = exp(-0.108 * mc)
-    elif mc < 20 and wind < 10:
-        fm = 0.684 - 0.0342 * mc
-    elif mc < 23.9 and wind >= 10:
-        fm = 0.547 - 0.0228 * mc
-    else:
-        fm = 0
-    cf = (1.034 / (1 + 104 * exp(-0.1 * (cur - 20)))) if cur > 20 else 0.0
+    # NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10
+    # using 0.6838 instead would mean this is always less than ws >= 10
+    # mc < 23.9 because of check at start of function, so last expression is any ws >= 10
+    fm = (
+        exp(-0.108 * mc)
+        if mc < 12
+        else (
+            0.684 - 0.0342 * mc
+            if (mc < 20.0 and ws < 10.0)
+            else 0.547 - 0.0228 * mc
+            if (mc < 23.9 and ws >= 10.0)
+            else 0.0
+        )
+    )
+    cf = 1.034 / (1 + 104 * exp(-0.1 * (cur - 20))) if cur > 20 else 0.0
     return 1.11 * fw * fm * cf
 
 
@@ -466,38 +225,188 @@ def grass_isi(wind, mc, cur):
 # @param gsi               Grass Spread Index
 # @param load              Fuel Load (kg/m^2)
 # @return                  Grass Fire Weather Index
-def grass_fwi(gsi, load):
-    ros = gsi / 1.11  #  this just converts back to ROS in m/min
+def grass_fire_weather_index(gsi, load):
+    # this just converts back to ROS in m/min
+    ros = gsi / 1.11
     Fint = 300.0 * load * ros
-    gfwi = (log(Fint / 60.0) / 0.14) if Fint > 100 else (Fint / 25.0)
-    return gfwi
+    return (log(Fint / 60.0) / 0.14) if Fint > 100 else (Fint / 25.0)
 
 
-##
-# Calculate hourly Grass Fine Fuel Moisture Code (FFMC)
-#
-# @param w               Table of hourly weather data to use for calculations [TIMESTAMP, DATE, TEMP, RH, WS, PREC, SOLRAD]
-# @param lastmcgfmc       Grass Fuel Moisture for previous hour
-# @return                Grass Fine Fuel Moisture Codes for given data
-def _hgffmc(w, lastmcgfmc):
-    result = []
-    for r in w[["TEMP", "RH", "WS", "PREC", "SOLRAD"]].itertuples():
-        lastmcgfmc = hourly_gfmc(r.TEMP, r.RH, r.WS, r.PREC, lastmcgfmc, r.SOLRAD, 1.0)
-        result.append(lastmcgfmc)
-    return result
+def dmc_drying(temp, rh, ws, rain, mon):
+    if temp <= 1.1:
+        return 0.0
+    return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001
+
+
+def dc_drying(temp, rh, ws, rain, mon):
+    if temp <= 2.8:
+        return 0.0
+    return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0
+
+
+def dmc_wetting(rain_total, lastdmc):
+    # compare floats by using tolerance
+    if rain_total <= DMC_INTERCEPT:
+        return 0.0
+    b = (
+        100.0 / (0.5 + 0.3 * lastdmc)
+        if (lastdmc <= 33)
+        else (
+            14.0 - 1.3 * log(lastdmc)
+            if (lastdmc <= 65)
+            else (6.2 * log(lastdmc) - 17.2)
+        )
+    )
+    reff = 0.92 * rain_total - 1.27
+    # This is the change in MC (moisturecontent)  from FULL DAY's rain
+    return 1000.0 * reff / (48.77 + b * reff)
+
+
+def dc_wetting(rain_total, lastdc):
+    # compare floats by using tolerance
+    if rain_total <= DC_INTERCEPT:
+        return 0.0
+    rw = 0.83 * rain_total - 1.27
+    smi = 800 * exp(-lastdc / 400)
+    # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
+    return 400.0 * log(1.0 + 3.937 * rw / smi)
+
+
+def dmc_wetting_between(rain_total_previous, rain_total, lastdmc):
+    if rain_total_previous >= rain_total:
+        return 0.0
+    # wetting is calculated based on initial dmc when rain started and rain since
+    current = dmc_wetting(rain_total, lastdmc)
+    # recalculate instead of storing so we don't need to reset this too
+    # NOTE: rain_total_previous != (rain_total - cur["prec"]) due to floating point math
+    previous = dmc_wetting(rain_total_previous, lastdmc)
+    return current - previous
+
+
+def dc_wetting_between(rain_total_previous, rain_total, lastdc):
+    if rain_total_previous >= rain_total:
+        return 0.0
+    # wetting is calculated based on initial dc when rain started and rain since
+    current = dc_wetting(rain_total, lastdc)
+    # recalculate instead of storing so we don't need to reset this too
+    # NOTE: rain_total_previous != (rain_total - cur["prec"]) due to floating point math
+    previous = dc_wetting(rain_total_previous, lastdc)
+    return current - previous
+
+
+def drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset):
+    # define with all parameters so we can easily sub in something better later
+    sunrise_start = round(sunrise)
+    sunset_start = round(sunset)
+    sunlight_hours = sunset_start - sunrise_start
+    # apply one hour of drying if during sunlight hours
+    return (
+        (1.0 / sunlight_hours)
+        if (hour >= sunrise_start and hour < sunset_start)
+        else 0.0
+    )
+
+
+def duff_moisture_code(
+    last_dmc,
+    temp,
+    rh,
+    ws,
+    rain,
+    mon,
+    hour,
+    solrad,
+    sunrise,
+    sunset,
+    dmc_before_rain,
+    rain_total_prev,
+    rain_total,
+):
+    if 0 == rain_total:
+        dmc_before_rain = last_dmc
+    dmc_daily = dmc_drying(temp, rh, ws, rain, mon)
+    dmc_hourly = dmc_daily * drying_fraction(
+        temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset
+    )
+    dmc = last_dmc + dmc_hourly
+    # apply wetting since last period
+    dmc_wetting_hourly = dmc_wetting_between(
+        rain_total_prev, rain_total, dmc_before_rain
+    )
+    # at most apply same wetting as current value (don't go below 0)
+    if dmc_wetting_hourly > dmc:
+        dmc_wetting_hourly = dmc
+    # should be no way this is below 0 because we just made sure it wasn't > dmc
+    # HACK: return two values since C uses a pointer to assign a value
+    return (dmc - dmc_wetting_hourly, dmc_before_rain)
+
+
+def drought_code(
+    last_dc,
+    temp,
+    rh,
+    ws,
+    rain,
+    mon,
+    hour,
+    solrad,
+    sunrise,
+    sunset,
+    dc_before_rain,
+    rain_total_prev,
+    rain_total,
+):
+    if 0 == rain_total:
+        dc_before_rain = last_dc
+    dc_daily = dc_drying(temp, rh, ws, rain, mon)
+    dc_hourly = dc_daily * drying_fraction(
+        temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset
+    )
+    dc = last_dc + dc_hourly
+    # apply wetting since last period
+    dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    # at most apply same wetting as current value (don't go below 0)
+    if dc_wetting_hourly > dc:
+        dc_wetting_hourly = dc
+    # should be no way this is below 0 because we just made sure it wasn't > dc
+    # HACK: return two values since C uses a pointer to assign a value
+    return (dc - dc_wetting_hourly, dc_before_rain)
+
+
+# Calculate number of drying "units" this hour contributes
+def drying_units(temp, rh, ws, rain, solrad):
+    # for now, just add 1 drying "unit" per hour
+    return 1.0
+
+
+def rain_since_intercept_reset(
+    temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset, canopy
+):
+    # for now, want 5 "units" of drying (which is 1 per hour to start)
+    TARGET_DRYING_SINCE_INTERCEPT = 5.0
+    if 0 < rain:
+        # no drying if still raining
+        canopy["drying_since_intercept"] = 0.0
+    else:
+        canopy["drying_since_intercept"] += drying_units(temp, rh, ws, rain, solrad)
+        if canopy["drying_since_intercept"] >= TARGET_DRYING_SINCE_INTERCEPT:
+            # reset rain if intercept reset criteria met
+            canopy["rain_total"] = 0.0
+            canopy["drying_since_intercept"] = 0.0
+    canopy["rain_total_prev"] = canopy["rain_total"]
+    canopy["rain_total"] += rain
+    return canopy
 
 
 ##
 # Calculate hourly FWI indices from hourly weather stream for a single station.
 #
 # @param     w               hourly values weather stream
-# @param     timezone        integer offset from GMT to use for sun calculations
 # @param     ffmc_old        previous value for Fine Fuel Moisture Code
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
-# @param     percent_cured   Grass curing (percent, 0-100)
 # @return                    hourly values FWI and weather stream
-def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False):
+def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
     if 1 != len(w["ID"].unique()):
@@ -507,64 +416,97 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False
     if 1 != len(w["LONG"].unique()):
         raise RuntimeError("Expected a single LONG value for input weather")
     r = w.loc[:]
-    # dates = w['TIMESTAMP'].apply(lambda d: d.date()).unique()
-    row = r.iloc[0]
-    latitude = row["LAT"]
-    longitude = row["LONG"]
-    # check that sun() works on a single line
-    solrad, sunrise, sunset = util.sun(
-        row["LAT"], row["LONG"], row["MON"], row["DAY"], row["HR"], timezone
-    )
-    # print(solrad, sunrise, sunset)
-    r[["SOLRAD", "SUNRISE", "SUNSET"]] = r.apply(
-        lambda row: util.sun(
-            row["LAT"], row["LONG"], row["MON"], row["DAY"], row["HR"], timezone
-        ),
-        axis=1,
-        result_type="expand",
-    )
-    # HACK: formulas don't work if noon is missing, so filter
-    have_dates = r["TIMESTAMP"].dt.date.drop_duplicates()
-    have_noon = r[r["HR"] == 12]["TIMESTAMP"].dt.date.drop_duplicates()
-    missing_noon = list(set(have_dates).difference(set(have_noon)))
-    if missing_noon:
-        n0 = len(r)
-        r = r.loc[~(r["TIMESTAMP"].dt.date.isin(missing_noon))]
-        n1 = len(r)
-        if not silent:
-            logging.warning(
-                f"Can't calculate indices for dates missing noon, so dropping {n0 - n1} rows"
-                f"and not calculating for {[x.strftime('%Y-%m-%d') for x in missing_noon]}"
+    r.columns = map(str.lower, r.columns)
+    mcffmc = fine_fuel_moisture_from_code(ffmc_old)
+    mcgfmc = mcffmc
+    dmc = dmc_old
+    dmc_before_rain = dmc_old
+    dc = dc_old
+    dc_before_rain = dc_old
+    # FIX: just use loop for now so it matches C code
+    canopy = {
+        "rain_total": 0.0,
+        "rain_total_prev": 0.0,
+        "drying_since_intercept": 0.0,
+    }
+    results = []
+    for i in range(len(r)):
+        cur = r.iloc[i].to_dict()
+        canopy = rain_since_intercept_reset(
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            cur["prec"],
+            cur["mon"],
+            cur["hr"],
+            cur["solrad"],
+            cur["sunrise"],
+            cur["sunset"],
+            canopy,
+        )
+        # use lesser of remaining intercept and current hour's rain
+        rain_ffmc = (
+            0.0
+            if (canopy["rain_total"] <= FFMC_INTERCEPT)
+            else (
+                cur["prec"]
+                if ((canopy["rain_total"] - FFMC_INTERCEPT) > cur["prec"])
+                else canopy["rain_total"] - FFMC_INTERCEPT
             )
-    r["FFMC"] = _hffmc(r, ffmc_old)
-    r["MCFFMC"] = 0
-    r["DMC"] = _hdmc(r, dmc_old)
-    r["DC"] = _hdc(r, dc_old)
-    r["ISI"] = r.apply(lambda row: initial_spread_index(row["WS"], row["FFMC"]), axis=1)
-    r["BUI"] = r.apply(lambda row: buildup_index(row["DMC"], row["DC"]), axis=1)
-    r["FWI"] = r.apply(lambda row: fire_weather_index(row["ISI"], row["BUI"]), axis=1)
-    r["DSR"] = r.apply(lambda row: daily_severity_rating(row["FWI"]), axis=1)
-    r = pd.merge(
-        r, pd.DataFrame({"MIN_RH": r.groupby("DATE")["RH"].min()}), on=["DATE"]
-    )
-    r["MIN_RH"] = r.apply(lambda row: min(100, max(0, row["MIN_RH"])), axis=1)
-    r["SOLPROP"] = r.apply(
-        lambda row: (1.27 - 0.0111 * row["MIN_RH"]) if row["MIN_RH"] > 30 else 1, axis=1
-    )
-    r["SOLPROP"] = r.apply(lambda row: max(0, MAX_SOL_PROP * row["SOLPROP"]), axis=1)
-    r["SOLRAD"] = r.apply(lambda row: row["SOLRAD"] * row["SOLPROP"], axis=1)
-    lastmcgfmc = 101.0 - ffmc_old  # approximation for a start up
-    r["mcgfmc"] = _hgffmc(r, lastmcgfmc)
-    r["GFMC"] = r.apply(
-        lambda row: 59.5 * (250 - row["mcgfmc"]) / (147.2772277 + row["mcgfmc"]), axis=1
-    )
-    r["GSI"] = r.apply(
-        lambda row: grass_isi(row["WS"], row["mcgfmc"], row["PERCENT_CURED"]), axis=1
-    )
-    r["GFWI"] = r.apply(
-        lambda row: grass_fwi(row["GSI"], row["GRASS_FUEL_LOAD"]), axis=1
-    )
-    # print(r)
+        )
+        mcffmc = hourly_fine_fuel_moisture(
+            cur["temp"], cur["rh"], cur["ws"], rain_ffmc, mcffmc
+        )
+        cur["mcffmc"] = mcffmc
+        #  convert to code for output, but keep using moisture % for precision
+        cur["ffmc"] = fine_fuel_moisture_code(mcffmc)
+        # not ideal, but at least encapsulates the code for each index
+        dmc, dmc_before_rain = duff_moisture_code(
+            dmc,
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            cur["prec"],
+            cur["mon"],
+            cur["hr"],
+            cur["solrad"],
+            cur["sunrise"],
+            cur["sunset"],
+            dmc_before_rain,
+            canopy["rain_total_prev"],
+            canopy["rain_total"],
+        )
+        cur["dmc"] = dmc
+        dc, dc_before_rain = drought_code(
+            dc,
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            cur["prec"],
+            cur["mon"],
+            cur["hr"],
+            cur["solrad"],
+            cur["sunrise"],
+            cur["sunset"],
+            dc_before_rain,
+            canopy["rain_total_prev"],
+            canopy["rain_total"],
+        )
+        cur["dc"] = dc
+        cur["isi"] = initial_spread_index(cur["ws"], cur["ffmc"])
+        cur["bui"] = buildup_index(dmc, dc)
+        cur["fwi"] = fire_weather_index(cur["isi"], cur["bui"])
+        cur["dsr"] = daily_severity_rating(cur["fwi"])
+        mcgfmc = hourly_grass_fuel_moisture(
+            cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc
+        )
+        cur["mcgfmc"] = mcgfmc
+        cur["gfmc"] = fine_fuel_moisture_code(mcgfmc)
+        cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"])
+        cur["gfwi"] = grass_fire_weather_index(cur["gsi"], cur["grass_fuel_load"])
+        results.append(cur)
+    r = pd.DataFrame(results)
+    del r["index"]
     return r
 
 
@@ -579,14 +521,14 @@ def _stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old, percent_cured, silent=False
 # @param     percent_cured   Grass curing (percent, 0-100)
 # @return                    hourly values FWI and weather stream
 def hFWI(
-    weatherstream,
+    df_wx,
     timezone,
     ffmc_old=FFMC_DEFAULT,
     dmc_old=DMC_DEFAULT,
     dc_old=DC_DEFAULT,
     silent=False,
 ):
-    wx = weatherstream.loc[:]
+    wx = df_wx.loc[:]
     old_names = wx.columns
     wx.columns = map(str.upper, wx.columns)
     new_names = wx.columns
@@ -617,7 +559,7 @@ def hFWI(
     if not had_longitude:
         logger.warning(f"Using default longitude of {DEFAULT_LONGITUDE}")
         wx["LONG"] = DEFAULT_LONGITUDE
-    COLUMN_SYNONYMS = {"WIND": "WS", "RAIN": "PREC", "YEAR": "YR", "HOUR": "HR"}
+    COLUMN_SYNONYMS = {"WIND": "WS", "YEAR": "YR", "HOUR": "HR"}
     wx = wx.rename(columns=COLUMN_SYNONYMS)
     if not ((0 <= wx["RH"]).all() and (100 >= wx["RH"]).all()):
         raise RuntimeError("RH must be 0-100")
@@ -641,87 +583,35 @@ def hFWI(
             ),
             axis=1,
         )
+    # print(solrad, sunrise, sunset)
+    wx[["SOLRAD", "SUNRISE", "SUNSET"]] = wx.apply(
+        lambda row: util.sun(
+            row["LAT"], row["LONG"], row["MON"], row["DAY"], row["HR"], timezone
+        ),
+        axis=1,
+        result_type="expand",
+    )
+    if "PERCENT_CURED" not in wx.columns:
+        wx["JULIAN"] = wx.apply(lambda row: util.julian(row["MON"], row["DAY"]), axis=1)
+        wx["PERCENT_CURED"] = wx["JULIAN"].apply(util.seasonal_curing)
+    if "GRASS_FUEL_LOAD" not in wx.columns:
+        wx["GRASS_FUEL_LOAD"] = DEFAULT_GRASS_FUEL_LOAD
     #########################################
     # PROCESS HERE
     #########################################
     results = None
     for idx, by_year in wx.groupby(["ID", "YR"]):
         logger.debug(f"Running for {idx}")
+        w = by_year.reset_index()
         r = _stnHFWI(
-            by_year.reset_index(),
-            timezone,
+            w,
             ffmc_old,
             dmc_old,
             dc_old,
             silent,
         )
         results = pd.concat([results, r])
-    #########################################
-    # REVERT TO ORIGINAL COLUMN NAMES
-    #########################################
-    if not had_stn:
-        del results["ID"]
-    if not had_minute:
-        del results["MINUTE"]
-    if not had_date:
-        del results["DATE"]
-    # if not had_latitude:
-    #     del results["LAT"]
-    # if not had_longitude:
-    #     del results["LONG"]
-    if not had_timestamp:
-        del results["TIMESTAMP"]
-    results = results.rename(columns={v: k for k, v in COLUMN_SYNONYMS.items()})
-    # HACK: just do this for now to get right column names
-    results = results.rename(
-        columns={
-            "YEAR": "YR",
-            "HOUR": "HR",
-            "WIND": "WS",
-            "RAIN": "PREC",
-        }
-    )
-    return results
-
-
-if "__main__" == __name__:
-    if len(sys.argv) != 7:
-        logger.fatal(
-            "\n".join(
-                [
-                    f"Command line:   {sys.argv[0]}  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n",
-                    "<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )",
-                    "INPUT FILE format must be HOURLY weather data, comma separated and take the form",
-                    "All times should be local standard time",
-                    "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humiditiy(%%),Wind_speed(km/h),Rainfall(mm)\n",
-                ]
-            )
-        )
-        sys.exit(1)
-    outfile = sys.argv[6]
-    infile = sys.argv[5]
-    if not os.path.exists(infile):
-        logger.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
-        sys.exit(1)
-    TZadjust = int(sys.argv[1])
-    if TZadjust < -9 or TZadjust > -2:
-        logger.fatal(
-            "/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2"
-        )
-        sys.exit(1)
-    lastffmc = float(sys.argv[2])
-    if lastffmc > 101 or lastffmc < 0:
-        logger.fatal(" /n/n *****   FFMC must be between 0 and 101")
-        sys.exit(1)
-    lastdmc = float(sys.argv[3])
-    if lastdmc < 0:
-        logger.fatal(" /n/n *****  starting DMC must be >=0")
-        sys.exit(1)
-    lastdc = float(sys.argv[4])
-    if lastdc < 0:
-        logger.fatal(" /n/n *****   starting DC must be >=0\n")
-        sys.exit(1)
-    logger.debug(f"TZ={TZadjust}    start ffmc={lastffmc}  dmc={lastdmc}\n")
+    # reorganize columns
     colnames_out = [
         "lat",
         "long",
@@ -740,6 +630,7 @@ if "__main__" == __name__:
         "isi",
         "bui",
         "fwi",
+        "dsr",
         "gfmc",
         "gsi",
         "gfwi",
@@ -748,21 +639,56 @@ if "__main__" == __name__:
         "percent_cured",
         "grass_fuel_load",
     ]
+    if "id" in results.columns:
+        colnames_out = ["id"] + colnames_out
+    results = results[colnames_out]
+    return results
+
+
+if "__main__" == __name__:
+    args = sys.argv[1:]
+    if len(args) != 6:
+        logger.fatal(
+            "\n".join(
+                [
+                    f"Command line:   {sys.argv[0]}  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n",
+                    "<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )",
+                    "INPUT FILE format must be HOURLY weather data, comma separated and take the form",
+                    "All times should be local standard time",
+                    "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humiditiy(%%),Wind_speed(km/h),Rainfall(mm)\n",
+                ]
+            )
+        )
+        sys.exit(1)
+    outfile = args[5]
+    infile = args[4]
+    if not os.path.exists(infile):
+        logger.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
+        sys.exit(1)
+    timezone = int(args[0])
+    if timezone < -9 or timezone > -2:
+        logger.fatal(
+            "/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2"
+        )
+        sys.exit(1)
+    ffmc_old = float(args[1])
+    if ffmc_old > 101 or ffmc_old < 0:
+        logger.fatal(" /n/n *****   FFMC must be between 0 and 101")
+        sys.exit(1)
+    dmc_old = float(args[2])
+    if dmc_old < 0:
+        logger.fatal(" /n/n *****  starting DMC must be >=0")
+        sys.exit(1)
+    dc_old = float(args[3])
+    if dc_old < 0:
+        logger.fatal(" /n/n *****   starting DC must be >=0\n")
+        sys.exit(1)
+    logger.debug(f"TZ={timezone}    start ffmc={ffmc_old}  dmc={dmc_old}\n")
     # colnames_in = ["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]
     # df = pd.read_csv(infile, header=None, names=colnames_in)
-    df = pd.read_csv(infile)
-    logger.debug(df)
+    df_wx = pd.read_csv(infile)
+    logger.debug(df_wx)
     # FIX: add check for sequential hours in input
     # FIX: check for all columns being present
-    # weatherstream = df
-    # timezone = TZadjust
-    # ffmc_old = lastffmc
-    # dmc_old = lastdmc
-    # dc_old = lastdc
-    # percent_cured = PERCENT_CURED
-    df["PERCENT_CURED"] = PERCENT_CURED
-    df["GRASS_FUEL_LOAD"] = GRASS_FUEL_LOAD
-    df_fwi = hFWI(df, TZadjust, lastffmc, lastdmc, lastdc)
-    df_fwi.columns = map(str.lower, df_fwi.columns)
-    df_fwi = df_fwi[colnames_out]
+    df_fwi = hFWI(df_wx, timezone, ffmc_old, dmc_old, dc_old)
     save_csv(df_fwi, outfile)

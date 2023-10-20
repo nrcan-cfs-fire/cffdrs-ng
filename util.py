@@ -144,6 +144,54 @@ def sun(lat, lon, mon, day, hour, timezone):
     return solrad, sunrise, sunset
 
 
+def seasonal_curing(julian_date):
+    PERCENT_CURED = [
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        95.0,
+        93.0,
+        92.0,
+        90.5,
+        88.4,
+        84.4,
+        78.1,
+        68.7,
+        50.3,
+        32.9,
+        23.0,
+        22.0,
+        21.0,
+        20.0,
+        25.7,
+        35.0,
+        43.0,
+        49.8,
+        60.0,
+        68.0,
+        72.0,
+        75.0,
+        78.9,
+        86.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+        96.0,
+    ]
+    jd_class = julian_date // 10
+    first = PERCENT_CURED[jd_class]
+    last = PERCENT_CURED[jd_class + 1]
+    period_frac = (julian_date % 10) / 10.0
+    return first + (last - first) * period_frac
+
+
 def save_csv(df, file):
     COLS_LOC = ["lat", "long"]
     COLS_DATE = ["yr", "mon", "day", "hr"]
@@ -190,6 +238,6 @@ def save_csv(df, file):
     apply_format(COLS_INDICES, "{:.1f}", 1)
     apply_format(COLS_EXTRA, "{:.4f}", 4)
     apply_format(COLS_GFL, "{:.2f}", 2)
-    apply_format(COLS_PC, "{:.1f}")
+    apply_format(COLS_PC, "{:.1f}", 1)
     result = result[[col for col in result.columns if col in cols_used]]
     result.to_csv(file, index=False)

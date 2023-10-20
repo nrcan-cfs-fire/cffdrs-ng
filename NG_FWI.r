@@ -446,12 +446,11 @@ rain_since_intercept_reset <- function(temp,
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
 #'
 #' @param     w               hourly values weather stream
-#' @param     timezone        integer offset from GMT to use for sun calculations
 #' @param     ffmc_old        previous value for Fine Fuel Moisture Code
 #' @param     dmc_old         previous value for Duff Moisture Code
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
-.stnHFWI <- function(w, timezone, ffmc_old, dmc_old, dc_old) {
+.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old) {
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -676,7 +675,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
       setnames(sunlight, c("DATE"), c("TIMESTAMP"))
       sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
       w <- merge(by_year, sunlight, by = c("TIMESTAMP", "LAT", "LONG"))
-      r <- .stnHFWI(w, timezone, ffmc_old, dmc_old, dc_old)
+      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
       results <- rbind(results, r)
     }
   }
