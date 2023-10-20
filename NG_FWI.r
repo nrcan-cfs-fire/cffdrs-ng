@@ -632,6 +632,13 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   if (wasHour) {
     setnames(wx, c("HOUR"), c("HR"))
   }
+  if (!("PERCENT_CURED" %in% names(wx))) {
+    wx$JULIAN <- julian(wx$MON, wx$DAY)
+    wx$PERCENT_CURED <- seasonal_curing(wx$JULIAN)
+  }
+  if (!("GRASS_FUEL_LOAD" %in% names(wx))) {
+    wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
+  }
   stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
   stopifnot(all(wx$WS >= 0))
   stopifnot(all(wx$PREC >= 0))
@@ -723,9 +730,6 @@ if ("--args" %in% commandArgs()) {
     file_in <- args[5]
     file_out <- args[6]
     df_wx <- as.data.table(read.csv(file_in))
-    df_wx$JULIAN <- julian(df_wx$mon, df_wx$day)
-    df_wx$PERCENT_CURED <- seasonal_curing(df_wx$JULIAN)
-    df_wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
     df_fwi <- hFWI(df_wx,
       timezone = timezone,
       ffmc_old = ffmc_old,
