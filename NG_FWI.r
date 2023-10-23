@@ -281,7 +281,7 @@ grass_fire_weather_index <- Vectorize(function(gsi, load) {
 
 dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   if (temp <= 1.1) {
-    return(0.0)
+    temp <- -1.1
   }
   i <- ifelse(lat <= 30 & lat > 10,
     2,
@@ -296,12 +296,13 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
       )
     )
   )
-  return(1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[[i]][mon] * 0.0001)
+  pe <- 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[[i]][mon] * 0.0001
+  return(ifelse(pe < 0.0, 0.0, pe))
 }
 
 dc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   if (temp <= 2.8) {
-    return(0.0)
+    temp <- -2.8
   }
   i <- ifelse(lat <= -20,
     2,
@@ -310,12 +311,13 @@ dc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
       1
     )
   )
-  return((0.36 * (temp + 2.8) + FL_DC[[i]][mon]) / 2.0)
+  pe <- (0.36 * (temp + 2.8) + FL_DC[[i]][mon]) / 2.0
+  return(ifelse(pe < 0.0, 0.0, pe))
 }
 
 dmc_wetting <- function(rain_total, lastdmc) {
-  # compare floats by using tolerance
   if (rain_total <= DMC_INTERCEPT) {
+    # no wetting if below intercept threshold
     return(0.0)
   }
   b <- ifelse(lastdmc <= 33,
@@ -325,23 +327,32 @@ dmc_wetting <- function(rain_total, lastdmc) {
       6.2 * log(lastdmc) - 17.2
     )
   )
-  reff <- 0.92 * rain_total - 1.27
+  rw <- 0.92 * rain_total - 1.27
   wmi <- 20 + 280 / exp(0.023 * lastdmc)
-  wmr <- wmi + 1000 * reff / (48.77 + b * reff)
+  wmr <- wmi + 1000 * rw / (48.77 + b * rw)
   dmc <- 43.43 * (5.6348 - log(wmr - 20))
+  if (dmc < 0.0) {
+    dmc <- 0.0
+  }
   # total amount of wetting since lastdmc
-  return(lastdmc - dmc)
+  w <- lastdmc - dmc
+  return(w)
 }
 
 dc_wetting <- function(rain_total, lastdc) {
-  # compare floats by using tolerance
   if (rain_total <= DC_INTERCEPT) {
+    # no wetting if below intercept threshold
     return(0.0)
   }
   rw <- 0.83 * rain_total - 1.27
   smi <- 800 * exp(-lastdc / 400)
-  # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
-  return(400.0 * log(1.0 + 3.937 * rw / smi))
+  # total amount of wetting since lastdc
+  w <- 400.0 * log(1.0 + 3.937 * rw / smi)
+  # don't wet more than lastdc regardless of drying since then
+  if (w > lastdc) {
+    w <- lastdc
+  }
+  return(w)
 }
 
 dmc_wetting_between <- function(rain_total_previous, rain_total, lastdmc) {
@@ -409,8 +420,9 @@ duff_moisture_code <- function(
     dmc_wetting_hourly <- dmc
   }
   # should be no way this is below 0 because we just made sure it wasn't > dmc
+  dmc <- dmc - dmc_wetting_hourly
   # HACK: return two values since C uses a pointer to assign a value
-  return(list(dmc = dmc - dmc_wetting_hourly, dmc_before_rain = dmc_before_rain))
+  return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
 }
 
 drought_code <- function(
@@ -442,8 +454,9 @@ drought_code <- function(
     dc_wetting_hourly <- dc
   }
   # should be no way this is below 0 because we just made sure it wasn't > dc
+  dc <- dc - dc_wetting_hourly
   # HACK: return two values since C uses a pointer to assign a value
-  return(list(dc = dc - dc_wetting_hourly, dc_before_rain = dc_before_rain))
+  return(list(dc = dc, dc_before_rain = dc_before_rain))
 }
 
 # Calculate number of drying "units" this hour contributes
