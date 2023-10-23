@@ -296,8 +296,11 @@ dmc_wetting <- function(rain_total, lastdmc) {
     )
   )
   reff <- 0.92 * rain_total - 1.27
-  # This is the change in MC (moisturecontent)  from FULL DAY's rain
-  return(1000.0 * reff / (48.77 + b * reff))
+  wmi <- 20 + 280 / exp(0.023 * lastdmc)
+  wmr <- wmi + 1000 * reff / (48.77 + b * reff)
+  dmc <- 43.43 * (5.6348 - log(wmr - 20))
+  # total amount of wetting since lastdmc
+  return(lastdmc - dmc)
 }
 
 dc_wetting <- function(rain_total, lastdc) {
