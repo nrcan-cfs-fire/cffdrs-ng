@@ -8,13 +8,14 @@ source("util.r")
 # Written as a function to enable upgrading later if needs be
 temp_min_max <- function(temp_noon, rh_noon) {
   temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
-  if ((temp_noon < 3 && rh_noon == 100) || temp_range < 2) {
-    temp_max <- temp_noon + (temp_range / 2.0)
-    temp_min <- temp_noon - (temp_range / 2.0)
-  } else {
-    temp_max <- temp_noon + 2
-    temp_min <- temp_max - temp_range
-  }
+  temp_max <- ifelse(((temp_noon < 3) & (rh_noon == 100)) | (temp_range < 2),
+    temp_noon + (temp_range / 2.0),
+    temp_noon + 2
+  )
+  temp_min <- ifelse(((temp_noon < 3) & (rh_noon == 100)) | (temp_range < 2),
+    temp_noon - (temp_range / 2.0),
+    temp_max - temp_range
+  )
   return(list(temp_min, temp_max))
 }
 #' Convert daily noon values stream to daily min/max values stream.
