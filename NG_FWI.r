@@ -16,8 +16,18 @@ DC_DEFAULT <- 15
 DEFAULT_LATITUDE <- 55.0
 DEFAULT_LONGITUDE <- -120.0
 
-EL_DMC <- c(6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6)
-FL_DC <- c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6)
+EL_DMC <- list(
+  c(6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0),
+  c(7.9, 8.4, 8.9, 9.5, 9.9, 10.2, 10.1, 9.7, 9.1, 8.6, 8.1, 7.8),
+  c(10.1, 9.6, 9.1, 8.5, 8.1, 7.8, 7.9, 8.3, 8.9, 9.4, 9.9, 10.2),
+  c(11.5, 10.5, 9.2, 7.9, 6.8, 6.2, 6.5, 7.4, 8.7, 10, 11.2, 11.8),
+  c(9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0)
+)
+FL_DC <- list(
+  c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6),
+  c(6.4, 5, 2.4, 0.4, -1.6, -1.6, -1.6, -1.6, -1.6, 0.9, 3.8, 5.8),
+  c(1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4)
+)
 MPCT_TO_MC <- 147.2772277
 FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
@@ -269,18 +279,38 @@ grass_fire_weather_index <- Vectorize(function(gsi, load) {
 })
 
 
-dmc_drying <- function(temp, rh, ws, rain, mon) {
+dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   if (temp <= 1.1) {
     return(0.0)
   }
-  return(1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon] * 0.0001)
+  i <- ifelse(lat <= 30 & lat > 10,
+    2,
+    ifelse(lat <= -10 & lat > -30,
+      3,
+      ifelse(lat <= -30 & lat >= -90,
+        4,
+        ifelse(lat <= 10 & lat > -10,
+          5,
+          1
+        )
+      )
+    )
+  )
+  return(1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[[i]][mon] * 0.0001)
 }
 
-dc_drying <- function(temp, rh, ws, rain, mon) {
+dc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   if (temp <= 2.8) {
     return(0.0)
   }
-  return((0.36 * (temp + 2.8) + FL_DC[mon]) / 2.0)
+  i <- ifelse(lat <= -20,
+    2,
+    ifelse(abs(lat) <= 20,
+      3,
+      1
+    )
+  )
+  return((0.36 * (temp + 2.8) + FL_DC[[i]][mon]) / 2.0)
 }
 
 dmc_wetting <- function(rain_total, lastdmc) {
@@ -350,23 +380,26 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
   ))
 }
 
-duff_moisture_code <- function(last_dmc,
-                               temp,
-                               rh,
-                               ws,
-                               rain,
-                               mon,
-                               hour,
-                               solrad,
-                               sunrise,
-                               sunset,
-                               dmc_before_rain,
-                               rain_total_prev,
-                               rain_total) {
+duff_moisture_code <- function(
+    last_dmc,
+    lat,
+    long,
+    temp,
+    rh,
+    ws,
+    rain,
+    mon,
+    hour,
+    solrad,
+    sunrise,
+    sunset,
+    dmc_before_rain,
+    rain_total_prev,
+    rain_total) {
   if (0 == rain_total) {
     dmc_before_rain <- last_dmc
   }
-  dmc_daily <- dmc_drying(temp, rh, ws, rain, mon)
+  dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
   dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
   dmc <- last_dmc + dmc_hourly
   # apply wetting since last period
@@ -380,23 +413,26 @@ duff_moisture_code <- function(last_dmc,
   return(list(dmc = dmc - dmc_wetting_hourly, dmc_before_rain = dmc_before_rain))
 }
 
-drought_code <- function(last_dc,
-                         temp,
-                         rh,
-                         ws,
-                         rain,
-                         mon,
-                         hour,
-                         solrad,
-                         sunrise,
-                         sunset,
-                         dc_before_rain,
-                         rain_total_prev,
-                         rain_total) {
+drought_code <- function(
+    last_dc,
+    lat,
+    long,
+    temp,
+    rh,
+    ws,
+    rain,
+    mon,
+    hour,
+    solrad,
+    sunrise,
+    sunset,
+    dc_before_rain,
+    rain_total_prev,
+    rain_total) {
   if (0 == rain_total) {
     dc_before_rain <- last_dc
   }
-  dc_daily <- dc_drying(temp, rh, ws, rain, mon)
+  dc_daily <- dc_drying(lat, long, temp, rh, ws, rain, mon)
   dc_hourly <- dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
   dc <- last_dc + dc_hourly
   # apply wetting since last period
@@ -512,6 +548,8 @@ rain_since_intercept_reset <- function(temp,
     # not ideal, but at least encapsulates the code for each index
     dmc_ <- duff_moisture_code(
       dmc_$dmc,
+      cur$lat,
+      cur$long,
       cur$temp,
       cur$rh,
       cur$ws,
@@ -528,6 +566,8 @@ rain_since_intercept_reset <- function(temp,
     cur$dmc <- dmc_$dmc
     dc_ <- drought_code(
       dc_$dc,
+      cur$lat,
+      cur$long,
       cur$temp,
       cur$rh,
       cur$ws,
