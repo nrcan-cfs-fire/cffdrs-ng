@@ -16,13 +16,6 @@ DC_DEFAULT <- 15
 DEFAULT_LATITUDE <- 55.0
 DEFAULT_LONGITUDE <- -120.0
 
-EL_DMC <- list(
-  c(6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0),
-  c(7.9, 8.4, 8.9, 9.5, 9.9, 10.2, 10.1, 9.7, 9.1, 8.6, 8.1, 7.8),
-  c(10.1, 9.6, 9.1, 8.5, 8.1, 7.8, 7.9, 8.3, 8.9, 9.4, 9.9, 10.2),
-  c(11.5, 10.5, 9.2, 7.9, 6.8, 6.2, 6.5, 7.4, 8.7, 10, 11.2, 11.8),
-  c(9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0)
-)
 FL_DC <- list(
   c(-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5, 2.4, 0.4, -1.6, -1.6),
   c(6.4, 5, 2.4, 0.4, -1.6, -1.6, -1.6, -1.6, -1.6, 0.9, 3.8, 5.8),
@@ -283,20 +276,7 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   if (temp <= 1.1) {
     temp <- -1.1
   }
-  i <- ifelse(lat <= 30 & lat > 10,
-    2,
-    ifelse(lat <= -10 & lat > -30,
-      3,
-      ifelse(lat <= -30 & lat >= -90,
-        4,
-        ifelse(lat <= 10 & lat > -10,
-          5,
-          1
-        )
-      )
-    )
-  )
-  pe <- 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[[i]][mon] * 0.0001
+  pe <- 1.894 * (temp + 1.1) * (100.0 - rh) * 0.0001
   return(ifelse(pe < 0.0, 0.0, pe))
 }
 
@@ -418,8 +398,16 @@ duff_moisture_code <- function(
   }
   # should be no way this is below 0 because we just made sure it wasn't > dmc
   dmc <- last_dmc - dmc_wetting_hourly
-  dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
-  dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
+  # apply drying after wetting
+  sunrise_start <- round(sunrise)
+  sunset_start <- round(sunset)
+  sunlight_hours <- sunset_start - sunrise_start
+  is_daylight <- hour >= sunrise_start && hour < sunset_start
+  dmc_hourly <- ifelse(
+    is_daylight,
+    dmc_drying(lat, long, temp, rh, ws, rain, mon),
+    0.0
+  )
   dmc <- dmc + dmc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
