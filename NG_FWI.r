@@ -516,7 +516,7 @@ rain_since_intercept_reset <- function(temp,
   if (length(na.omit(unique(w$LONG))) != 1) {
     stop("Expected a single LONG value for input weather")
   }
-  r <- copy(w)
+  r <- as.data.table(copy(w))
   names(r) <- tolower(names(r))
   mcffmc <- fine_fuel_moisture_from_code(ffmc_old)
   mcgfmc <- mcffmc
@@ -530,10 +530,8 @@ rain_since_intercept_reset <- function(temp,
   )
   results <- NULL
   N <- nrow(r)
-  # N <- 243
   for (i in 1:N)
   {
-    # i <- i + 1
     cur <- r[i]
     canopy <- rain_since_intercept_reset(
       cur$temp,
@@ -620,7 +618,7 @@ rain_since_intercept_reset <- function(temp,
 #' @return                    hourly values FWI and weather stream
 #' @export hFWI
 hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
-  wx <- copy(df_wx)
+  wx <- as.data.table(copy(df_wx))
   old_names <- colnames(wx)
   # add a bunch of dummy columns if they don't exist
   colnames(wx) <- toupper(colnames(wx))
