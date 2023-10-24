@@ -16,6 +16,11 @@ DC_DEFAULT <- 15
 DEFAULT_LATITUDE <- 55.0
 DEFAULT_LONGITUDE <- -120.0
 
+# # just apply "daily" indices to noon directly
+# HOUR_TO_START_FROM <- 12
+# start with daily indices at peak burn
+HOUR_TO_START_FROM <- 16
+
 EL_DMC <- list(
   c(6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0),
   c(7.9, 8.4, 8.9, 9.5, 9.9, 10.2, 10.1, 9.7, 9.1, 8.6, 8.1, 7.8),
@@ -520,6 +525,23 @@ rain_since_intercept_reset <- function(temp,
   names(r) <- tolower(names(r))
   mcffmc <- fine_fuel_moisture_from_code(ffmc_old)
   mcgfmc <- mcffmc
+  # HACK: always start from daily value at noon
+  while (12 != r[1]$hr) {
+    r <- r[2:nrow(r)]
+  }
+  cur <- r[1]
+  dmc_old <- daily_duff_moisture_code(dmc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
+  dc_old <- daily_drought_code(dc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
+  # HACK: start from when daily value should be "accurate"
+  prec_accum <- 0.0
+  while (HOUR_TO_START_FROM != r[1]$hr) {
+    # tally up precip between noon and whenever we're applying the indices
+    prec_accum <- prec_accum + r[1]$prec
+    r <- r[2:nrow(r)]
+  }
+  cur <- r[1]
+  # HACK: add precip tally to current hour so it doesn't get omitted
+  cur$prec <- cur$prec + prec_accum
   dmc_ <- list(dmc = dmc_old, dmc_before_rain = dmc_old)
   dc_ <- list(dc = dc_old, dc_before_rain = dc_old)
   # FIX: just use loop for now so it matches C code
