@@ -3,6 +3,9 @@ library(lubridate)
 library(data.table)
 source("util.r")
 
+FLAG_NIGHT_DRYING <- FALSE
+# FLAG_NIGHT_DRYING <- TRUE
+
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
 MAX_SOLAR_PROPAGATION <- 0.85
@@ -436,7 +439,7 @@ duff_moisture_code <- function(
       sunlight_hours <- sunset_start - sunrise_start
       is_daylight <- hour >= sunrise_start && hour < sunset_start
       dmc_hourly <- ifelse(
-        is_daylight,
+        is_daylight || FLAG_NIGHT_DRYING,
         dmc_drying_direct(lat, long, temp, rh, ws, rain, mon),
         0.0
       )
