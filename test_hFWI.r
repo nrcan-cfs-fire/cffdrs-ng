@@ -2,10 +2,10 @@
 source("NG_FWI.r")
 source("old_cffdrs.r")
 
-test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6) {
+test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLAG_NO_MONTH_FACTOR = FALSE) {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
-  r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT)
+  r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
   colnames(w) <- toupper(colnames(w))
@@ -50,7 +50,7 @@ plot_comparison <- function(r) {
     geom_point(aes(TIMESTAMP, DDC), data = r[hour(TIMESTAMP) == 16]))
 }
 
-plot_test <- function(df = read.csv("./data/test_hffmc.csv")) {
-  r <- test_hfwi(df)
+plot_test <- function(df = read.csv("./data/test_hffmc.csv"), FLAG_NO_MONTH_FACTOR = FALSE) {
+  r <- test_hfwi(df, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
   plot_comparison(r)
 }

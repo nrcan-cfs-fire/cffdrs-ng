@@ -395,7 +395,13 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
     0.0
   ))
 }
-
+dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon) {
+  if (temp <= 1.1) {
+    temp <- -1.1
+  }
+  pe <- 1.894 * (temp + 1.1) * (100.0 - rh) * 0.0001
+  return(ifelse(pe < 0.0, 0.0, pe))
+}
 duff_moisture_code <- function(
     last_dmc,
     lat,
@@ -411,7 +417,8 @@ duff_moisture_code <- function(
     sunset,
     dmc_before_rain,
     rain_total_prev,
-    rain_total) {
+    rain_total,
+    FLAG_NO_MONTH_FACTOR = FALSE) {
   if (0 == rain_total) {
     dmc_before_rain <- last_dmc
   }
@@ -423,8 +430,20 @@ duff_moisture_code <- function(
   }
   # should be no way this is below 0 because we just made sure it wasn't > dmc
   dmc <- last_dmc - dmc_wetting_hourly
-  dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
-  dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
+  if (FLAG_NO_MONTH_FACTOR) {
+      sunrise_start <- round(sunrise)
+      sunset_start <- round(sunset)
+      sunlight_hours <- sunset_start - sunrise_start
+      is_daylight <- hour >= sunrise_start && hour < sunset_start
+      dmc_hourly <- ifelse(
+        is_daylight,
+        dmc_drying_direct(lat, long, temp, rh, ws, rain, mon),
+        0.0
+      )
+  } else {
+    dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
+    dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
+  }
   dmc <- dmc + dmc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
@@ -508,7 +527,7 @@ rain_since_intercept_reset <- function(temp,
 #' @param     dmc_old         previous value for Duff Moisture Code
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
-.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old) {
+.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, FLAG_NO_MONTH_FACTOR = FALSE) {
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -595,7 +614,8 @@ rain_since_intercept_reset <- function(temp,
       cur$sunset,
       dmc_$dmc_before_rain,
       canopy$rain_total_prev,
-      canopy$rain_total
+      canopy$rain_total,
+      FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR
     )
     cur$dmc <- dmc_$dmc
     dc_ <- drought_code(
@@ -639,7 +659,7 @@ rain_since_intercept_reset <- function(temp,
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 #' @export hFWI
-hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
+hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15, FLAG_NO_MONTH_FACTOR = FALSE) {
   wx <- as.data.table(copy(df_wx))
   old_names <- colnames(wx)
   # add a bunch of dummy columns if they don't exist
@@ -720,7 +740,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
       setnames(sunlight, c("DATE"), c("TIMESTAMP"))
       sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
       w <- merge(by_year, sunlight, by = c("TIMESTAMP", "LAT", "LONG"))
-      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
+      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
       results <- rbind(results, r)
     }
   }
@@ -779,7 +799,8 @@ if ("--args" %in% commandArgs()) {
     file_in <- args[5]
     file_out <- args[6]
     df_wx <- as.data.table(read.csv(file_in))
-    df_fwi <- hFWI(df_wx,
+    df_fwi <- hFWI(
+      df_wx,
       timezone = timezone,
       ffmc_old = ffmc_old,
       dmc_old = dmc_old,
