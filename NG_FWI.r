@@ -410,17 +410,17 @@ duff_moisture_code <- function(
   if (0 == rain_total) {
     dmc_before_rain <- last_dmc
   }
-  dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
-  dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
-  dmc <- last_dmc + dmc_hourly
   # apply wetting since last period
   dmc_wetting_hourly <- dmc_wetting_between(rain_total_prev, rain_total, dmc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
-  if (dmc_wetting_hourly > dmc) {
-    dmc_wetting_hourly <- dmc
+  if (dmc_wetting_hourly > last_dmc) {
+    dmc_wetting_hourly <- last_dmc
   }
   # should be no way this is below 0 because we just made sure it wasn't > dmc
-  dmc <- dmc - dmc_wetting_hourly
+  dmc <- last_dmc - dmc_wetting_hourly
+  dmc_daily <- dmc_drying(lat, long, temp, rh, ws, rain, mon)
+  dmc_hourly <- dmc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
+  dmc <- dmc + dmc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
 }
@@ -444,17 +444,18 @@ drought_code <- function(
   if (0 == rain_total) {
     dc_before_rain <- last_dc
   }
-  dc_daily <- dc_drying(lat, long, temp, rh, ws, rain, mon)
-  dc_hourly <- dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
-  dc <- last_dc + dc_hourly
   # apply wetting since last period
   dc_wetting_hourly <- dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
-  if (dc_wetting_hourly > dc) {
-    dc_wetting_hourly <- dc
+  if (dc_wetting_hourly > last_dc) {
+    dc_wetting_hourly <- last_dc
   }
   # should be no way this is below 0 because we just made sure it wasn't > dc
-  dc <- dc - dc_wetting_hourly
+  dc <- last_dc - dc_wetting_hourly
+  # apply drying after wetting
+  dc_daily <- dc_drying(lat, long, temp, rh, ws, rain, mon)
+  dc_hourly <- dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
+  dc <- dc + dc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dc = dc, dc_before_rain = dc_before_rain))
 }
