@@ -2,15 +2,6 @@
 source("NG_FWI.r")
 source("old_cffdrs.r")
 
-add_sunlight <- function(df, lat, long, timezone){
-  dates <- as_datetime(unique(df$TIMESTAMP))
-  sunlight <- getSunlight(dates, timezone, lat, long)
-  setnames(sunlight, c("DATE"), c("TIMESTAMP"))
-  sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
-  names(df) <- toupper(names(df))
-  w <- merge(df, sunlight, by = c("TIMESTAMP"))
-}
-
 test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLAG_NO_MONTH_FACTOR = FALSE) {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)

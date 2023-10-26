@@ -60,6 +60,40 @@ julian <- function(mon, day) {
   return(month[mon] + day)
 }
 
+getSunlightDT <- function(df) {
+  df_copy <- copy(df)
+  df_copy[, D := as_date(TIMESTAMP)]
+  df_dates <- unique(df_copy[, c("LAT", "LONG", "D", "TIMEZONE")])
+  dechour <- 12.0
+  df_dates[, JD := julian(month(D), day(D))]
+  df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
+  df_dates[, EQTIME := 229.18 * (0.000075 + 0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) - 0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
+  df_dates[, DECL := 0.006918 - 0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) - 0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) - 0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
+  df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
+  df_dates[, ZENITH := 90.833 * pi / 180.0]
+  # FIX: is this some kind of approximation that can be wrong?
+  #       breaks with (67.1520291504819, -132.37538245496188)
+  df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) - tan(LAT * pi / 180.0) * tan(DECL)]
+  # HACK: keep in range
+  df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
+  df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
+  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_all <- merge(df_copy, df_dates, by=c("LAT", "LONG", "D", "TIMEZONE"))
+  df_all[, HR := hour(TIMESTAMP)]
+  df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
+  df_all[, HOURANGLE := TST / 4 - 180]
+  df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
+  df_all[, SOLRAD := 0.95 * cos(ZENITH)]
+  df_all[, SOLRAD := ifelse(SOLRAD < 0, 0, SOLRAD)]
+  colnames(df_all) <- toupper(colnames(df_all))
+  # remove temporary calculations
+  cols <- c(names(df), "SOLRAD", "SUNRISE", "SUNSET")
+  df_result <- df_all[, ..cols]
+  df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  return(df_result)
+}
+
 #' Find solar radiation at a give time and place
 #'
 #' @param dates             Datetimes to find solar radiation for
@@ -68,37 +102,15 @@ julian <- function(mon, day) {
 #' @param longitude         Longitude (degrees)
 #' @return                  Solar radiation (kW/m^2), sunrise, sunset, sunlight hours
 getSunlight <- function(dates, timezone, latitude, longitude) {
-  df <- data.table(DATE = dates)
-  df[, d := as_date(DATE)]
-  dechour <- 12.0
-  df[, jd := julian(month(d), day(d))]
-  df[, fracyear := 2.0 * pi / 365.0 * (jd - 1.0 + (dechour - 12.0) / 24.0)]
-  df[, eqtime := 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear))]
-  df[, decl := 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear)]
-  df[, timeoffset := eqtime + 4 * longitude - 60 * timezone]
-  df[, zenith := 90.833 * pi / 180.0]
-  # FIX: is this some kind of approximation that can be wrong?
-  #       breaks with (67.1520291504819, -132.37538245496188)
-  df[, x_tmp := cos(zenith) / (cos(latitude * pi / 180.0) * cos(decl)) - tan(latitude * pi / 180.0) * tan(decl)]
-  # HACK: keep in range
-  df[, x_tmp := pmax(-1, pmin(1, x_tmp))]
-  df[, halfday := 180.0 / pi * acos(x_tmp)]
-  df[, sunrise := (720.0 - 4.0 * (longitude + halfday) - eqtime) / 60 + timezone]
-  df[, sunset := (720.0 - 4.0 * (longitude - halfday) - eqtime) / 60 + timezone]
-  df[, hr := hour(DATE)]
-  df[, tst := as.numeric(hr) * 60.0 + timeoffset]
-  df[, hourangle := tst / 4 - 180]
-  df[, zenith := acos(sin(latitude * pi / 180) * sin(decl) + cos(latitude * pi / 180) * cos(decl) * cos(hourangle * pi / 180))]
-  df[, solrad := 0.95 * cos(zenith)]
-  df[, solrad := ifelse(solrad < 0, 0, solrad)]
-  colnames(df) <- toupper(colnames(df))
-  df[, LAT := latitude]
-  df[, LONG := longitude]
-  result <- df[, c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET")]
-  result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  # replicate old function for now
+  df <- data.table(TIMESTAMP = dates)
+  df$TIMEZONE <- timezone
+  df$LAT <- latitude
+  df$LONG <- longitude
+  df_sunlight <- getSunlightDT(df)
+  result <- df_sunlight[, c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET", "SUNLIGHT_HOURS")]
   return(result)
 }
-
 
 toDecimal <- function(t) {
   return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)

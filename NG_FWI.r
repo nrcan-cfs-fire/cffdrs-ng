@@ -6,6 +6,9 @@ source("util.r")
 FLAG_NIGHT_DRYING <- FALSE
 # FLAG_NIGHT_DRYING <- TRUE
 
+DEFAULT_K_DMC_DRYING <- 1.894
+K_DMC_DRYING <- 1.894
+
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
 MAX_SOLAR_PROPAGATION <- 0.85
@@ -398,13 +401,18 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
     0.0
   ))
 }
-dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon) {
-  if (temp <= 1.1) {
-    temp <- -1.1
-  }
-  pe <- 1.894 * (temp + 1.1) * (100.0 - rh) * 0.0001
+dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DEFAULT_K_DMC_DRYING) {
+  temp <- ifelse(temp <= 1.1, -1.1, temp)
+  pe <- k * (temp + 1.1) * (100.0 - rh) * 0.0001
   return(ifelse(pe < 0.0, 0.0, pe))
 }
+# dmc_drying_direct_hourly <- function(lat, long, temp, rh, ws, rain, mon) {
+#   if (temp <= 1.1) {
+#     temp <- -1.1
+#   }
+#   pe <- K_DMC_DRYING * (temp + 1.1) * (100.0 - rh) * 0.0001
+#   return(ifelse(pe < 0.0, 0.0, pe))
+# }
 duff_moisture_code <- function(
     last_dmc,
     lat,
@@ -421,7 +429,8 @@ duff_moisture_code <- function(
     dmc_before_rain,
     rain_total_prev,
     rain_total,
-    FLAG_NO_MONTH_FACTOR = FALSE) {
+    FLAG_NO_MONTH_FACTOR = FALSE,
+    k=DEFAULT_K_DMC_DRYING) {
   if (0 == rain_total) {
     dmc_before_rain <- last_dmc
   }
@@ -440,7 +449,7 @@ duff_moisture_code <- function(
       is_daylight <- hour >= sunrise_start && hour < sunset_start
       dmc_hourly <- ifelse(
         is_daylight || FLAG_NIGHT_DRYING,
-        dmc_drying_direct(lat, long, temp, rh, ws, rain, mon),
+        dmc_drying_direct(lat, long, temp, rh, ws, rain, mon, k),
         0.0
       )
   } else {
