@@ -7,8 +7,7 @@ source("old_cffdrs.r")
 FLAG_NIGHT_DRYING <- FALSE
 # FLAG_NIGHT_DRYING <- TRUE
 
-DEFAULT_K_DMC_DRYING <- 1.894
-K_DMC_DRYING <- 1.894
+DAILY_K_DMC_DRYING <- 1.894
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
@@ -402,8 +401,11 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
     0.0
   ))
 }
-# dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DEFAULT_K_DMC_DRYING) {
-dmc_drying_direct <- function(temp, rh, k=DEFAULT_K_DMC_DRYING) {
+dmc_drying_ratio <- function(temp, rh) {
+  return(ifelse(temp <= 1.1, 0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
+}
+# dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DAILY_K_DMC_DRYING) {
+dmc_drying_direct <- function(temp, rh, k=DAILY_K_DMC_DRYING) {
   temp <- ifelse(temp <= 1.1, -1.1, temp)
   pe <- k * (temp + 1.1) * (100.0 - rh) * 0.0001
   return(ifelse(pe < 0.0, 0.0, pe))
@@ -412,7 +414,7 @@ dmc_drying_direct <- function(temp, rh, k=DEFAULT_K_DMC_DRYING) {
 #   if (temp <= 1.1) {
 #     temp <- -1.1
 #   }
-#   pe <- K_DMC_DRYING * (temp + 1.1) * (100.0 - rh) * 0.0001
+#   pe <- DAILY_K_DMC_DRYING * (temp + 1.1) * (100.0 - rh) * 0.0001
 #   return(ifelse(pe < 0.0, 0.0, pe))
 # }
 duff_moisture_code <- function(
@@ -432,7 +434,7 @@ duff_moisture_code <- function(
     rain_total_prev,
     rain_total,
     FLAG_NO_MONTH_FACTOR = FALSE,
-    k=DEFAULT_K_DMC_DRYING) {
+    k=DAILY_K_DMC_DRYING) {
   if (0 == rain_total) {
     dmc_before_rain <- last_dmc
   }

@@ -6,6 +6,7 @@ library(ISLR)
 library(fs)
 library(ggplot2)
 library(snow)
+source("util.r")
 
 REQUIRED_COLUMNS <- c('ID', 'TIMESTAMP', 'DATE', 'LAT', 'LONG', 'TIMEZONE', 'YR', 'MON', 'DAY', 'HR', 'MINUTE', 'TEMP', 'RH', 'WS', 'PREC')
 
@@ -83,7 +84,7 @@ if (!exists("ontario")) {
   ontario[, TIMEZONE := ifelse("EST" == TIMEZONE, -5, ifelse("CST" == TIMEZONE, -6, NA))]
   ontario <- getSunlightDT(ontario)
 }
-
+df_wx <- ontario
 #
 # if (!exists("alberta")) {
 #   alberta <- fread(paste0(HOME_DIR, './AB_AAF_hourly_wxObs_2000-2017_60pTmprlCov.csv'))
