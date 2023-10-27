@@ -1,6 +1,3 @@
-# HACK: include code we use from cffdrs library so it doesn't add dependency for terra
-source("NG_FWI.r")
-
 daily_fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
   wmo <- 147.27723 * (101 - ffmc_yda) / (59.5 + ffmc_yda)
   ra <- ifelse(prec > 0.5, prec - 0.5, prec)

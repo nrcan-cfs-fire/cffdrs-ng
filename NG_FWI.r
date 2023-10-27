@@ -2,6 +2,7 @@
 library(lubridate)
 library(data.table)
 source("util.r")
+source("old_cffdrs.r")
 
 FLAG_NIGHT_DRYING <- FALSE
 # FLAG_NIGHT_DRYING <- TRUE
