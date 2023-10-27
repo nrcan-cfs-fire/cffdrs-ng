@@ -402,7 +402,8 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
     0.0
   ))
 }
-dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DEFAULT_K_DMC_DRYING) {
+# dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DEFAULT_K_DMC_DRYING) {
+dmc_drying_direct <- function(temp, rh, k=DEFAULT_K_DMC_DRYING) {
   temp <- ifelse(temp <= 1.1, -1.1, temp)
   pe <- k * (temp + 1.1) * (100.0 - rh) * 0.0001
   return(ifelse(pe < 0.0, 0.0, pe))
@@ -450,7 +451,8 @@ duff_moisture_code <- function(
       is_daylight <- hour >= sunrise_start && hour < sunset_start
       dmc_hourly <- ifelse(
         is_daylight || FLAG_NIGHT_DRYING,
-        dmc_drying_direct(lat, long, temp, rh, ws, rain, mon, k),
+        # dmc_drying_direct(lat, long, temp, rh, ws, rain, mon, k),
+        dmc_drying_direct(temp, rh, k),
         0.0
       )
   } else {
