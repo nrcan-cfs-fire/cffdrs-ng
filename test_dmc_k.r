@@ -4,7 +4,7 @@ library(promises)
 source("test_hFWI.r")
 
 HOUR_PEAK <- 16
-COLS_DMC <- c("LAT", "LONG", "FOR_DATE", "PE_DAILY", "DMC_DRYING_RATIO")
+COLS_DMC <- c("LAT", "LONG", "FOR_DATE", "PE_DAILY", "DMC_DRYING_RATIO", "DMC_SUNLIGHT_RATIO")
 # maximum drying factor to try using
 DMC_K_LIMIT <- 10
 
@@ -15,18 +15,20 @@ prep_df <- function(df_wx, hour_split) {
   df[, PREC24 := sum(PREC), by=list(ID, YR, FOR_DATE)]
   df[, SUNRISE := round(SUNRISE)]
   df[, SUNSET := round(SUNSET)]
-  df[, IS_DAYLIGHT := ((HR >= SUNRISE) & (HR < SUNSET))]
+  df[, IS_DAYLIGHT := ifelse((HR >= SUNRISE) & (HR < SUNSET), "T", "F")]
   df[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
-  df[, HAD_RAIN := PREC24 > 0]
+  df[, HAD_RAIN := ifelse(PREC24 > 0, "T", "F")]
   df[, DMC_DRYING_RATIO := dmc_drying_ratio(TEMP, RH)]
   df_noon <- df[12 == HR, ]
   df_noon[, PE_DAILY := DMC_DRYING_RATIO * DAILY_K_DMC_DRYING * EL_DMC[[1]][MON]]
   # df_noon <- df_noon[, c("ID", "YR", "FOR_DATE", "PE_DAILY")]
   df_pe <- df[, list(DMC_DRYING_RATIO=sum(DMC_DRYING_RATIO)), by=list(ID, FOR_DATE, IS_DAYLIGHT)]
   df_daily <- merge(df_noon[, -c("IS_DAYLIGHT", "DMC_DRYING_RATIO")], df_pe, by=c("ID", "FOR_DATE"))
+  df_daily[, DMC_SUNLIGHT_RATIO := EL_DMC[[1]][MON] / SUNLIGHT_HOURS]
   # df_relevant <- df[, -c("DATE", "FOR_DATE", "PREC24", "SUNRISE", "SUNSET", "DAY", "HR")]
-  cols <- c(c("IS_DAYLIGHT", "HAD_RAIN", "ID", "FOR_DATE", "YR", "MON", "SUNLIGHT_HOURS"), COLS_DMC)
+  # cols <- c(c("IS_DAYLIGHT", "HAD_RAIN", "ID", "FOR_DATE", "YR", "MON", "SUNLIGHT_HOURS"), COLS_DMC)
   # cols <- c(c("IS_DAYLIGHT", "HAD_RAIN", "ID", "FOR_DATE", "YR", "SUNLIGHT_HOURS"), COLS_DMC)
+  cols <- c(c("IS_DAYLIGHT", "HAD_RAIN", "ID", "FOR_DATE", "YR", "MON", "SUNLIGHT_HOURS"), COLS_DMC)
   df <- df_daily[, ..cols]
   return(df)
 }
@@ -34,6 +36,7 @@ prep_df <- function(df_wx, hour_split) {
 solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
   df_prepared <- prep_df(df_wx, hour_split)
   score_df <- function(df, cols_groups) {
+    print(paste0("Running with groups based on: [", paste0(cols_groups, collapse=", "), "]"))
     # df_noon <- unique(df[, c("ID", "FOR_DATE", "PE_DAILY")])
     find_k <- function(df) {
       cmp_df <- function(k) {
@@ -60,7 +63,7 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
         col <- cols_left[[1]]
         cols_left <- setdiff(cols_left, c(col))
         # call with whole thing but less columns first
-        cols_set[col] <- "__ALL__"
+        cols_set[col] <- "*"
         results_group <- NULL
         results_group <- rbind(results_group, for_groups(fct, df_group, cols_set, cols_left))
         by_col <- split(df_group, df_group[[col]])
@@ -98,15 +101,19 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     # show progress right away since first fit takes longest
     i <- 0
     add_row <- function(df_group, cols_set) {
+      OUTPUT_PRECISION <- 4
       # promises::future_promise({
         for_group <- copy(cols_set)
-        for_group["LAT"] <- mean(df_group$LAT)
-        for_group["LONG"] <- mean(df_group$LONG)
+        for_group["LAT"] <- round(mean(df_group$LAT), OUTPUT_PRECISION)
+        for_group["LONG"] <- round(mean(df_group$LONG), OUTPUT_PRECISION)
+        for_group["DMC_SUNLIGHT_RATIO_MEAN"] <- round(mean(df_group$DMC_SUNLIGHT_RATIO), OUTPUT_PRECISION)
+        for_group["DMC_SUNLIGHT_RATIO_MIN"] <- round(min(df_group$DMC_SUNLIGHT_RATIO), OUTPUT_PRECISION)
+        for_group["DMC_SUNLIGHT_RATIO_MAX"] <- round(max(df_group$DMC_SUNLIGHT_RATIO), OUTPUT_PRECISION)
         # print(as.data.table(for_group))
         r_k <- find_k(df_group)
         r <- cbind(
           as.data.table(for_group),
-          as.data.table(r_k)
+          round(as.data.table(r_k), OUTPUT_PRECISION)
         )
         i <<- i + 1
         pb_all$tick(nrow(df_group), tokens = list(i = i, n = n))
@@ -126,8 +133,13 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
   # df <- df[, -c("MON", "SUNLIGHT_HOURS")]
   # df <- df[TRUE == IS_DAYLIGHT]
   # df <- df[, -c("IS_DAYLIGHT")]
+  df <- df["T" == IS_DAYLIGHT & "F" == HAD_RAIN, -c("IS_DAYLIGHT", "HAD_RAIN")]
   cols_groups <- setdiff(names(df), COLS_DMC)
   df_results <- score_df(df, cols_groups)
+  # df_results[, CONDITION_DAY := ifelse("T" == IS_DAYLIGHT, "DAY", ifelse("F" == IS_DAYLIGHT, "NIGHT", "24HR"))]
+  # df_results[, CONDITION_RAIN := ifelse("T" == HAD_RAIN, "RAIN_ONLY", ifelse("F" == HAD_RAIN, "NO_RAIN", "ALL"))]
+  # df_results[, CONDITIONS := paste0(CONDITION_DAY, "_", CONDITION_RAIN)]
+  q <- summary(df_results$estimate)
 }
 
 
