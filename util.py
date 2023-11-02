@@ -221,6 +221,8 @@ def save_csv(df, file):
 
     def apply_format(cols, fmt, digits=0):
         def fix_col(x):
+            if 0 == digits:
+                return fmt.format(int(round(x, digits)))
             return fmt.format(round(x, digits))
 
         for col in result.columns:
