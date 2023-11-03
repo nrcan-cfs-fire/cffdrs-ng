@@ -142,15 +142,38 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
   # q <- summary(df_results$estimate)
   df_results_all <- NULL
   # check a bunch of sunrise offsets to see if anything fits better
-  for (i in (0.5 * (-6:6))) {
-    df <- prep_df(df_wx, hour_split, offset_sunrise=i)
-    df <- df["T" == IS_DAYLIGHT & "F" == HAD_RAIN, -c("IS_DAYLIGHT", "HAD_RAIN")]
-    cols_groups <- setdiff(names(df), COLS_DMC)
-    df_results <- score_df(df, cols_groups)
-    df_results[, OFFSET_SUNRISE := i]
-    q <- summary(df_results$estimate)
-    df_results_all <- rbind(df_results_all, df_results)
+  # OFFSET_MAX <- 6
+  OFFSET_MAX <- 3
+  n <- 0
+  for (i in (0.5 * (-(2 * OFFSET_MAX):(2 * OFFSET_MAX)))) {
+    # don't do more than 6 hours overall
+    offset_remaining <- (OFFSET_MAX - abs(i))
+    # for (j in (0.5 * (-12:12))) {
+    for (j in (0.5 * (-(2 * offset_remaining):(2 * offset_remaining)))) {
+    # for (j in (0.5 * ((-OFFSET_MAX + (2 * i)):(OFFSET_MAX + (2 * i))))) {
+      n <- n + 1
+      print(sprintf("(OFFSET_SUNRISE=%0.1f, OFFSET_SUNSET=%0.1f)", i, j))
+      file_out <- sprintf("dmc_k_ON_sunrise_%0.1f_%0.1f.csv", i, j)
+      if (is.null(df_results_all) || 0 == nrow(df_results_all[i == OFFSET_SUNRISE & j == OFFSET_SUNSET])) {
+        df <- prep_df(df_wx, hour_split, offset_sunrise=i, offset_sunset=j)
+        df <- df["T" == IS_DAYLIGHT & "F" == HAD_RAIN, -c("IS_DAYLIGHT", "HAD_RAIN")]
+        cols_groups <- setdiff(names(df), COLS_DMC)
+        df_results <- score_df(df, cols_groups)
+        df_results[, OFFSET_SUNRISE := i]
+        df_results[, OFFSET_SUNSET := j]
+        # write.csv(df_results, file_out, row.names=FALSE, quote=FALSE)
+        q <- summary(df_results$estimate)
+        print(q)
+        df_results_all <- rbind(df_results_all, df_results)
+      }
+      # should be equivalent to df_results from above
+      df_current <- df_results_all[i == OFFSET_SUNRISE & j == OFFSET_SUNSET]
+      if (1 < nrow(df_current)) {
+        write.csv(df_current, file_out, row.names=FALSE, quote=FALSE)
+      }
+    }
   }
+  return(df_results_all)
 }
 
 
