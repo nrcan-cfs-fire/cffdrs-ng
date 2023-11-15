@@ -306,18 +306,18 @@ double grass_fire_weather_index(double gsi, double load)
 
 double dmc_drying(double temp, double rh, double ws, double prec, int mon)
 {
-  if (temp <= 1.1)
+  if (temp <= -1.1)
   {
-    return 0.0;
+    temp = -1.1;
   }
   return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001;
 }
 
 double dc_drying(double temp, double rh, double ws, double prec, int mon)
 {
-  if (temp <= 2.8)
+  if (temp <= -2.8)
   {
-    return 0.0;
+    temp = -2.8;
   }
   return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0;
 }

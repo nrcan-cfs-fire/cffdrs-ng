@@ -233,14 +233,14 @@ def grass_fire_weather_index(gsi, load):
 
 
 def dmc_drying(temp, rh, ws, rain, mon):
-    if temp <= 1.1:
-        return 0.0
+    if temp <= -1.1:
+        temp = -1.1
     return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001
 
 
 def dc_drying(temp, rh, ws, rain, mon):
-    if temp <= 2.8:
-        return 0.0
+    if temp <= -2.8:
+        temp = -2.8
     return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0
 
 

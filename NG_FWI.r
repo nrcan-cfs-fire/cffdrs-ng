@@ -291,7 +291,7 @@ grass_fire_weather_index <- Vectorize(function(gsi, load) {
 
 
 dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
-  if (temp <= 1.1) {
+  if (temp <= -1.1) {
     temp <- -1.1
   }
   i <- ifelse(lat <= 30 & lat > 10,
@@ -312,7 +312,7 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
 }
 
 dc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
-  if (temp <= 2.8) {
+  if (temp <= -2.8) {
     temp <- -2.8
   }
   i <- ifelse(lat <= -20,
@@ -402,16 +402,16 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
   ))
 }
 dmc_drying_ratio <- function(temp, rh) {
-  return(ifelse(temp <= 1.1, 0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
+  return(ifelse(temp <= -1.1, 0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
 }
 # dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DAILY_K_DMC_DRYING) {
 dmc_drying_direct <- function(temp, rh, k=DAILY_K_DMC_DRYING) {
-  temp <- ifelse(temp <= 1.1, -1.1, temp)
+  temp <- ifelse(temp <= -1.1, -1.1, temp)
   pe <- k * (temp + 1.1) * (100.0 - rh) * 0.0001
   return(ifelse(pe < 0.0, 0.0, pe))
 }
 # dmc_drying_direct_hourly <- function(lat, long, temp, rh, ws, rain, mon) {
-#   if (temp <= 1.1) {
+#   if (temp <= -1.1) {
 #     temp <- -1.1
 #   }
 #   pe <- DAILY_K_DMC_DRYING * (temp + 1.1) * (100.0 - rh) * 0.0001
