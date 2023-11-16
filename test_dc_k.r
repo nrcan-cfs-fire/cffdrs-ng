@@ -12,7 +12,6 @@ DC_K_LIMIT <- 10
 
 DAILY_K_DC_DRYING <- 3.94
 
-
 dc_drying_daily <- function(temp, mon) {
   # if (temp <= -2.8) {
   #   temp <- -2.8
@@ -33,7 +32,7 @@ dc_drying_ratio <- function(temp, mon, dc_factor) {
   # return((0.0914 * (temp + 2.8)) + Epot_adj)
   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
   # not allowed to be negative
-  return(max(0.0, (((0.0914 * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+  return(max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
 }
 
 prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
@@ -212,6 +211,8 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
       print(sprintf("(OFFSET_SUNRISE=%0.1f, OFFSET_SUNSET=%0.1f)", i, j))
       df <- prep_df(eqn, df_wx, hour_split, offset_sunrise=i, offset_sunset=j)
       df <- df["T" == IS_DAYLIGHT & "F" == HAD_RAIN, -c("IS_DAYLIGHT", "HAD_RAIN")]
+      # # stop trying to find a relationship with sunlight hours
+      # df <- df[, -c("SUNLIGHT_HOURS")]
       cols_groups <- setdiff(names(df), COLS_DC)
       df_current <- score_df(df, cols_groups, i, j)
       file_out <- sprintf("%s/dc_k_ON_%s_%0.1f_%0.1f.csv", dir_out, lbl, i, j)
