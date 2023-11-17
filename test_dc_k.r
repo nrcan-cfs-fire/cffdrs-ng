@@ -47,19 +47,7 @@ prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
   df[, HAD_RAIN := ifelse(PREC24 > 0, "T", "F")]
   # HACK: just avoid using minimum temp boundary conditions
   df <- df[TEMP > -2.8]
-  if (1 == eqn){
-    # eq1: 24 hours a day
-    df[, DC_HOURS := 24.0]
-    df[, DC_FACTOR := DC_HOURS]
-  }  else if (2 == eqn) {
-    # eq2: # of hours based on DMC lookup table + 3
-    df[, DC_HOURS := (EL_DMC[[1]][MON] + 3)]
-    df[, DC_FACTOR := DC_HOURS]
-  }  else if (3 == eqn) {
-    # eq3: eq2, but (h / 12)^2 to mimic PET_hamon
-    df[, DC_HOURS := (EL_DMC[[1]][MON] + 3)]
-    df[, DC_FACTOR := (DC_HOURS / 12.0) ^ 2]
-  }  else if (4 == eqn) {
+  if (4 == eqn) {
     # eq4: eq3, but with actual sunlight hours
     df[, DC_HOURS := SUNLIGHT_HOURS]
     df[, DC_FACTOR := (DC_HOURS / 12.0) ^ 2]
@@ -67,7 +55,19 @@ prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
     # eq5: eq4, but without square
     df[, DC_HOURS := SUNLIGHT_HOURS]
     df[, DC_FACTOR := (DC_HOURS / 12.0)]
-  } else {
+  # } else if (1 == eqn){
+  #   # eq1: 24 hours a day
+  #   df[, DC_HOURS := 24.0]
+  #   df[, DC_FACTOR := DC_HOURS]
+  # }  else if (2 == eqn) {
+  #   # eq2: # of hours based on DMC lookup table + 3
+  #   df[, DC_HOURS := (EL_DMC[[1]][MON] + 3)]
+  #   df[, DC_FACTOR := DC_HOURS]
+  # }  else if (3 == eqn) {
+  #   # eq3: eq2, but (h / 12)^2 to mimic PET_hamon
+  #   df[, DC_HOURS := (EL_DMC[[1]][MON] + 3)]
+  #   df[, DC_FACTOR := (DC_HOURS / 12.0) ^ 2]
+  }  else {
     stop(sprintf("invalid equation specified: %d", eqn))
   }
   df[, DC_DRYING_RATIO := dc_drying_ratio(TEMP, MON, DC_FACTOR)]
@@ -182,30 +182,33 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
   # OFFSET_MAX <- 6
   OFFSET_MAX <- 3
   n <- 0
-  vals <- list()
-  for (i in (0.5 * (-(2 * OFFSET_MAX):(2 * OFFSET_MAX)))) {
-    # don't do more than 6 hours overall
-    offset_remaining <- (OFFSET_MAX - abs(i))
-    # for (j in (0.5 * (-12:12))) {
-    for (j in (0.5 * (-(2 * offset_remaining):(2 * offset_remaining)))) {
-      # for (j in (0.5 * ((-OFFSET_MAX + (2 * i)):(OFFSET_MAX + (2 * i))))) {
-      n <- n + 1
-      vals <- rbind(vals, list(offset_sunrise=i, offset_sunset=j))
-    }
-  }
+  # vals <- list()
+  # for (i in (0.5 * (-(2 * OFFSET_MAX):(2 * OFFSET_MAX)))) {
+  #   # don't do more than 6 hours overall
+  #   offset_remaining <- (OFFSET_MAX - abs(i))
+  #   # for (j in (0.5 * (-12:12))) {
+  #   for (j in (0.5 * (-(2 * offset_remaining):(2 * offset_remaining)))) {
+  #     # for (j in (0.5 * ((-OFFSET_MAX + (2 * i)):(OFFSET_MAX + (2 * i))))) {
+  #     n <- n + 1
+  #     vals <- rbind(vals, list(offset_sunrise=i, offset_sunset=j))
+  #   }
+  # }
+  vals <- rbind(NULL, list(offset_sunrise=2.5, offset_sunset=0.5))
   # default is 500mb which is not enough
   options(future.globals.maxSize = 1024 * 1024^2)
   plan(multisession)
   dir_main <- sprintf("dc_k_ON_%s", strftime(today(), "%Y%m%d"))
   R.utils::mkdirs(dir_main)
   df_results_by_eqn <- NULL
-  for (eqn in 1:5) {
+  # for (eqn in 1:5) {
+  for (eqn in 4:5) {
     message("Running for equation ", eqn)
     lbl <- sprintf("eq%d", eqn)
     dir_out <- sprintf("%s/dc_k_ON_%s.%s", dir_main, strftime(today(), "%Y%m%d"), lbl)
     R.utils::mkdirs(dir_out)
-    fct <- function(k) {
-      v <- vals[k, ]
+    # fct <- function(k) {
+      # v <- vals[k, ]
+      v <- vals[1, ]
       i <- v$offset_sunrise
       j <- v$offset_sunset
       print(sprintf("(OFFSET_SUNRISE=%0.1f, OFFSET_SUNSET=%0.1f)", i, j))
@@ -217,10 +220,11 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
       df_current <- score_df(df, cols_groups, i, j)
       file_out <- sprintf("%s/dc_k_ON_%s_%0.1f_%0.1f.csv", dir_out, lbl, i, j)
       write.csv(df_current, file_out, row.names=FALSE, quote=FALSE)
-      return(df_current)
-    }
-    r <- future_lapply(1:nrow(vals), FUN=fct)
-    df_results_all <- rbindlist(r)
+      # return(df_current)
+    # }
+    # r <- future_lapply(1:nrow(vals), FUN=fct)
+    # df_results_all <- rbindlist(r)
+    df_results_all <- copy(df_current)
     df_results_all[, equation := eqn]
     df_results_by_eqn <- rbind(df_results_by_eqn, df_results_all)
     # write.csv(df_results_all, "dc_k_ON_sunrise_all.csv", row.names=FALSE, quote=FALSE)
@@ -240,12 +244,12 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     png(sprintf("%s/%s_monthly_2.5_0.5.png", dir_main, lbl))
     boxplot(estimate ~ MON, df_offset)
     dev.off()
-
-    df_offset <- df_results_all["*" == SUNLIGHT_HOURS,][0.0 == OFFSET_SUNRISE,][0.0 == OFFSET_SUNSET,]
-    # eq1_monthly_0.0_0.0.png
-    png(sprintf("%s/%s_monthly_0.0_0.0.png", dir_main, lbl))
-    boxplot(estimate ~ MON, df_offset)
-    dev.off()
+#
+#     df_offset <- df_results_all["*" == SUNLIGHT_HOURS,][0.0 == OFFSET_SUNRISE,][0.0 == OFFSET_SUNSET,]
+#     # eq1_monthly_0.0_0.0.png
+#     png(sprintf("%s/%s_monthly_0.0_0.0.png", dir_main, lbl))
+#     boxplot(estimate ~ MON, df_offset)
+#     dev.off()
 
 
     s <- list()

@@ -11,10 +11,15 @@ DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.94
 
 HOURLY_K_DMC <- 2.10
+
+HOURLY_K_DC <- 0.2309482
+# HOURLY_K_DC <- 0.1651805
+
+
 # HOURLY_K_DC <- 0.241
 # HOURLY_K_DC < 0.1651805
 # HOURLY_K_DC < 0.1651805 * DAILY_K_DC_DRYING
-HOURLY_K_DC <- 0.1652
+# HOURLY_K_DC <- 0.1652
 
 OFFSET_SUNRISE <- 2.5
 OFFSET_SUNSET <- 0.5
@@ -321,15 +326,6 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
   return(ifelse(pe < 0.0, 0.0, pe))
 }
 
-dc_drying_daily <- function(temp, mon) {
-  # if (temp <= -2.8) {
-  #   temp <- -2.8
-  # }
-  # pe <- (0.36 * (temp + 2.8) + FL_DC[[1]][mon]) / 2.0
-  pe <- (0.36 * (max(-2.8, temp) + 2.8) + FL_DC[[1]][mon]) / 2.0
-  return(ifelse(pe < 0.0, 0.0, pe))
-}
-
 #
 # dc_drying_ratio <- function(temp, lat, mon, dc_factor) {
 #   # assume lat works
@@ -354,6 +350,33 @@ dc_drying_daily <- function(temp, mon) {
 #   # return(max(0.0, (((0.0914 * (temp + 2.8)) + Epot_adj) / dc_factor) / 2.0))
 # }
 
+# ################################
+# dc_drying_ratio <- function(temp, mon, dc_factor) {
+#   # if (temp <= -2.8) {
+#   #   # this doesn't cancel out, so can't just return 0 if <= -2.8
+#   #   temp <- -2.8
+#   # }
+#   # if we add this for every hour then the term can't be the daily value
+#   Epot_adj <- FL_DC[[1]][mon] / DAILY_K_DC_DRYING / dc_factor
+#   # return((0.0914 * (temp + 2.8)) + Epot_adj)
+#   return(((0.0914 * (temp + 2.8)) + Epot_adj) * HOURLY_K_DC * dc_factor)
+#   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
+#   # not allowed to be negative
+#   # return(max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   # return(max(0.0, (((0.36 * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+# }
+#
+
+
+dc_drying_daily <- function(temp, mon) {
+  # if (temp <= -2.8) {
+  #   temp <- -2.8
+  # }
+  # pe <- (0.36 * (temp + 2.8) + FL_DC[[1]][mon]) / 2.0
+  pe <- (0.36 * (max(-2.8, temp) + 2.8) + FL_DC[[1]][mon]) / 2.0
+  return(ifelse(pe < 0.0, 0.0, pe))
+}
+
 
 dc_drying_ratio <- function(temp, mon, dc_factor) {
   # if (temp <= -2.8) {
@@ -365,8 +388,8 @@ dc_drying_ratio <- function(temp, mon, dc_factor) {
   # return((0.0914 * (temp + 2.8)) + Epot_adj)
   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
   # not allowed to be negative
-  # return(max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
-  return(max(0.0, (((0.36 * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+  dc_ratio <- (max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+  return(2.0 * HOURLY_K_DC * dc_ratio)
 }
 
 
@@ -574,10 +597,11 @@ drought_code <- function(
   #                     HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor),
   #                     0.0)
   dc_factor <- (sunlight_hours / 12.0)
+  # dc_factor <- ((round(sunset) - round(sunrise)) / 12.0)
   dc_factor <- dc_factor ^ 2
   # dc_hourly <- HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor)
   dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
-                      HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor),
+                      dc_drying_ratio(temp, mon, dc_factor),
                       # HOURLY_K_DC * dc_drying_ratio(temp, mon, 1.0),
                       0.0)
   dc <- dc + dc_hourly
