@@ -8,13 +8,16 @@ FLAG_NIGHT_DRYING <- FALSE
 # FLAG_NIGHT_DRYING <- TRUE
 
 DAILY_K_DMC_DRYING <- 1.894
-DAILY_K_DC_DRYING <- 3.94
+DAILY_K_DC_DRYING <- 3.937
 
 HOURLY_K_DMC <- 2.10
 
-HOURLY_K_DC <- 0.2309482
+# HOURLY_K_DC <- 3.9640751
+# HOURLY_K_DC <- 0.2309482
 # HOURLY_K_DC <- 0.1651805
 
+# eq6
+# HOURLY_K_DC <- 0.3233780
 
 # HOURLY_K_DC <- 0.241
 # HOURLY_K_DC < 0.1651805
@@ -54,6 +57,19 @@ FL_DC <- list(
   c(6.4, 5, 2.4, 0.4, -1.6, -1.6, -1.6, -1.6, -1.6, 0.9, 3.8, 5.8),
   c(1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4, 1.4)
 )
+
+# don't set here for now since testing
+# # NOTE: next attempt should be this with the + 3 hours
+# FL_HDC <- unlist(lapply(1:12, function(i) { FL_DC[[1]][i] / DAILY_K_DC_DRYING / EL_DMC[[1]][i] }))
+#
+# # eq5's 0.2712259 seems pretty good with this
+# FL_HDC <- unlist(lapply(1:12, function(i) { FL_DC[[1]][i] / DAILY_K_DC_DRYING / (((EL_DMC[[1]][i] ^ 2) / (12.0 ^ 2)) ^ 0.5) }))
+
+
+DC_DAILY_CONST <- 0.36
+DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
+
+
 MPCT_TO_MC <- 147.2772277
 FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
@@ -346,8 +362,8 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
 #   # return((0.0914 * (temp + 2.8)) + Epot_adj)
 #   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
 #   # not allowed to be negative
-#   return(max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
-#   # return(max(0.0, (((0.0914 * (temp + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   return(pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   # return(pmax(0.0, (((0.0914 * (temp + 2.8)) + Epot_adj) / dc_factor) / 2.0))
 # }
 
 # ################################
@@ -362,8 +378,8 @@ dmc_drying <- function(lat, long, temp, rh, ws, rain, mon) {
 #   return(((0.0914 * (temp + 2.8)) + Epot_adj) * HOURLY_K_DC * dc_factor)
 #   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
 #   # not allowed to be negative
-#   # return(max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
-#   # return(max(0.0, (((0.36 * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   # return(pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   # return(pmax(0.0, (((0.36 * (pmax(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
 # }
 #
 
@@ -373,24 +389,41 @@ dc_drying_daily <- function(temp, mon) {
   #   temp <- -2.8
   # }
   # pe <- (0.36 * (temp + 2.8) + FL_DC[[1]][mon]) / 2.0
-  pe <- (0.36 * (max(-2.8, temp) + 2.8) + FL_DC[[1]][mon]) / 2.0
+  pe <- (0.36 * (pmax(-2.8, temp) + 2.8) + FL_DC[[1]][mon]) / 2.0
   return(ifelse(pe < 0.0, 0.0, pe))
 }
 
-
-dc_drying_ratio <- function(temp, mon, dc_factor) {
-  # if (temp <= -2.8) {
-  #   # this doesn't cancel out, so can't just return 0 if <= -2.8
-  #   temp <- -2.8
-  # }
-  # if we add this for every hour then the term can't be the daily value
-  Epot_adj <- FL_DC[[1]][mon] / DAILY_K_DC_DRYING / dc_factor
-  # return((0.0914 * (temp + 2.8)) + Epot_adj)
-  # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
-  # not allowed to be negative
-  dc_ratio <- (max(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (max(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
-  return(2.0 * HOURLY_K_DC * dc_ratio)
-}
+#
+# dc_drying_ratio <- function(temp, mon, dc_factor) {
+#   # if (temp <= -2.8) {
+#   #   # this doesn't cancel out, so can't just return 0 if <= -2.8
+#   #   temp <- -2.8
+#   # }
+#   # if we add this for every hour then the term can't be the daily value
+#   Epot_adj <- FL_DC[[1]][mon] / DAILY_K_DC_DRYING / dc_factor
+#   message(sprintf("dc_factor=%f; FL_DC=%f; FL_DC/K=%f; Epot_adj=%f",
+#                   dc_factor,
+#                   FL_DC[[1]][mon],
+#                   FL_DC[[1]][mon] / DAILY_K_DC_DRYING,
+#                   Epot_adj))
+#   # return((0.0914 * (temp + 2.8)) + Epot_adj)
+#   # divide by 2 to rescale for 0-400 like DC is instead of 0-800 like SMI
+#   # not allowed to be negative
+#   # pretty close to old method when using:
+#   #   HOURLY_K_DC <- 0.2309482
+#   dc_ratio <- (pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
+#   # return(2.0 * HOURLY_K_DC * dc_ratio)
+#   # dc_ratio <- (pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj)) / 2.0))
+#   return(HOURLY_K_DC * dc_ratio)
+# }
+#
+# dc_drying_ratio <- function(temp, mon, dc_factor) {
+#   # eq6?
+#   # does dc_factor not apply for some reason?
+#   # NOTE: this seems really good
+#   Epot_adj <- FL_DC[[1]][mon] / DAILY_K_DC_DRYING / dc_factor
+#   return(pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj)) / 2.0))
+# }
 
 
 #
@@ -548,6 +581,12 @@ duff_moisture_code <- function(
   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
   sunset_start <- round(sunset + OFFSET_SUNSET)
   sunlight_hours <- sunset_start - sunrise_start
+  # print(sprintf("FIT_DAYLIGHT=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
+  #               fit_daylight,
+  #               hour,
+  #               hour >= sunrise_start & hour < sunset_start,
+  #               OFFSET_TEMP,
+  #               DC_K_HOURLY))
   dmc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
                        HOURLY_K_DMC * dmc_drying_ratio(temp, rh),
                        0.0)
@@ -555,6 +594,133 @@ duff_moisture_code <- function(
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
 }
+#
+# drought_code <- function(
+#     last_dc,
+#     lat,
+#     long,
+#     temp,
+#     rh,
+#     ws,
+#     rain,
+#     mon,
+#     hour,
+#     solrad,
+#     sunrise,
+#     sunset,
+#     dc_before_rain,
+#     rain_total_prev,
+#     rain_total) {
+#   if (0 == rain_total) {
+#     dc_before_rain <- last_dc
+#   }
+#   # apply wetting since last period
+#   dc_wetting_hourly <- dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+#   # at most apply same wetting as current value (don't go below 0)
+#   if (dc_wetting_hourly > last_dc) {
+#     dc_wetting_hourly <- last_dc
+#   }
+#   # should be no way this is below 0 because we just made sure it wasn't > dc
+#   dc <- last_dc - dc_wetting_hourly
+#   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
+#   sunset_start <- round(sunset + OFFSET_SUNSET)
+#   sunlight_hours <- sunset_start - sunrise_start
+#   # # eqn <- 9
+#   # if (4 == eqn) {
+#   #   # eq4: eq3, but with actual sunlight hours
+#   #   dc_factor <- (sunlight_hours / 12.0) ^ 2
+#   # }  else if (5 == eqn) {
+#   #   # eq5: eq4, but without square
+#   #   dc_factor <- (sunlight_hours / 12.0)
+#   # } else if (1 == eqn){
+#   #   # eq1: divide drying over 24 hours a day
+#   #   dc_factor <- 24.0
+#   # }  else if (2 == eqn) {
+#   #   # eq2: # of hours based on DMC lookup table + 3
+#   #   dc_factor <- EL_DMC[[1]][mon] + 3
+#   # }  else if (3 == eqn) {
+#   #   # eq3: eq2, but (h / 12)^2 to mimic PET_hamon
+#   #   dc_factor <- ((EL_DMC[[1]][mon] + 3) / 12.0) ^ 2
+#   # }  else if (6 == eqn) {
+#   #   # eq6: # of hours based on DMC lookup table + 3, as a ratio vs 12
+#   #   dc_factor <- ((EL_DMC[[1]][mon] + 3) / 12.0)
+#   # } else if (7 == eqn) {
+#   #   # eq7: # of hours based on DMC lookup table
+#   #   dc_factor <- EL_DMC[[1]][mon]
+#   # } else if (8 == eqn) {
+#   #   # eq8: # of hours based on sunlight hours
+#   #   dc_factor <- sunlight_hours
+#   # } else if (9 == eqn) {
+#   #   # eq9: no factor
+#   #   dc_factor <- 1.0
+#   # } else if (10 == eqn) {
+#   #   dc_factor <- EL_DMC[[1]][mon] / sunlight_hours
+#   # } else if (11 == eqn) {
+#   #   dc_factor <- sunlight_hours / EL_DMC[[1]][mon]
+#   # } else if (12 == eqn) {
+#   #   dc_factor <- (3 + EL_DMC[[1]][mon]) / sunlight_hours
+#   # } else if (13 == eqn) {
+#   #   # okay but worse in later months
+#   #   # same result with 3rd attempt at FL_HDC
+#   #   dc_factor <- sunlight_hours / (3 + EL_DMC[[1]][mon])
+#   # } else if (14 == eqn) {
+#   #   # a bit too high
+#   #   dc_factor <- 12.0 / (3 + EL_DMC[[1]][mon])
+#   # } else if (15 == eqn) {
+#   #   # worse in later months
+#   #   dc_factor <- 12.0 / (EL_DMC[[1]][mon])
+#   # } else if (16 == eqn) {
+#   #   # worse in later months but maybe better than 13?
+#   #   dc_factor <- 12.0 / sunlight_hours
+#   # } else if (17 == eqn) {
+#   #   # too much for early months
+#   #   dc_factor <- (12.0 / sunlight_hours) ^ 2
+#   # } else if (18 == eqn) {
+#   #   # too low all the time
+#   #   dc_factor <- (12.0 / sunlight_hours) ^ 0.5
+#   # } else if (19 == eqn) {
+#   #   # way too low
+#   #   dc_factor <- (sunlight_hours / 12.0) ^ 0.5
+#   # } else if (20 == eqn) {
+#   #   # too much in July (mostly?)
+#   #   dc_factor <- 1 / ((sunlight_hours / 12.0) ^ 2)
+#   # }
+#   # HOURLY_K_DC <- df_eq$mean[eqn_j]
+#   # # HOURLY_K_DC <- df_eq$mean[9]
+#   # # HOURLY_K_DC <- K_
+#   # # dc_factor <- 1.0
+#   # # dc_factor <- F_
+#   # v <- (pmax(0.0, (((DC_HOURLY_CONST * (pmax(-2.8, temp) + 2.8)) + FL_HDC[mon]) / dc_factor) / 2.0))
+#   # # v <- (pmax(0.0, (((DC_HOURLY_CONST * (pmax(-2.8, temp) + 2.8)) + FL_HDC[mon])) / 2.0))
+#   # dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
+#   #                     HOURLY_K_DC * v,
+#   #                     0.0)
+#   # if (21 == eqn) {
+#     # F <- 1.1591
+#     # DC_K_HOURLY <- 1.1591
+#     # K <- 0.0914 * 3.937 / 24.0 * DC_K_HOURLY
+#     K <- DC_K_HOURLY
+#     # offset_temp <- 2.8
+#     v <- pmax(0.0, K * (temp + OFFSET_TEMP))
+#     if (FIT_DAYLIGHT) {
+#       dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
+#                           v,
+#                           0.0)
+#     } else {
+#       dc_hourly <- v
+#     }
+#     # print(sprintf("FIT_DAYLIGHT=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
+#     #               fit_daylight,
+#     #               hour,
+#     #               hour >= sunrise_start & hour < sunset_start,
+#     #               OFFSET_TEMP,
+#     #               DC_K_HOURLY))
+#   # }
+#   dc <- dc + dc_hourly
+#   # HACK: return two values since C uses a pointer to assign a value
+#   return(list(dc = dc, dc_before_rain = dc_before_rain))
+# }
+
 
 drought_code <- function(
     last_dc,
@@ -583,31 +749,25 @@ drought_code <- function(
   }
   # should be no way this is below 0 because we just made sure it wasn't > dc
   dc <- last_dc - dc_wetting_hourly
-  # apply drying after wetting
-  # dc_daily <- dc_drying(lat, long, temp, rh, ws, rain, mon)
-  # dc_hourly <- dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset)
-  # define with all parameters so we can easily sub in something better later
   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
   sunset_start <- round(sunset + OFFSET_SUNSET)
   sunlight_hours <- sunset_start - sunrise_start
-  # dc_factor <- (sunlight_hours / 12.0) ^ 2
-  # # dc_hourly <- HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor)
-  # dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
-  #                     # HOURLY_K_DC * dc_drying_ratio(temp, lat, mon, dc_factor),
-  #                     HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor),
-  #                     0.0)
-  dc_factor <- (sunlight_hours / 12.0)
-  # dc_factor <- ((round(sunset) - round(sunrise)) / 12.0)
-  dc_factor <- dc_factor ^ 2
-  # dc_hourly <- HOURLY_K_DC * dc_drying_ratio(temp, mon, dc_factor)
-  dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
-                      dc_drying_ratio(temp, mon, dc_factor),
-                      # HOURLY_K_DC * dc_drying_ratio(temp, mon, 1.0),
-                      0.0)
+  # K <- 0.0914 * 3.937 / 24.0 * DC_K_HOURLY
+  K <- DC_K_HOURLY
+  # offset_temp <- 2.8
+  v <- pmax(0.0, K * (temp + OFFSET_TEMP))
+  if (FIT_DAYLIGHT) {
+    dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
+                        v,
+                        0.0)
+  } else {
+    dc_hourly <- v
+  }
   dc <- dc + dc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dc = dc, dc_before_rain = dc_before_rain))
 }
+
 
 # Calculate number of drying "units" this hour contributes
 drying_units <- function(temp, rh, ws, rain, solrad) {

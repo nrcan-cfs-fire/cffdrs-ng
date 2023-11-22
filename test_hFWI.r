@@ -42,10 +42,12 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLA
 }
 
 plot_comparison <- function(r) {
+  # print(ggplot(r) +
+  #   geom_line(aes(TIMESTAMP, DMC)) +
+  #   geom_point(aes(TIMESTAMP, DDMC), data = r[hour(TIMESTAMP) == 16]))
   print(ggplot(r) +
-    geom_line(aes(TIMESTAMP, DMC)) +
-    geom_point(aes(TIMESTAMP, DDMC), data = r[hour(TIMESTAMP) == 16]))
-  print(ggplot(r) +
+    # ggtitle(sprintf("Equation %dx%dx%d", eqn_k, eqn, eqn_j)) +
+    ggtitle(sprintf("K <- 0.0914 * 3.937 / 24.0 * F\n pe <- K * (temp + %f)\nF <- %f", OFFSET_TEMP, DC_K_HOURLY)) +
     geom_line(aes(TIMESTAMP, DC)) +
     geom_point(aes(TIMESTAMP, DDC), data = r[hour(TIMESTAMP) == 16]))
 }
@@ -54,3 +56,8 @@ plot_test <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLA
   r <- test_hfwi(df, timezone, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
   plot_comparison(r)
 }
+
+
+eqn_j <- 1
+eqn <- 21
+eqn_k <- 0
