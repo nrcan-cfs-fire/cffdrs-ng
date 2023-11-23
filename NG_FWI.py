@@ -12,6 +12,14 @@ from util import save_csv
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
+
+HOURLY_K_DMC = 2.10
+HOURLY_K_DC = 0.017066
+DC_OFFSET_TEMP = 0.0
+
+OFFSET_SUNRISE = 2.5
+OFFSET_SUNSET = 0.5
+
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
 MAX_SOLAR_PROPAGATION = 0.85
@@ -307,6 +315,10 @@ def drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset):
     )
 
 
+def dmc_drying_ratio(temp, rh):
+    return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
+
+
 def duff_moisture_code(
     last_dmc,
     temp,
@@ -324,9 +336,12 @@ def duff_moisture_code(
 ):
     if 0 == rain_total:
         dmc_before_rain = last_dmc
-    dmc_daily = dmc_drying(temp, rh, ws, rain, mon)
-    dmc_hourly = dmc_daily * drying_fraction(
-        temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset
+    sunrise_start = round(sunrise + OFFSET_SUNRISE)
+    sunset_start = round(sunset + OFFSET_SUNSET)
+    dmc_hourly = (
+        HOURLY_K_DMC * dmc_drying_ratio(temp, rh)
+        if (hour >= sunrise_start and hour < sunset_start)
+        else 0.0
     )
     dmc = last_dmc + dmc_hourly
     # apply wetting since last period
@@ -339,6 +354,10 @@ def duff_moisture_code(
     # should be no way this is below 0 because we just made sure it wasn't > dmc
     # HACK: return two values since C uses a pointer to assign a value
     return (dmc - dmc_wetting_hourly, dmc_before_rain)
+
+
+def dc_drying_hourly(temp):
+    return max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP))
 
 
 def drought_code(
@@ -358,10 +377,7 @@ def drought_code(
 ):
     if 0 == rain_total:
         dc_before_rain = last_dc
-    dc_daily = dc_drying(temp, rh, ws, rain, mon)
-    dc_hourly = dc_daily * drying_fraction(
-        temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset
-    )
+    dc_hourly = dc_drying_hourly(temp)
     dc = last_dc + dc_hourly
     # apply wetting since last period
     dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)

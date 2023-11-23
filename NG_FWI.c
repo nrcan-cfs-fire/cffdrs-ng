@@ -15,6 +15,13 @@ bmw/2021
 #include "util.h"
 #include <stdlib.h>
 
+static const double HOURLY_K_DMC = 2.10;
+static const double HOURLY_K_DC = 0.017066;
+static const double DC_OFFSET_TEMP = 0.0;
+
+static const double OFFSET_SUNRISE = 2.5;
+static const double OFFSET_SUNSET = 0.5;
+
 /* Fuel Load (kg/m^2) */
 static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
 static const double MAX_SOLAR_PROPAGATION = 0.85;
@@ -403,6 +410,12 @@ double drying_fraction(double temp,
   return f;
 }
 
+double dmc_drying_ratio(double temp, double rh)
+{
+  const double d = (temp + 1.1) * (100.0 - rh) * 0.0001;
+  return (0.0 < d ? 0.0 : d);
+}
+
 double duff_moisture_code(double last_dmc,
                           double temp,
                           double rh,
@@ -422,9 +435,11 @@ double duff_moisture_code(double last_dmc,
   {
     *dmc_before_rain = last_dmc;
   }
-  double dmc_daily = dmc_drying(temp, rh, ws, rain, mon);
-  double df = drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset);
-  double dmc_hourly = dmc_daily * df;
+  double sunrise_start = round(sunrise + OFFSET_SUNRISE);
+  double sunset_start = round(sunset + OFFSET_SUNSET);
+  double dmc_hourly = ((hour >= sunrise_start && hour < sunset_start)
+                         ? (HOURLY_K_DMC * dmc_drying_ratio(temp, rh))
+                         : 0.0);
   double dmc = last_dmc + dmc_hourly;
   /* apply wetting since last period */
   double dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, *dmc_before_rain);
@@ -445,6 +460,12 @@ double duff_moisture_code(double last_dmc,
   return dmc - dmc_wetting_hourly;
 }
 
+double dc_drying_hourly(temp)
+{
+  const double d = HOURLY_K_DC * (temp + DC_OFFSET_TEMP);
+  return (d < 0.0 ? 0.0 : d);
+}
+
 double drought_code(double last_dc,
                     double temp,
                     double rh,
@@ -463,8 +484,7 @@ double drought_code(double last_dc,
   {
     *dc_before_rain = last_dc;
   }
-  double dc_daily = dc_drying(temp, rh, ws, rain, mon);
-  double dc_hourly = dc_daily * drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset);
+  double dc_hourly = dc_drying_hourly(temp);
   double dc = last_dc + dc_hourly;
   /* apply wetting since last period */
   double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);

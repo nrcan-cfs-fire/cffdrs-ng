@@ -31,10 +31,11 @@ DC_DEFAULT <- 15
 DEFAULT_LATITUDE <- 55.0
 DEFAULT_LONGITUDE <- -120.0
 
-# # just apply "daily" indices to noon directly
-# HOUR_TO_START_FROM <- 12
-# start with daily indices at peak burn
-HOUR_TO_START_FROM <- 16
+# just apply "daily" indices to noon directly
+HOUR_TO_START_FROM <- 12
+# result seemed to match better at noon so try starting from there instead
+# # start with daily indices at peak burn
+# HOUR_TO_START_FROM <- 16
 
 EL_DMC <- list(
   c(6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0),
