@@ -1,7 +1,7 @@
 library(ggplot2)
 library(ggrepel)
 library(promises)
-source("test_hFWI.r")
+source("test_hFWI_fitting.r")
 
 HOUR_PEAK <- 16
 

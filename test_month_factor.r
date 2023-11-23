@@ -1,6 +1,6 @@
 library(ggplot2)
 library(ggrepel)
-source("test_hFWI.r")
+source("test_hFWI_fitting.r")
 
 plot_cmp <- function(df, timezone) {
   FLAG_NIGHT_DRYING <<- FALSE
@@ -10,11 +10,10 @@ plot_cmp <- function(df, timezone) {
   r_24hr <- test_hfwi(df, timezone, FLAG_NO_MONTH_FACTOR = TRUE)
   FLAG_NIGHT_DRYING <<- FALSE
   print(ggplot(r_old) +
-          geom_line(aes(TIMESTAMP, DMC)) +
-          geom_point(aes(TIMESTAMP, DDMC), data = r_old[hour(TIMESTAMP) == 16]) +
-          geom_line(aes(TIMESTAMP, DMC), data=r_direct, colour="red") +
-          geom_line(aes(TIMESTAMP, DMC), data=r_24hr, colour="blue"))
-
+    geom_line(aes(TIMESTAMP, DMC)) +
+    geom_point(aes(TIMESTAMP, DDMC), data = r_old[hour(TIMESTAMP) == 16]) +
+    geom_line(aes(TIMESTAMP, DMC), data = r_direct, colour = "red") +
+    geom_line(aes(TIMESTAMP, DMC), data = r_24hr, colour = "blue"))
 }
 
 plot_cmp_timezones <- function(df, timezone) {
@@ -49,10 +48,10 @@ plot_cmp_timezones <- function(df, timezone) {
   #         geom_text(data = subset(r_all, TIMESTAMP == as.POSIXct(date_max)), aes(label = TZ, colour = TZ, x = Inf, y = DMC), hjust = -.1) +
   #         geom_point(aes(TIMESTAMP, DDMC), data = r_old[hour(TIMESTAMP) == 16]))
 
-  print(ggplot(data=r_all, mapping=aes(x=TIMESTAMP, y=DMC, group=TZ, colour=TZ)) +
-          geom_line() +
-          geom_label_repel(aes(label=TZ), data=r_all[TIMESTAMP == date_max], nudge_x = 1, na.rm = TRUE) +
-          geom_point(aes(TIMESTAMP, DDMC), data = r_old[hour(TIMESTAMP) == 16]))
+  print(ggplot(data = r_all, mapping = aes(x = TIMESTAMP, y = DMC, group = TZ, colour = TZ)) +
+    geom_line() +
+    geom_label_repel(aes(label = TZ), data = r_all[TIMESTAMP == date_max], nudge_x = 1, na.rm = TRUE) +
+    geom_point(aes(TIMESTAMP, DDMC), data = r_old[hour(TIMESTAMP) == 16]))
 
 
 
@@ -92,5 +91,4 @@ test_month_factor <- function() {
   plot_cmp(df_hourly_no_prec, timezone = -6)
   plot_cmp(df_prf_no_prec, timezone = -5)
   plot_cmp_timezones(df_prf_no_prec, timezone = -5)
-
 }

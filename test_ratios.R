@@ -1,3 +1,4 @@
+source("test_hFWI_fitting.r")
 df_wx <- as.data.table(read.csv("./data/test_hffmc.csv"))
 df_hourly <- as.data.table(read.csv("./data/wx_hourly.csv"))
 
@@ -12,7 +13,7 @@ df <- df_hourly_no_prec
 r_old <- test_hfwi(df, FLAG_NO_MONTH_FACTOR = FALSE)
 r_direct <- test_hfwi(df, FLAG_NO_MONTH_FACTOR = TRUE)
 
-df_daily <- r_direct[16 == hour(TIMESTAMP),]
+df_daily <- r_direct[16 == hour(TIMESTAMP), ]
 DMC_DEFAULT <- 6
 n <- nrow(df_daily)
 dry_daily <- df_daily$DDMC - c(DMC_DEFAULT, shift(df_daily$DDMC)[2:n])
@@ -33,28 +34,28 @@ w[, HRS_RATIO := EL / SUNLIGHT_HOURS]
 
 print(ggplot(w) +
         geom_line(aes(TIMESTAMP, DRY_RATIO)) +
-        geom_line(aes(TIMESTAMP, HRS_RATIO), colour="blue"))
+        geom_line(aes(TIMESTAMP, HRS_RATIO), colour = "blue"))
 
 w[, DRY_RATIO_NORM := ((DRY_RATIO - mean(DRY_RATIO)) / (max(DRY_RATIO) - min(DRY_RATIO)))]
-w[, HRS_RATIO_NORM := ((HRS_RATIO - mean(HRS_RATIO)) / (max(HRS_RATIO)- min(HRS_RATIO)))]
+w[, HRS_RATIO_NORM := ((HRS_RATIO - mean(HRS_RATIO)) / (max(HRS_RATIO) - min(HRS_RATIO)))]
 print(ggplot(w) +
         geom_line(aes(TIMESTAMP, DRY_RATIO_NORM)) +
-        geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour="blue"))
+        geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour = "blue"))
 
 
 w[, DRY_RATIO_NORM := ((DRY_RATIO - mean(DRY_RATIO)) / (max(DRY_RATIO) - mean(DRY_RATIO)))]
-w[, HRS_RATIO_NORM := ((HRS_RATIO - mean(HRS_RATIO)) / (max(HRS_RATIO)- mean(HRS_RATIO)))]
+w[, HRS_RATIO_NORM := ((HRS_RATIO - mean(HRS_RATIO)) / (max(HRS_RATIO) - mean(HRS_RATIO)))]
 print(ggplot(w) +
         geom_line(aes(TIMESTAMP, DRY_RATIO_NORM)) +
-        geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour="blue"))
+        geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour = "blue"))
 
 
-# 
+#
 # w[, DRY_RATIO_SHIFT := (DRY_RATIO - mean(DRY_RATIO))]
 # w[, HRS_RATIO_SHIFT := (HRS_RATIO - mean(HRS_RATIO))]
 # w[, DR_NORM := (DRY_RATIO_SHIFT / (max(DRY_RATIO_SHIFT) - min(DRY_RATIO_SHIFT)))]
 # w[, HR_NORM := (HRS_RATIO_SHIFT / (max(HRS_RATIO_SHIFT) - min(HRS_RATIO_SHIFT)))]
-# 
+#
 # print(ggplot(w) +
 #         geom_line(aes(TIMESTAMP, DR_NORM)) +
 #         geom_line(aes(TIMESTAMP, HR_NORM), colour="blue"))
@@ -65,29 +66,29 @@ w[, HR_NORM := ((HRS_RATIO - mean(HRS_RATIO)) / (max(HRS_RATIO) - min(HRS_RATIO)
 
 print(ggplot(w) +
         geom_line(aes(TIMESTAMP, DR_NORM)) +
-        geom_line(aes(TIMESTAMP, HR_NORM), colour="blue"))
+        geom_line(aes(TIMESTAMP, HR_NORM), colour = "blue"))
 
 
-# 
+#
 # w[, DRY_RATIO_RANGE := DRY_RATIO / mean(DRY_RATIO)]
 # w[, HRS_RATIO_RANGE := HRS_RATIO / mean(HRS_RATIO)]
 # print(ggplot(w) +
 #         geom_line(aes(TIMESTAMP, DRY_RATIO_RANGE)) +
 #         geom_line(aes(TIMESTAMP, HRS_RATIO_RANGE), colour="blue"))
 
-# 
+#
 # w[, DRY_RATIO_NORM := (DRY_RATIO - mean(DRY_RATIO))]
 # w[, HRS_RATIO_NORM := (HRS_RATIO - mean(HRS_RATIO))]
 # print(ggplot(w) +
 #         geom_line(aes(TIMESTAMP, DRY_RATIO_NORM)) +
 #         geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour="blue"))
-# 
+#
 # # w[, DRY_RATIO_NORM_RANGE := (DRY_RATIO_NORM / max(abs(min(DRY_RATIO)), abs(max(DRY_RATIO))))]
 # # w[, HRS_RATIO_NORM_RANGE := (HRS_RATIO_NORM / max(abs(min(HRS_RATIO)), abs(max(HRS_RATIO))))]
 # # print(ggplot(w) +
 # #         geom_line(aes(TIMESTAMP, DRY_RATIO_NORM_RANGE)) +
 # #         geom_line(aes(TIMESTAMP, HRS_RATIO_NORM_RANGE), colour="blue"))
-# 
+#
 # w[, DRY_RATIO_NORM_RANGE := (DRY_RATIO_NORM / (max(DRY_RATIO) - min(DRY_RATIO)))]
 # w[, HRS_RATIO_NORM_RANGE := (HRS_RATIO_NORM / (max(HRS_RATIO)- min(HRS_RATIO)))]
 # print(ggplot(w) +
@@ -100,4 +101,3 @@ print(ggplot(w) +
 # print(ggplot(w) +
 #         geom_line(aes(TIMESTAMP, DRY_RATIO_NORM)) +
 #         geom_line(aes(TIMESTAMP, HRS_RATIO_NORM), colour="blue"))
-

@@ -1,10 +1,9 @@
+source("load_data.r")
 source("test_dc_k.r")
-source("NG_FWI.r")
-source("test_hFWI.r")
+source("test_hFWI_fitting.r")
 
 
-
-do_test <- function(fit_temp, fit_daylight, offset_temp=2.8, timezone = -6, offset_sunrise=2.5, offset_sunset=0.5) {
+do_test <- function(fit_temp, fit_daylight, offset_temp=2.8, timezone = -6, offset_sunrise=2.5, offset_sunset=0.5, do_plot=FALSE) {
   FIT_TEMP <<- fit_temp
   FIT_DAYLIGHT <<- fit_daylight
   OFFSET_SUNRISE <<- offset_sunrise
@@ -71,11 +70,13 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=2.8, timezone = -6, offs
   df_fwi <- test_hfwi(df_test, timezone, FLAG_NO_MONTH_FACTOR = FALSE)
   score <- sqrt(mean(df_fwi[hour(TIMESTAMP) == 16, (DC - DDC)] ^ 2))
   title <- sprintf("RMSE: %0.3f\n%s", score, title)
-  print(ggplot(df_fwi) +
-          # ggtitle(sprintf("Equation %dx%dx%d", eqn_k, eqn, eqn_j)) +
-          ggtitle(title) +
-          geom_line(aes(TIMESTAMP, DC), colour="red") +
-          geom_point(aes(TIMESTAMP, DDC), data = df_fwi[hour(TIMESTAMP) == 16]))
+  if (do_plot) {
+    print(ggplot(df_fwi) +
+            # ggtitle(sprintf("Equation %dx%dx%d", eqn_k, eqn, eqn_j)) +
+            ggtitle(title) +
+            geom_line(aes(TIMESTAMP, DC), colour="red") +
+            geom_point(aes(TIMESTAMP, DDC), data = df_fwi[hour(TIMESTAMP) == 16]))
+  }
   # df_fwi_all <- test_hfwi(df_all[TIMEZONE == timezone,], timezone)
   # score_all <- sqrt(mean(df_fwi_all[hour(TIMESTAMP) == 16, (DC - DDC)] ^ 2))
   return(data.table(list(offset_sunrise=ifelse(fit_daylight, offset_sunrise, NA),

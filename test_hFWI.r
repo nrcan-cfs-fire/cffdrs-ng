@@ -2,10 +2,10 @@
 source("NG_FWI.r")
 source("old_cffdrs.r")
 
-test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLAG_NO_MONTH_FACTOR = FALSE) {
+test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, filename="out.csv") {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
-  r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
+  r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT)
   # want to figure out what daily values would have been with old function
   w <- copy(weatherstream)
   colnames(w) <- toupper(colnames(w))
@@ -13,18 +13,24 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLA
   w[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0))]
   r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0))]
   d <- toDaily(w)
-  d[, LAT := DEFAULT_LATITUDE]
-  d[, LONG := DEFAULT_LONGITUDE]
+  if (!("LAT" %in% names(d))) {
+    d[, LAT := DEFAULT_LATITUDE]
+  }
+  if (!("LONG" %in% names(d))) {
+    d[, LONG := DEFAULT_LONGITUDE]
+  }
   daily <- daily_fwi(d, init = c(FFMC_DEFAULT, DMC_DEFAULT, DC_DEFAULT))
   setnames(
     daily,
     c("FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR"),
     c("DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")
   )
-  daily <- daily[, daily[, c("YR", "MON", "DAY", "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")]]
+  cols_id <- intersect(names(r), c("ID", "LAT", "LONG", "TIMEZONE", "YR", "MON", "DAY"))
+  cols_daily <- c(cols_id, "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")
+  daily <- daily[, ..cols_daily]
   r <- merge(r,
     daily,
-    by = c("YR", "MON", "DAY")
+    by = cols_id
   )
   r[, DISI := Vectorize(initial_spread_index)(WS, DFFMC)]
   r[, DBUI := Vectorize(buildup_index)(DDMC, DDC)]
@@ -32,12 +38,15 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLA
   # taken from package code
   r[, DDSR := Vectorize(daily_severity_rating)(DFWI^1.77)]
   # output input and FWI columns so git can tell us if they change
-  r <- r[, c(
-    "TIMESTAMP", "TEMP", "WS", "RH", "PREC",
-    "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR",
-    "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR"
-  )]
-  write.table(r, file = "out.csv", sep = ",", row.names = FALSE)
+  cols_cmp <- c(cols_id,
+                "TIMESTAMP", "TEMP", "WS", "RH", "PREC",
+                "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR",
+                "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR"
+  )
+  r <- r[, ..cols_cmp]
+  if (!is.null(filename)) {
+    write.table(r, file = filename, sep = ",", row.names = FALSE)
+  }
   return(r)
 }
 
@@ -52,12 +61,61 @@ plot_comparison <- function(r) {
     geom_point(aes(TIMESTAMP, DDC), data = r[hour(TIMESTAMP) == 16]))
 }
 
-plot_test <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, FLAG_NO_MONTH_FACTOR = FALSE) {
-  r <- test_hfwi(df, timezone, FLAG_NO_MONTH_FACTOR = FLAG_NO_MONTH_FACTOR)
+plot_test <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6) {
+  r <- test_hfwi(df, timezone)
   plot_comparison(r)
 }
 
+source("NG_FWI.r")
+source("old_cffdrs.r")
+source("load_data.r")
 
-eqn_j <- 1
-eqn <- 21
-eqn_k <- 0
+rmse  <- function(x, y) {
+  return(sqrt(mean((x - y) ^ 2)))
+}
+
+rrmse <- function(x, y) {
+  return(sqrt(mean((x - y) ^ 2) / sum(x ^ 2)))
+}
+
+df_rmse <- NULL
+df_fwi_all <- NULL
+for (yr in sort(unique(df_wx$YR))) {
+  df_yr <- df_wx[YR == yr, ]
+  for (timezone in unique(df_yr$TIMEZONE)) {
+    df_tz <- df_yr[TIMEZONE == timezone, -c("SOLRAD", "SUNRISE", "SUNSET", "SUNLIGHT_HOURS")]
+    for (stn in unique(df_tz$ID)) {
+      df_stn <- df_tz[ID == stn, ]
+      # don't run if already have results
+      if (is.null(df_rmse) || (0 == nrow(df_rmse[(ID == stn) & (YR == yr) & (TIMEZONE == timezone)]))) {
+        df_fwi <- test_hfwi(df_stn, timezone, filename = NULL)
+        df_daily <- df_fwi[hour(TIMESTAMP) == 16,]
+        df_rmse <- rbind(
+          df_rmse,
+          df_daily[, list(ID=stn,
+                          TIMEZONE=timezone,
+                          YR=yr,
+                          RMSE_FFMC=rmse(DFFMC, FFMC),
+                          RMSE_DMC=rmse(DDMC, DMC),
+                          RMSE_DC=rmse(DDC, DC),
+                          RRMSE_FFMC=rrmse(DFFMC, FFMC),
+                          RRMSE_DMC=rrmse(DDMC, DMC),
+                          RRMSE_DC=rrmse(DDC, DC))])
+        df_fwi_all <- rbind(df_fwi_all, df_fwi)
+      }
+    }
+  }
+}
+df_fwi_all[, HR := hour(TIMESTAMP)]
+cols_id <- c("ID", "LAT", "LONG", "TIMEZONE", "YR", "MON", "DAY", "HR")
+cols_ordered <- c(cols_id, setdiff(names(df_fwi_all), cols_id))
+df_fwi_all <- df_fwi_all[, ..cols_ordered]
+df_fwi_all <- df_fwi_all[, -c("TIMESTAMP")]
+write.csv(df_fwi_all, "fwi_ON_cmp_full.csv", row.names=FALSE, quote=FALSE)
+
+# HACK: just use known column names for now
+cols <- names(df_fwi_all)[9:26]
+# cols <- setdiff(names(df_fwi_all), cols_id)
+df_fwi_all[, 9:26 := round(.SD, digits=2), .SDcols = cols]
+write.csv(df_fwi_all, "fwi_ON_cmp.csv", row.names=FALSE, quote=FALSE)
+

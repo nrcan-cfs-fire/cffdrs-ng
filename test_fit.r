@@ -1,4 +1,4 @@
-source("NG_FWI.r");
+source("NG_FWI_fitting.r")
 
 
 FL_HDC_ALL <- list(
