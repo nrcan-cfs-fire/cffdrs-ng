@@ -13,6 +13,12 @@ DAILY_K_DC_DRYING <- 3.937
 HOURLY_K_DMC <- 2.10
 HOURLY_K_DC <- 0.017066
 
+OFFSET_TEMP_DMC <- 1.1
+OFFSET_TEMP_DC <- 0.0
+
+FIT_DAYLIGHT_DMC <- TRUE
+FIT_DAYLIGHT_DC <- FALSE
+
 # HOURLY_K_DC <- 3.9640751
 # HOURLY_K_DC <- 0.2309482
 # HOURLY_K_DC <- 0.1651805
@@ -518,6 +524,12 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
                 0.0
   ))
 }
+dmc_drying_daily <- function(temp, rh) {
+  return(DAILY_K_DMC_DRYING * pmax(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
+}
+dmc_drying_hourly <- function(temp, rh) {
+  return(HOURLY_K_DMC * pmax(0.0, (temp + OFFSET_TEMP_DMC) * (100.0 - rh) * 0.0001))
+}
 dmc_drying_ratio <- function(temp, rh) {
   return(ifelse(temp <= -1.1, 0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
 }
@@ -582,15 +594,20 @@ duff_moisture_code <- function(
   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
   sunset_start <- round(sunset + OFFSET_SUNSET)
   sunlight_hours <- sunset_start - sunrise_start
-  # print(sprintf("FIT_DAYLIGHT=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
+  # print(sprintf("FIT_DAYLIGHT_DMC=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
   #               fit_daylight,
   #               hour,
   #               hour >= sunrise_start & hour < sunset_start,
-  #               OFFSET_TEMP,
-  #               DC_K_HOURLY))
-  dmc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
-                       HOURLY_K_DMC * dmc_drying_ratio(temp, rh),
-                       0.0)
+  #               OFFSET_TEMP_DMC,
+  #               HOURLY_K_DC))
+  v <- dmc_drying_hourly(temp, rh)
+  if (FIT_DAYLIGHT_DMC) {
+    dmc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
+                         v,
+                         0.0)
+  } else {
+    dmc_hourly <- v
+  }
   dmc <- dmc + dmc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
@@ -698,24 +715,24 @@ duff_moisture_code <- function(
 #   #                     0.0)
 #   # if (21 == eqn) {
 #     # F <- 1.1591
-#     # DC_K_HOURLY <- 1.1591
-#     # K <- 0.0914 * 3.937 / 24.0 * DC_K_HOURLY
-#     K <- DC_K_HOURLY
+#     # HOURLY_K_DC <- 1.1591
+#     # K <- 0.0914 * 3.937 / 24.0 * HOURLY_K_DC
+#     K <- HOURLY_K_DC
 #     # offset_temp <- 2.8
-#     v <- pmax(0.0, K * (temp + OFFSET_TEMP))
-#     if (FIT_DAYLIGHT) {
+#     v <- pmax(0.0, K * (temp + OFFSET_TEMP_DC))
+#     if (FIT_DAYLIGHT_DC) {
 #       dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
 #                           v,
 #                           0.0)
 #     } else {
 #       dc_hourly <- v
 #     }
-#     # print(sprintf("FIT_DAYLIGHT=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
+#     # print(sprintf("FIT_DAYLIGHT_DC=%s; %d is %s; K <- 0.0914 * 3.937 / 24.0 * F; pe <- K * (temp + %f); F <- %f",
 #     #               fit_daylight,
 #     #               hour,
 #     #               hour >= sunrise_start & hour < sunset_start,
-#     #               OFFSET_TEMP,
-#     #               DC_K_HOURLY))
+#     #               OFFSET_TEMP_DC,
+#     #               HOURLY_K_DC))
 #   # }
 #   dc <- dc + dc_hourly
 #   # HACK: return two values since C uses a pointer to assign a value
@@ -753,11 +770,11 @@ drought_code <- function(
   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
   sunset_start <- round(sunset + OFFSET_SUNSET)
   sunlight_hours <- sunset_start - sunrise_start
-  # K <- 0.0914 * 3.937 / 24.0 * DC_K_HOURLY
-  K <- DC_K_HOURLY
+  # K <- 0.0914 * 3.937 / 24.0 * HOURLY_K_DC
+  K <- HOURLY_K_DC
   # offset_temp <- 2.8
-  v <- pmax(0.0, K * (temp + OFFSET_TEMP))
-  if (FIT_DAYLIGHT) {
+  v <- pmax(0.0, K * (temp + OFFSET_TEMP_DC))
+  if (FIT_DAYLIGHT_DC) {
     dc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
                         v,
                         0.0)

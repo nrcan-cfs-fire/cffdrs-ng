@@ -610,7 +610,23 @@ void main(int argc, char* argv[])
   /* double mcgfmc = 101.0 - ffmc; */
   /* assuming this is fine because swiss sfms uses it now */
   double mcgfmc = mcffmc;
-
+  /*
+  # HACK: always start from daily value at noon
+  while (12 != r[1]$hr) {
+    r <- r[2:nrow(r)]
+  }
+  cur <- r[1]
+  dmc_old <- daily_duff_moisture_code(dmc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
+  dc_old <- daily_drought_code(dc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
+  # HACK: start from when daily value should be "accurate"
+  prec_accum <- 0.0
+  while (HOUR_TO_START_FROM != r[1]$hr) {
+    # tally up precip between noon and whenever we're applying the indices
+    prec_accum <- prec_accum + r[1]$prec
+    r <- r[2:nrow(r)]
+  }
+  cur <- r[1]
+  */
   /* check that the header matches what is expected */
   check_header(inp, header);
   struct row cur;

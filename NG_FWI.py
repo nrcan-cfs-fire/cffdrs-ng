@@ -7,11 +7,13 @@ from math import exp, log, pow, sqrt
 import pandas as pd
 
 import util
+from old_cffdrs import daily_drought_code, daily_duff_moisture_code
 from util import save_csv
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
+HOUR_TO_START_FROM = 12
 
 HOURLY_K_DMC = 2.10
 HOURLY_K_DC = 0.017066
@@ -435,6 +437,23 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
     r.columns = map(str.lower, r.columns)
     mcffmc = fine_fuel_moisture_from_code(ffmc_old)
     mcgfmc = mcffmc
+    # HACK: always start from daily value at noon
+    while 12 != r.iloc[0]["hr"]:
+        r = r.iloc[1:]
+    cur = r.iloc[0]
+    dmc_old = daily_duff_moisture_code(
+        dmc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
+    )
+    dc_old = daily_drought_code(
+        dc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
+    )
+    # HACK: start from when daily value should be "accurate"
+    prec_accum = 0.0
+    while HOUR_TO_START_FROM != r.iloc[0]["hr"]:
+        # tally up precip between noon and whenever we're applying the indices
+        prec_accum = prec_accum + r.iloc[0]["prec"]
+        r = r.iloc[1:]
+    r.iloc[0, list(r.columns).index("prec")] += prec_accum
     dmc = dmc_old
     dmc_before_rain = dmc_old
     dc = dc_old
