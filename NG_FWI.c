@@ -16,7 +16,7 @@ bmw/2021
 #include <stdlib.h>
 
 static const double HOURLY_K_DMC = 2.10;
-static const double HOURLY_K_DC = 0.017066;
+static const double HOURLY_K_DC = 0.017;
 static const double DC_OFFSET_TEMP = 0.0;
 
 static const double OFFSET_SUNRISE = 2.5;
@@ -35,8 +35,6 @@ static const double DC_DEFAULT = 15;
 static const double DEFAULT_LATITUDE = 55.0;
 static const double DEFAULT_LONGITUDE = -120.0;
 
-static const double EL_DMC[] = {6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0};
-static const double FL_DC[] = {-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6};
 static const double MPCT_TO_MC = 147.2772277;
 static const double FFMC_INTERCEPT = 0.5;
 static const double DMC_INTERCEPT = 1.5;
@@ -311,24 +309,6 @@ double grass_fire_weather_index(double gsi, double load)
          : Fint / 25.0;
 }
 
-double dmc_drying(double temp, double rh, double ws, double prec, int mon)
-{
-  if (temp <= -1.1)
-  {
-    temp = -1.1;
-  }
-  return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001;
-}
-
-double dc_drying(double temp, double rh, double ws, double prec, int mon)
-{
-  if (temp <= -2.8)
-  {
-    temp = -2.8;
-  }
-  return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0;
-}
-
 double dmc_wetting(double rain_total, double lastdmc)
 {
   /* compare floats by using tolerance */
@@ -387,33 +367,9 @@ double dc_wetting_between(double rain_total_previous, double rain_total, double 
   return current - previous;
 }
 
-double drying_fraction(double temp,
-                       double rh,
-                       double ws,
-                       double rain,
-                       int mon,
-                       int hour,
-                       double solar,
-                       double sunrise,
-                       double sunset)
-{
-  /* drying_fraction(temp, rh, ws, rain, mon, hour, solar, sunrise, sunset); */
-  /* define with all parameters so we can easily sub in something better later */
-  int sunrise_start = _round(sunrise, 0);
-  int sunset_start = _round(sunset, 0);
-  int sunlight_hours = sunset_start - sunrise_start;
-  /* apply one hour of drying if during sunlight hours */
-  const double f = (hour >= sunrise_start && hour < sunset_start)
-                   ? (1.0 / sunlight_hours)
-                   : 0.0;
-  /* printf("S:%d, %d, %d, %f\n", sunrise_start, sunset_start, sunlight_hours, f); */
-  return f;
-}
-
 double dmc_drying_ratio(double temp, double rh)
 {
-  const double d = (temp + 1.1) * (100.0 - rh) * 0.0001;
-  return (0.0 < d ? 0.0 : d);
+  return _max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001);
 }
 
 double duff_moisture_code(double last_dmc,
@@ -423,7 +379,7 @@ double duff_moisture_code(double last_dmc,
                           double rain,
                           int mon,
                           int hour,
-                          double solar,
+                          double solrad,
                           double sunrise,
                           double sunset,
                           double* dmc_before_rain,
@@ -435,19 +391,19 @@ double duff_moisture_code(double last_dmc,
   {
     *dmc_before_rain = last_dmc;
   }
-  double sunrise_start = round(sunrise + OFFSET_SUNRISE);
-  double sunset_start = round(sunset + OFFSET_SUNSET);
-  double dmc_hourly = ((hour >= sunrise_start && hour < sunset_start)
+  /* apply wetting since last period */
+  double dmc_wetting_hourly = dmc_wetting_between(
+    rain_total_prev,
+    rain_total,
+    *dmc_before_rain);
+  /* at most apply same wetting as current value (don't go below 0) */
+  double dmc = _max(0.0, last_dmc - dmc_wetting_hourly);
+  double sunrise_start = _round(sunrise + OFFSET_SUNRISE, 0);
+  double sunset_start = _round(sunset + OFFSET_SUNSET, 0);
+  double dmc_hourly = (((hour >= sunrise_start) && (hour < sunset_start))
                          ? (HOURLY_K_DMC * dmc_drying_ratio(temp, rh))
                          : 0.0);
-  double dmc = last_dmc + dmc_hourly;
-  /* apply wetting since last period */
-  double dmc_wetting_hourly = dmc_wetting_between(rain_total_prev, rain_total, *dmc_before_rain);
-  /* at most apply same wetting as current value (don't go below 0) */
-  if (dmc_wetting_hourly > dmc)
-  {
-    dmc_wetting_hourly = dmc;
-  }
+  dmc = dmc + dmc_hourly;
   /* printf("%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
          *dmc_before_rain,
          last_dmc,
@@ -456,14 +412,12 @@ double duff_moisture_code(double last_dmc,
          df,
          dmc_hourly,
          dmc_wetting_hourly); */
-  /* should be no way this is below 0 because we just made sure it wasn't > dmc */
-  return dmc - dmc_wetting_hourly;
+  return dmc;
 }
 
 double dc_drying_hourly(temp)
 {
-  const double d = HOURLY_K_DC * (temp + DC_OFFSET_TEMP);
-  return (d < 0.0 ? 0.0 : d);
+  return _max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP));
 }
 
 double drought_code(double last_dc,
@@ -484,23 +438,24 @@ double drought_code(double last_dc,
   {
     *dc_before_rain = last_dc;
   }
-  double dc_hourly = dc_drying_hourly(temp);
-  double dc = last_dc + dc_hourly;
   /* apply wetting since last period */
   double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
-  if (dc_wetting_hourly > dc)
+  if (dc_wetting_hourly > last_dc)
   {
-    dc_wetting_hourly = dc;
+    dc_wetting_hourly = last_dc;
   }
   /* should be no way this is below 0 because we just made sure it wasn't > dc */
-  return dc - dc_wetting_hourly;
+  double dc = last_dc - dc_wetting_hourly;
+  double dc_hourly = dc_drying_hourly(temp);
+  dc = dc + dc_hourly;
+  return (dc);
 }
 
 /*
  * Calculate number of drying "units" this hour contributes
  */
-double drying_units(double temp, double rh, double wind, double rain, double solar)
+double drying_units(double temp, double rh, double wind, double rain, double solrad)
 {
   /* for now, just add 1 drying "unit" per hour */
   return 1.0;
@@ -611,6 +566,7 @@ void main(int argc, char* argv[])
   /* assuming this is fine because swiss sfms uses it now */
   double mcgfmc = mcffmc;
   /*
+  # FIX: implement this
   # HACK: always start from daily value at noon
   while (12 != r[1]$hr) {
     r <- r[2:nrow(r)]

@@ -1,0 +1,9 @@
+df = pd.read_csv("bak_rh100.csv")
+df["lat"] = 51.7256
+df["long"] = -93.6442
+df["rh"] = df["rh"].astype(int)
+df["wind"] = df["wind"].apply(lambda x: round(x, 1))
+df["rain"] = df["rain"].apply(lambda x: round(x, 2))
+df["temp"] = df["temp"].apply(lambda x: round(x, 1))
+df["year"] = 2019
+df.to_csv("./data/wx_rh100.csv", index=False)

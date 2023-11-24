@@ -27,6 +27,11 @@ double _round(double x, int digits)
   return y;
 }
 
+double _max(double x, double y)
+{
+  return (x > y ? x : y);
+}
+
 double findQ(double temp, double rh)
 {
   /* find absolute humidity */

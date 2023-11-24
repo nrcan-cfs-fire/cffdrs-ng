@@ -15,8 +15,9 @@ logger.setLevel(logging.WARNING)
 
 HOUR_TO_START_FROM = 12
 
-HOURLY_K_DMC = 2.10
-HOURLY_K_DC = 0.017066
+HOURLY_K_DMC = 0.27
+HOURLY_K_DC = 0.017
+DMC_OFFSET_TEMP = 1.1
 DC_OFFSET_TEMP = 0.0
 
 OFFSET_SUNRISE = 2.5
@@ -35,8 +36,6 @@ DC_DEFAULT = 15
 DEFAULT_LATITUDE = 55.0
 DEFAULT_LONGITUDE = -120.0
 
-EL_DMC = [6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0]
-FL_DC = [-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6]
 MPCT_TO_MC = 147.2772277
 FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
@@ -242,18 +241,6 @@ def grass_fire_weather_index(gsi, load):
     return (log(Fint / 60.0) / 0.14) if Fint > 100 else (Fint / 25.0)
 
 
-def dmc_drying(temp, rh, ws, rain, mon):
-    if temp <= -1.1:
-        temp = -1.1
-    return 1.894 * (temp + 1.1) * (100.0 - rh) * EL_DMC[mon - 1] * 0.0001
-
-
-def dc_drying(temp, rh, ws, rain, mon):
-    if temp <= -2.8:
-        temp = -2.8
-    return (0.36 * (temp + 2.8) + FL_DC[mon - 1]) / 2.0
-
-
 def dmc_wetting(rain_total, lastdmc):
     # compare floats by using tolerance
     if rain_total <= DMC_INTERCEPT:
@@ -304,19 +291,6 @@ def dc_wetting_between(rain_total_previous, rain_total, lastdc):
     return current - previous
 
 
-def drying_fraction(temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset):
-    # define with all parameters so we can easily sub in something better later
-    sunrise_start = round(sunrise)
-    sunset_start = round(sunset)
-    sunlight_hours = sunset_start - sunrise_start
-    # apply one hour of drying if during sunlight hours
-    return (
-        (1.0 / sunlight_hours)
-        if (hour >= sunrise_start and hour < sunset_start)
-        else 0.0
-    )
-
-
 def dmc_drying_ratio(temp, rh):
     return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
 
@@ -338,6 +312,12 @@ def duff_moisture_code(
 ):
     if 0 == rain_total:
         dmc_before_rain = last_dmc
+    # apply wetting since last period
+    dmc_wetting_hourly = dmc_wetting_between(
+        rain_total_prev, rain_total, dmc_before_rain
+    )
+    # at most apply same wetting as current value (don't go below 0)
+    dmc = max(0.0, last_dmc - dmc_wetting_hourly)
     sunrise_start = round(sunrise + OFFSET_SUNRISE)
     sunset_start = round(sunset + OFFSET_SUNSET)
     dmc_hourly = (
@@ -345,17 +325,9 @@ def duff_moisture_code(
         if (hour >= sunrise_start and hour < sunset_start)
         else 0.0
     )
-    dmc = last_dmc + dmc_hourly
-    # apply wetting since last period
-    dmc_wetting_hourly = dmc_wetting_between(
-        rain_total_prev, rain_total, dmc_before_rain
-    )
-    # at most apply same wetting as current value (don't go below 0)
-    if dmc_wetting_hourly > dmc:
-        dmc_wetting_hourly = dmc
-    # should be no way this is below 0 because we just made sure it wasn't > dmc
+    dmc = dmc + dmc_hourly
     # HACK: return two values since C uses a pointer to assign a value
-    return (dmc - dmc_wetting_hourly, dmc_before_rain)
+    return (dmc, dmc_before_rain)
 
 
 def dc_drying_hourly(temp):
@@ -437,23 +409,24 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
     r.columns = map(str.lower, r.columns)
     mcffmc = fine_fuel_moisture_from_code(ffmc_old)
     mcgfmc = mcffmc
-    # HACK: always start from daily value at noon
-    while 12 != r.iloc[0]["hr"]:
-        r = r.iloc[1:]
-    cur = r.iloc[0]
-    dmc_old = daily_duff_moisture_code(
-        dmc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
-    )
-    dc_old = daily_drought_code(
-        dc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
-    )
-    # HACK: start from when daily value should be "accurate"
-    prec_accum = 0.0
-    while HOUR_TO_START_FROM != r.iloc[0]["hr"]:
-        # tally up precip between noon and whenever we're applying the indices
-        prec_accum = prec_accum + r.iloc[0]["prec"]
-        r = r.iloc[1:]
-    r.iloc[0, list(r.columns).index("prec")] += prec_accum
+    # just use previous index values from current hour regardless of time
+    # # HACK: always start from daily value at noon
+    # while 12 != r.iloc[0]["hr"]:
+    #     r = r.iloc[1:]
+    # cur = r.iloc[0]
+    # dmc_old = daily_duff_moisture_code(
+    #     dmc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
+    # )
+    # dc_old = daily_drought_code(
+    #     dc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
+    # )
+    # # HACK: start from when daily value should be "accurate"
+    # prec_accum = 0.0
+    # while HOUR_TO_START_FROM != r.iloc[0]["hr"]:
+    #     # tally up precip between noon and whenever we're applying the indices
+    #     prec_accum = prec_accum + r.iloc[0]["prec"]
+    #     r = r.iloc[1:]
+    # r.iloc[0, list(r.columns).index("prec")] += prec_accum
     dmc = dmc_old
     dmc_before_rain = dmc_old
     dc = dc_old

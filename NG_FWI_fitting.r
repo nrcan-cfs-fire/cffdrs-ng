@@ -525,13 +525,13 @@ drying_fraction <- function(temp, rh, ws, rain, mon, hour, solrad, sunrise, suns
   ))
 }
 dmc_drying_daily <- function(temp, rh) {
-  return(DAILY_K_DMC_DRYING * pmax(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
+  return(DAILY_K_DMC_DRYING * pmax(0.0, (temp + OFFSET_TEMP_DMC) * (100.0 - rh) * 0.0001))
 }
 dmc_drying_hourly <- function(temp, rh) {
   return(HOURLY_K_DMC * pmax(0.0, (temp + OFFSET_TEMP_DMC) * (100.0 - rh) * 0.0001))
 }
 dmc_drying_ratio <- function(temp, rh) {
-  return(ifelse(temp <= -1.1, 0.0, (temp + 1.1) * (100.0 - rh) * 0.0001))
+  return(pmax(0.0, (temp + OFFSET_TEMP_DMC) * (100.0 - rh) * 0.0001))
 }
 # dmc_drying_direct <- function(lat, long, temp, rh, ws, rain, mon, k=DAILY_K_DMC_DRYING) {
 dmc_drying_direct <- function(temp, rh, k=DAILY_K_DMC_DRYING) {
