@@ -24,30 +24,13 @@ save_csv(result_hffmc, "./result_hffmc.csv")
 source("make_daily.r")
 df_wx <- as.data.table(read.csv("./data/wx_hourly.csv"))
 df <- hourly_to_daily(df_wx)
-df[, mon := sprintf("%02d", mon)]
-df[, day := sprintf("%02d", day)]
-df[, hour := sprintf("%02d", hour)]
-df[, temp := sprintf("%.1f", round(temp, 1))]
-df[, rh := sprintf("%.0f", round(rh, 0))]
-df[, wind := sprintf("%.1f", round(wind, 1))]
-df[, rain := sprintf("%.1f", round(rain, 1))]
-write.table(df, "./data/wx_daily.csv", quote = FALSE, sep = ",", row.names = FALSE)
+save_csv(df, "./data/wx_daily.csv")
 
 
 source("make_minmax.r")
 df_wx <- as.data.table(read.csv("./data/wx_daily.csv"))
 df <- daily_to_minmax(df_wx)
-df[, mon := sprintf("%02d", mon)]
-df[, day := sprintf("%02d", day)]
-df[, hour := sprintf("%02d", hour)]
-df[, temp_max := sprintf("%.1f", temp_max)]
-df[, temp_min := sprintf("%.1f", temp_min)]
-df[, rh_max := sprintf("%.0f", rh_max)]
-df[, rh_min := sprintf("%.0f", rh_min)]
-df[, ws_max := sprintf("%.1f", ws_max)]
-df[, ws_min := sprintf("%.1f", ws_min)]
-df[, rain := sprintf("%.1f", rain)]
-write.table(df, "./data/wx_minmax.csv", quote = FALSE, sep = ",", row.names = FALSE)
+save_csv(df, "./data/wx_minmax.csv")
 
 
 
@@ -55,15 +38,7 @@ source("make_hourly.r")
 wx_minmax <- as.data.table(read.csv("./data/wx_minmax.csv"))
 df <- minmax_to_hourly(wx_minmax, timezone = -6)
 df_hourly <- copy(df)
-df[, year := sprintf("%02d", year)]
-df[, mon := sprintf("%02d", mon)]
-df[, day := sprintf("%02d", day)]
-df[, hour := sprintf("%02d", hour)]
-df[, temp := sprintf("%.1f", round(temp, 1))]
-df[, rh := sprintf("%.0f", round(rh, 0))]
-df[, wind := sprintf("%.1f", round(wind, 1))]
-df[, rain := sprintf("%.1f", round(rain, 1))]
-write.table(df, "./data/wx_diurnal.csv", quote = FALSE, sep = ",", row.names = FALSE)
+save_csv(df, "./data/wx_diurnal.csv")
 
 
 wx_diurnal <- as.data.table(read.csv("./data/wx_diurnal.csv"))

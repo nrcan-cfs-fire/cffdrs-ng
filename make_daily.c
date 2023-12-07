@@ -81,20 +81,20 @@ int main(int argc, char* argv[])
             old.year,
             old.mon,
             old.day,
-            _round(atemp[LST_NOON], 1),
-            _round(arh[LST_NOON], 0),
-            _round(awind[LST_NOON], 1),
-            _round(rain24, 1));
+            atemp[LST_NOON],
+            arh[LST_NOON],
+            awind[LST_NOON],
+            rain24);
     printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
            old.lat,
            old.lon,
            old.year,
            old.mon,
            old.day,
-           _round(atemp[LST_NOON], 1),
-           _round(arh[LST_NOON], 0),
-           _round(awind[LST_NOON], 1),
-           _round(rain24, 1));
+           atemp[LST_NOON],
+           arh[LST_NOON],
+           awind[LST_NOON],
+           rain24);
   } /* end the main while(err>0)  */
   fclose(inp);
   fclose(out);

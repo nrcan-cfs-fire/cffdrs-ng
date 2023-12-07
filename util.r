@@ -184,12 +184,12 @@ save_csv <- function(df, file) {
   cols_used <- c()
   result <- copy(df)
   colnames(result) <- tolower(colnames(result))
-  apply_format <- function(cols, fmt, digits = 0) {
+  apply_format <- function(cols, fmt, as_int = FALSE) {
     fix_col <- Vectorize(function(x) {
-      y <- round(x, digits)
-      # HACK: deal with negative 0
-      y <- ifelse(0 == y, 0.0, y)
-      return(sprintf(fmt, y))
+      if (as_int) {
+        x <- as.integer(x)
+      }
+      return(sprintf(fmt, ifelse(0 == x, 0, x)))
     })
 
     for (col in names(result)) {
@@ -201,15 +201,15 @@ save_csv <- function(df, file) {
       }
     }
   }
-  apply_format(COLS_LOC, "%.4f", 4)
-  apply_format(COLS_DATE, "%02d")
+  apply_format(COLS_LOC, "%.4f")
+  apply_format(COLS_DATE, "%02d", TRUE)
   apply_format(COLS_RH, "%.0f")
-  apply_format(COLS_WX, "%.1f", 1)
-  apply_format(COLS_SOLRAD, "%.4f", 4)
-  apply_format(COLS_INDICES, "%.1f", 1)
-  apply_format(COLS_EXTRA, "%.4f", 4)
-  apply_format(COLS_GFL, "%.2f", 2)
-  apply_format(COLS_PC, "%.1f", 1)
+  apply_format(COLS_WX, "%.1f")
+  apply_format(COLS_SOLRAD, "%.4f")
+  apply_format(COLS_INDICES, "%.1f")
+  apply_format(COLS_EXTRA, "%.4f")
+  apply_format(COLS_GFL, "%.2f")
+  apply_format(COLS_PC, "%.1f")
   # order used columns based on original ordering
   cols <- intersect(names(result), cols_used)
   result <- result[, ..cols]

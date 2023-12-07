@@ -219,11 +219,12 @@ def save_csv(df, file):
     print(df.columns)
     print(result.columns)
 
-    def apply_format(cols, fmt, digits=0):
+    def apply_format(cols, fmt, as_int=False):
         def fix_col(x):
-            if 0 == digits:
-                return fmt.format(int(round(x, digits)))
-            return fmt.format(round(x, digits))
+            if as_int:
+                x = int(x)
+            # HACK: deal with negative 0
+            return fmt.format(0 if 0 == x else x)
 
         for col in result.columns:
             # HACK: deal with min/max columns
@@ -232,14 +233,14 @@ def save_csv(df, file):
                 cols_used.append(col)
                 result[col] = result[col].apply(fix_col)
 
-    apply_format(COLS_LOC, "{:.4f}", 4)
-    apply_format(COLS_DATE, "{:02d}")
+    apply_format(COLS_LOC, "{:.4f}")
+    apply_format(COLS_DATE, "{:02d}", True)
     apply_format(COLS_RH, "{:.0f}")
-    apply_format(COLS_WX, "{:.1f}", 1)
-    apply_format(COLS_SOLRAD, "{:.4f}", 4)
-    apply_format(COLS_INDICES, "{:.1f}", 1)
-    apply_format(COLS_EXTRA, "{:.4f}", 4)
-    apply_format(COLS_GFL, "{:.2f}", 2)
-    apply_format(COLS_PC, "{:.1f}", 1)
+    apply_format(COLS_WX, "{:.1f}")
+    apply_format(COLS_SOLRAD, "{:.4f}")
+    apply_format(COLS_INDICES, "{:.1f}")
+    apply_format(COLS_EXTRA, "{:.4f}")
+    apply_format(COLS_GFL, "{:.2f}")
+    apply_format(COLS_PC, "{:.1f}")
     result = result[[col for col in result.columns if col in cols_used]]
     result.to_csv(file, index=False)
