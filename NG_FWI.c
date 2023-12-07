@@ -441,15 +441,21 @@ double drought_code(double last_dc,
   /* apply wetting since last period */
   double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
-  if (dc_wetting_hourly > last_dc)
-  {
-    dc_wetting_hourly = last_dc;
-  }
-  /* should be no way this is below 0 because we just made sure it wasn't > dc */
-  double dc = last_dc - dc_wetting_hourly;
+  double dc = _max(0.0, last_dc - dc_wetting_hourly);
   double dc_hourly = dc_drying_hourly(temp);
+  /*   double drying = HOURLY_K_DC * (temp + DC_OFFSET_TEMP);
+    printf("temp=%0.2f, HOURLY_K_DC=%0.3f, DC_OFFSET_TEMP=%0.2f, drying=%0.2f, _max=%0.2f, last_dc=%0.2f, dc_wetting_hourly=%0.2f, dc=%0.2f, dc_hourly=%0.2f\n",
+           temp,
+           HOURLY_K_DC,
+           DC_OFFSET_TEMP,
+           drying,
+           _max(0.0, drying),
+           last_dc,
+           dc_wetting_hourly,
+           dc,
+           dc_hourly); */
   dc = dc + dc_hourly;
-  return (dc);
+  return dc;
 }
 
 /*
@@ -541,57 +547,37 @@ void main(int argc, char* argv[])
     printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n");
     exit(1);
   }
-  double ffmc = atof(argv[2]);
-  if (ffmc > 101 || ffmc < 0)
+  double ffmc_old = atof(argv[2]);
+  if (ffmc_old > 101 || ffmc_old < 0)
   {
     printf(" /n/n *****   FFMC must be between 0 and 101 \n");
     exit(1);
   }
-  const double dmc_startup = atof(argv[3]);
-  if (dmc_startup < 0)
+  const double dmc_old = atof(argv[3]);
+  if (dmc_old < 0)
   {
     printf(" /n/n *****  starting DMC must be >=0  \n");
     exit(1);
   }
-  double dc_startup = atof(argv[4]);
-  if (dc_startup < 0)
+  double dc_old = atof(argv[4]);
+  if (dc_old < 0)
   {
     printf(" /n/n *****   starting DC must be >=0\n");
     exit(1);
   }
-  /* printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, ffmc, dmc_startup); */
-  double mcffmc = fine_fuel_moisture_from_code(ffmc);
-  /* approximation for a start up*/
-  /* double mcgfmc = 101.0 - ffmc; */
+  /* printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, ffmc_old, dmc_old); */
+  double mcffmc = fine_fuel_moisture_from_code(ffmc_old);
   /* assuming this is fine because swiss sfms uses it now */
   double mcgfmc = mcffmc;
-  /*
-  # FIX: implement this
-  # HACK: always start from daily value at noon
-  while (12 != r[1]$hr) {
-    r <- r[2:nrow(r)]
-  }
-  cur <- r[1]
-  dmc_old <- daily_duff_moisture_code(dmc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
-  dc_old <- daily_drought_code(dc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
-  # HACK: start from when daily value should be "accurate"
-  prec_accum <- 0.0
-  while (HOUR_TO_START_FROM != r[1]$hr) {
-    # tally up precip between noon and whenever we're applying the indices
-    prec_accum <- prec_accum + r[1]$prec
-    r <- r[2:nrow(r)]
-  }
-  cur <- r[1]
-  */
   /* check that the header matches what is expected */
   check_header(inp, header);
   struct row cur;
   int err = populate_row(inp, &cur, TZadjust);
   struct row old = cur;
-  double dmc = dmc_startup;
-  double dmc_before_rain = dmc_startup;
-  double dc = dc_startup;
-  double dc_before_rain = dc_startup;
+  double dmc = dmc_old;
+  double dmc_before_rain = dmc_old;
+  double dc = dc_old;
+  double dc_before_rain = dc_old;
   struct rain_intercept canopy = {0.0, 0.0, 0.0};
   FILE* out = fopen(argv[6], "w");
   fprintf(out, "%s\n", header_out);
@@ -629,7 +615,7 @@ void main(int argc, char* argv[])
                             : canopy.rain_total - FFMC_INTERCEPT);
     mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.ws, rain_ffmc, mcffmc);
     /* convert to code for output, but keep using moisture % for precision */
-    ffmc = fine_fuel_moisture_code(mcffmc);
+    double ffmc = fine_fuel_moisture_code(mcffmc);
     /* not ideal, but at least encapsulates the code for each index */
     dmc = duff_moisture_code(
       dmc,
@@ -695,32 +681,32 @@ void main(int argc, char* argv[])
             mcgfmc,
             cur.percent_cured,
             cur.grass_fuel_load);
-    printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
-           cur.lat,
-           cur.lon,
-           cur.year,
-           cur.mon,
-           cur.day,
-           cur.hour,
-           cur.temp,
-           cur.rh,
-           cur.ws,
-           cur.rain,
-           cur.solrad,
-           ffmc,
-           dmc,
-           dc,
-           isi,
-           bui,
-           fwi,
-           dsr,
-           gfmc,
-           gsi,
-           gfwi,
-           mcffmc,
-           mcgfmc,
-           cur.percent_cured,
-           cur.grass_fuel_load);
+    /*     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+               cur.lat,
+               cur.lon,
+               cur.year,
+               cur.mon,
+               cur.day,
+               cur.hour,
+               cur.temp,
+               cur.rh,
+               cur.ws,
+               cur.rain,
+               cur.solrad,
+               ffmc,
+               dmc,
+               dc,
+               isi,
+               bui,
+               fwi,
+               dsr,
+               gfmc,
+               gsi,
+               gfwi,
+               mcffmc,
+               mcgfmc,
+               cur.percent_cured,
+               cur.grass_fuel_load); */
     old = cur;
     err = populate_row(inp, &cur, TZadjust);
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))

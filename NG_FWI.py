@@ -13,9 +13,9 @@ from util import save_csv
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
-HOUR_TO_START_FROM = 12
+# HOUR_TO_START_FROM = 12
 
-HOURLY_K_DMC = 0.27
+HOURLY_K_DMC = 2.10
 HOURLY_K_DC = 0.017
 DMC_OFFSET_TEMP = 1.1
 DC_OFFSET_TEMP = 0.0
@@ -316,6 +316,7 @@ def duff_moisture_code(
     dmc_wetting_hourly = dmc_wetting_between(
         rain_total_prev, rain_total, dmc_before_rain
     )
+    assert 0 <= dmc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
     dmc = max(0.0, last_dmc - dmc_wetting_hourly)
     sunrise_start = round(sunrise + OFFSET_SUNRISE)
@@ -351,16 +352,20 @@ def drought_code(
 ):
     if 0 == rain_total:
         dc_before_rain = last_dc
-    dc_hourly = dc_drying_hourly(temp)
-    dc = last_dc + dc_hourly
     # apply wetting since last period
     dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    assert 0 <= dc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
-    if dc_wetting_hourly > dc:
-        dc_wetting_hourly = dc
-    # should be no way this is below 0 because we just made sure it wasn't > dc
+    dc = max(0.0, last_dc - dc_wetting_hourly)
+    dc_hourly = dc_drying_hourly(temp)
+    # print(
+    #     "last_dc={:0.2f}, dc_wetting_hourly={:0.2f}, dc={:0.2f}, dc_hourly={:0.2f}".format(
+    #         last_dc, dc_wetting_hourly, dc, dc_hourly
+    #     )
+    # )
+    dc = dc + dc_hourly
     # HACK: return two values since C uses a pointer to assign a value
-    return (dc - dc_wetting_hourly, dc_before_rain)
+    return (dc, dc_before_rain)
 
 
 # Calculate number of drying "units" this hour contributes

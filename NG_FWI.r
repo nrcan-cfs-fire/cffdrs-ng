@@ -7,9 +7,9 @@ source("old_cffdrs.r")
 DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.937
 
-# HOURLY_K_DMC <- 2.10
+HOURLY_K_DMC <- 2.10
 # HOURLY_K_DC <- 0.017066
-HOURLY_K_DMC <- 0.27
+# HOURLY_K_DMC <- 0.27
 HOURLY_K_DC <- 0.017
 DMC_OFFSET_TEMP <- 1.1
 DC_OFFSET_TEMP <- 0.0
@@ -273,6 +273,7 @@ grass_spread_index <- Vectorize(function(ws, mc, cur) {
       )
     )
   )
+  # same as float curing(float PC)
   cf <- ifelse(cur > 20,
     1.034 / (1 + 104 * exp(-0.1 * (cur - 20))),
     0.0
@@ -326,13 +327,14 @@ dc_wetting <- function(rain_total, lastdc) {
   }
   rw <- 0.83 * rain_total - 1.27
   smi <- 800 * exp(-lastdc / 400)
-  # total amount of wetting since lastdc
-  w <- 400.0 * log(1.0 + 3.937 * rw / smi)
-  # don't wet more than lastdc regardless of drying since then
-  if (w > lastdc) {
-    w <- lastdc
-  }
-  return(w)
+  return(400.0 * log(1.0 + 3.937 * rw / smi))
+  # # total amount of wetting since lastdc
+  # w <- 400.0 * log(1.0 + 3.937 * rw / smi)
+  # # don't wet more than lastdc regardless of drying since then
+  # if (w > lastdc) {
+  #   w <- lastdc
+  # }
+  # return(w)
 }
 
 dmc_wetting_between <- function(rain_total_previous, rain_total, lastdmc) {
@@ -406,7 +408,7 @@ dc_drying_hourly <- function(temp) {
 drought_code <- function(
     last_dc,
     lat,
-    long,
+    lon,
     temp,
     rh,
     ws,
@@ -425,12 +427,13 @@ drought_code <- function(
   # apply wetting since last period
   dc_wetting_hourly <- dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
-  if (dc_wetting_hourly > last_dc) {
-    dc_wetting_hourly <- last_dc
-  }
-  # should be no way this is below 0 because we just made sure it wasn't > dc
-  dc <- last_dc - dc_wetting_hourly
+  dc <- pmax(0.0, last_dc - dc_wetting_hourly)
   dc_hourly <- dc_drying_hourly(temp)
+  # print(sprintf("last_dc=%0.2f, dc_wetting_hourly=%0.2f, dc=%0.2f, dc_hourly=%0.2f\n",
+  #        last_dc,
+  #        dc_wetting_hourly,
+  #        dc,
+  #        dc_hourly))
   dc <- dc + dc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dc = dc, dc_before_rain = dc_before_rain))
