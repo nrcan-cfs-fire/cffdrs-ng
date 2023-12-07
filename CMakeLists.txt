@@ -23,9 +23,15 @@ ENDIF()
 
 set(DIR_BIN ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
-add_custom_command(TARGET ${PROJECT_NAME}
-                   PRE_BUILD
-                   COMMAND rm -rf ${DIR_BIN})
+IF (NOT WIN32)
+    add_custom_command(TARGET ${PROJECT_NAME}
+                    PRE_BUILD
+                    COMMAND rm -rf ${DIR_BIN})
+ELSE()
+    add_custom_command(TARGET ${PROJECT_NAME}
+                    PRE_BUILD
+                    COMMAND del /s /q ${DIR_BIN})
+ENDIF()
 
 add_custom_command(TARGET ${PROJECT_NAME}
                    PRE_BUILD
