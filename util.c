@@ -5,13 +5,15 @@
 /* abs() isn't working either */
 double _abs(double x)
 {
-  return (x < 0) ? -x : x;
+  /* work around negative 0 as well */
+  return (0 == x) ? 0.0 : ((x < 0) ? -x : x);
 }
 
 /* copysign() doesn't seem to work for some reason */
 double _copysign(double x, double y)
 {
-  return _abs(x) * ((y < 0) ? -1 : 1);
+  /* >=0 to account for negative zero */
+  return _abs(x) * ((y >= 0) ? 1 : -1);
 }
 
 double _round(double x, int digits)
@@ -88,7 +90,7 @@ double sun_julian(double lat, double lon, int jd, int hour, int timezone, double
   double zenith = acos(sin(lat * M_PI / 180) * sin(decl)
                        + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180));
   double solrad = 0.95 * cos(zenith);
-  if (solrad < 0)
+  if (solrad <= 0)
   {
     solrad = 0.0;
   }

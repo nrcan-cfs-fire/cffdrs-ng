@@ -79,13 +79,13 @@ getSunlightDT <- function(df) {
   df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
   df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
   df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  df_all <- merge(df_copy, df_dates, by=c("LAT", "LONG", "D", "TIMEZONE"))
+  df_all <- merge(df_copy, df_dates, by = c("LAT", "LONG", "D", "TIMEZONE"))
   df_all[, HR := hour(TIMESTAMP)]
   df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
   df_all[, HOURANGLE := TST / 4 - 180]
   df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
   df_all[, SOLRAD := 0.95 * cos(ZENITH)]
-  df_all[, SOLRAD := ifelse(SOLRAD < 0, 0, SOLRAD)]
+  df_all[, SOLRAD := ifelse(SOLRAD <= 0, 0, SOLRAD)]
   colnames(df_all) <- toupper(colnames(df_all))
   # remove temporary calculations
   cols <- c(names(df), "SOLRAD", "SUNRISE", "SUNSET")
@@ -217,6 +217,6 @@ save_csv <- function(df, file) {
 }
 
 dmc_to_moisture_percent <- function(dmc) {
-  MC <- 20 + exp(dmc - 244.72)/43.43
+  MC <- 20 + exp(dmc - 244.72) / 43.43
   return(MC)
 }

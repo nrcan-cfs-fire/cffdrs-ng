@@ -62,12 +62,12 @@ int main(int argc, char* argv[])
     temp_min_max(cur.temp, cur.rh, &temp_min, &temp_max);
     double q = findQ(cur.temp, cur.rh);
     double rh_min = findrh(q, temp_max);
-    if (rh_min < 0)
+    if (rh_min <= 0)
     {
       rh_min = 0;
     }
     double rh_max = findrh(q, temp_min);
-    if (rh_max > 100)
+    if (rh_max >= 100)
     {
       rh_max = 100;
     }

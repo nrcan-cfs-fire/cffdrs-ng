@@ -20,7 +20,7 @@ dc_drying_daily <- function(temp, mon) {
   # }
   # pe <- (0.36 * (temp + 2.8) + FL_DC[[1]][mon]) / 2.0
   pe <- (0.36 * (pmax(-2.8, temp) + 2.8) + FL_DC[[1]][mon]) / 2.0
-  return(ifelse(pe < 0.0, 0.0, pe))
+  return(ifelse(pe <= 0.0, 0.0, pe))
 }
 #
 # # assume temp >= -2.8
@@ -189,11 +189,11 @@ dc_drying_ratio <- function(temp, mon, dc_factor) {
 #   return(pmax(0.0, ((((0.36 / DAILY_K_DC_DRYING) * (pmax(-2.8, temp) + 2.8)) + Epot_adj) / dc_factor) / 2.0))
 # }
 
-prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
+prep_df <- function(eqn, df_wx, hour_split, offset_sunrise = 0, offset_sunset = 0) {
   df <- copy(df_wx)
   df[, DATE := as.Date(TIMESTAMP)]
   df[, FOR_DATE := fifelse(HR <= hour_split, DATE, DATE + 1)]
-  df[, PREC24 := sum(PREC), by=list(ID, YR, FOR_DATE)]
+  df[, PREC24 := sum(PREC), by = list(ID, YR, FOR_DATE)]
   df[, SUNRISE := round(SUNRISE + offset_sunrise)]
   df[, SUNSET := round(SUNSET + offset_sunset)]
   df[, IS_DAYLIGHT := ifelse((HR >= SUNRISE) & (HR < SUNSET), "T", "F")]
@@ -256,10 +256,10 @@ prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
   df_noon[, PE_DAILY := dc_drying_daily(TEMP, MON)]
   # df_noon <- df_noon[, c("ID", "YR", "FOR_DATE", "PE_DAILY")]
   if (1 != eqn) {
-    df <- df["T" == IS_DAYLIGHT,]
+    df <- df["T" == IS_DAYLIGHT, ]
   }
-  df_pe <- df[, list(DC_DRYING_RATIO=sum(DC_DRYING_RATIO)), by=list(ID, FOR_DATE)]
-  df_daily <- merge(df_noon[, -c("IS_DAYLIGHT", "DC_DRYING_RATIO")], df_pe, by=c("ID", "FOR_DATE"))
+  df_pe <- df[, list(DC_DRYING_RATIO = sum(DC_DRYING_RATIO)), by = list(ID, FOR_DATE)]
+  df_daily <- merge(df_noon[, -c("IS_DAYLIGHT", "DC_DRYING_RATIO")], df_pe, by = c("ID", "FOR_DATE"))
   df_daily[, DC_SUNLIGHT_RATIO := FL_DC[[1]][MON] / SUNLIGHT_HOURS]
   cols <- c(c("HAD_RAIN", "ID", "FOR_DATE", "YR", "MON", "SUNLIGHT_HOURS"), COLS_DC)
   df <- df_daily[, ..cols]
@@ -291,23 +291,22 @@ prep_df <- function(eqn, df_wx, hour_split, offset_sunrise=0, offset_sunset=0) {
 # NULL
 
 
-solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
+solve_k <- function(df_wx, hour_split = HOUR_PEAK) {
   score_df <- function(df, cols_groups, offset_sunrise, offset_sunset) {
-    print(paste0("Running with groups based on: [", paste0(cols_groups, collapse=", "), "]"))
+    print(paste0("Running with groups based on: [", paste0(cols_groups, collapse = ", "), "]"))
     # df_noon <- unique(df[, c("ID", "FOR_DATE", "PE_DAILY")])
     find_k <- function(df) {
       cmp_df <- function(k) {
         # return(mean(abs(df[, list(PE_DAILY=min(PE_DAILY), PE=sum(k * DC_DRYING_RATIO)), by=list(ID, FOR_DATE)][, PE_DAILY - PE])))
-        return(mean((df[, list(PE_DAILY=min(PE_DAILY), PE=sum(k * DC_DRYING_RATIO)), by=list(ID, FOR_DATE)][, PE_DAILY - PE]) ^ 2))
+        return(mean((df[, list(PE_DAILY = min(PE_DAILY), PE = sum(k * DC_DRYING_RATIO)), by = list(ID, FOR_DATE)][, PE_DAILY - PE])^2))
       }
       return(optimize(cmp_df, c(1E-6, DC_K_LIMIT)))
     }
-    for_groups <- function(fct, df_group, cols_set=list(), cols_left=cols_groups) {
+    for_groups <- function(fct, df_group, cols_set = list(), cols_left = cols_groups) {
       if (0 == length(cols_left)) {
         # have group if cols_left is empty
         return(fct(df_group, cols_set))
-      }
-      else {
+      } else {
         col <- cols_left[[1]]
         cols_left <- setdiff(cols_left, c(col))
         # call with whole thing but less columns first
@@ -324,13 +323,13 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
       return(results_group)
     }
     add_total <- function(df_sub, cols_set) {
-      return(data.table(n=1, total=nrow(df_sub)))
+      return(data.table(n = 1, total = nrow(df_sub)))
     }
     cnt <- for_groups(add_total, df)
     n <- sum(cnt$n)
     total <- sum(cnt$total)
     # seems like there should be a way to get number of groups without looping but can't think of it
-    stopifnot((total / nrow(df)) == (2 ^ length(cols_groups)))
+    stopifnot((total / nrow(df)) == (2^length(cols_groups)))
     # n <- 0
     # # if set of groups contains all the rows overall then it's based on unique ways to pick subsets, plus 1 for no subset
     # total <- (2 ^ length(cols_groups)) * nrow(df)
@@ -342,9 +341,9 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     # 100%|███████████████████████████████████████| 100/100 [00:01<00:00, 97.89it/s]
     pbar_format <- "[:percent] |:bar| [:i/:n groups, :current/:total rows] [:elapsedfull<:eta, :tick_rate rows/s]"
     pb_all <- progress_bar$new(
-      total=total,
+      total = total,
       format = pbar_format,
-      clear=FALSE
+      clear = FALSE
     )
     # show progress right away since first fit takes longest
     i <- 0
@@ -396,7 +395,7 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     i <- 2.5
     j <- 0.5
     print(sprintf("(OFFSET_SUNRISE=%0.1f, OFFSET_SUNSET=%0.1f)", i, j))
-    df <- prep_df(eqn, df_wx, hour_split, offset_sunrise=i, offset_sunset=j)
+    df <- prep_df(eqn, df_wx, hour_split, offset_sunrise = i, offset_sunset = j)
     # df <- df["T" == IS_DAYLIGHT & "F" == HAD_RAIN, -c("IS_DAYLIGHT", "HAD_RAIN")]
     # # stop trying to find a relationship with sunlight hours
     # df <- df[, -c("SUNLIGHT_HOURS")]
@@ -404,16 +403,16 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     df_current <- score_df(df, cols_groups, i, j)
     df_current[, equation := eqn]
     file_out <- sprintf("%s/dc_k_ON_%s_%0.1f_%0.1f.csv", dir_out, lbl, i, j)
-    write.csv(df_current, file_out, row.names=FALSE, quote=FALSE)
+    write.csv(df_current, file_out, row.names = FALSE, quote = FALSE)
     return(df_current)
   }
-  r <- future_lapply(1:9, FUN=fct)
+  r <- future_lapply(1:9, FUN = fct)
   df_results_all <- rbindlist(r)
   df_results_by_eqn <- rbind(df_results_by_eqn, df_results_all)
   df <- df_results_by_eqn[OFFSET_SUNRISE == 2.5 & OFFSET_SUNSET == 0.5 & "*" == YR]
   # df <- df_results_by_eqn[OFFSET_SUNRISE == 2.5 & OFFSET_SUNSET == 0.5 & "*" == SUNLIGHT_HOURS & "*" == YR]
   # df <- df[equation >= 3,]
-  df <- df[7 == MON,]
+  df <- df[7 == MON, ]
   s <- list()
   m <- list()
   for (i in unique(df$equation)) {
@@ -423,7 +422,7 @@ solve_k <- function(df_wx, hour_split=HOUR_PEAK) {
     m[as.character(i)] <- mean(df_o$estimate)
   }
 
-  df_eq <- as.data.table(list("equation"=names(s), "std_dev"=unlist(s), "mean"=unlist(m)))
+  df_eq <- as.data.table(list("equation" = names(s), "std_dev" = unlist(s), "mean" = unlist(m)))
   df_eq[, mag := (std_dev * 100) / mean]
   boxplot(estimate ~ equation, df)
   print(df_eq)

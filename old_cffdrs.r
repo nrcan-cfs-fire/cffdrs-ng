@@ -22,7 +22,7 @@ daily_fine_fuel_moisture_code <- function(ffmc_yda, temp, rh, ws, prec) {
   wm <- ifelse(wmo > ed, ed + (wmo - ed) / (10^x), wm)
   ffmc1 <- (59.5 * (250 - wm)) / (147.2 + wm)
   ffmc1 <- ifelse(ffmc1 > 101, 101, ffmc1)
-  ffmc1 <- ifelse(ffmc1 < 0, 0, ffmc1)
+  ffmc1 <- ifelse(ffmc1 <= 0, 0, ffmc1)
   return(ffmc1)
 }
 
@@ -66,9 +66,9 @@ daily_duff_moisture_code <- function(dmc_yda, temp, rh, prec, lat, mon, lat.adju
     wmr <- wmi + 1000 * rw / (48.77 + b * rw)
     43.43 * (5.6348 - log(wmr - 20))
   })
-  pr <- ifelse(pr < 0, 0, pr)
+  pr <- ifelse(pr <= 0, 0, pr)
   dmc1 <- pr + rk
-  dmc1 <- ifelse(dmc1 < 0, 0, dmc1)
+  dmc1 <- ifelse(dmc1 <= 0, 0, dmc1)
   return(dmc1)
 }
 
@@ -90,15 +90,15 @@ daily_drought_code <- function(dc_yda, temp, rh, prec, lat, mon, lat.adjust = TR
     pe <- ifelse(lat > -20 & lat <= 20, (0.36 * (temp + 2.8) +
       1.4) / 2, pe)
   }
-  pe <- ifelse(pe < 0, 0, pe)
+  pe <- ifelse(pe <= 0, 0, pe)
   ra <- prec
   rw <- 0.83 * ra - 1.27
   smi <- 800 * exp(-1 * dc_yda / 400)
   dr0 <- dc_yda - 400 * log(1 + 3.937 * rw / smi)
-  dr0 <- ifelse(dr0 < 0, 0, dr0)
+  dr0 <- ifelse(dr0 <= 0, 0, dr0)
   dr <- ifelse(prec <= 2.8, dc_yda, dr0)
   dc1 <- dr + pe
-  dc1 <- ifelse(dc1 < 0, 0, dc1)
+  dc1 <- ifelse(dc1 <= 0, 0, dc1)
   return(dc1)
 }
 

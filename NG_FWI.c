@@ -152,7 +152,7 @@ double buildup_index(double dmc, double dc)
     const double p = (dmc - bui) / dmc;
     const double cc = 0.92 + pow(0.0114 * dmc, 1.7);
     bui = dmc - cc * p;
-    if (bui < 0)
+    if (bui <= 0)
     {
       bui = 0;
     }

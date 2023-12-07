@@ -124,7 +124,7 @@ def sun(lat, lon, mon, day, hour, timezone):
         + cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180)
     )
     solrad = 0.95 * cos(zenith)
-    if solrad < 0:
+    if solrad <= 0:
         solrad = 0.0
     # print(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f".format(jd, hour, fracyear, decl,
     #                                                                                          timeoffset, tst,

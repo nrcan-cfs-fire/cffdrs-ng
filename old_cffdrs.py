@@ -113,7 +113,7 @@ def daily_ffmc(ffmc_yda, temp, rh, ws, prec):
     ffmc1 = (59.5 * (250 - wm)) / (147.2 + wm)
     # Constraints
     ffmc1 = 101 if (ffmc1 > 101) else ffmc1
-    ffmc1 = 0 if (ffmc1 < 0) else ffmc1
+    ffmc1 = 0 if (ffmc1 <= 0) else ffmc1
     return ffmc1
 
 
@@ -227,10 +227,10 @@ def daily_duff_moisture_code(dmc_yda, temp, rh, prec, lat, mon, lat_adjust=True)
         wmr = wmi + 1000 * rw / (48.77 + b * rw)
         # Alteration to Eq. 15 to calculate more accurately
         pr = 43.43 * (5.6348 - log(wmr - 20))
-    pr = 0 if (pr < 0) else pr
+    pr = 0 if (pr <= 0) else pr
     # Calculate final P (DMC)
     dmc1 = pr + rk
-    dmc1 = 0 if (dmc1 < 0) else dmc1
+    dmc1 = 0 if (dmc1 <= 0) else dmc1
     return dmc1
 
 
@@ -302,7 +302,7 @@ def daily_drought_code(dc_yda, temp, rh, prec, lat, mon, lat_adjust=True):
         pe = ((0.36 * (temp + 2.8) + fl02[mon]) / 2) if (lat <= -20) else pe
         pe = ((0.36 * (temp + 2.8) + 1.4) / 2) if (-20 < lat <= 20) else pe
     # Cap potential evapotranspiration at 0 for negative winter DC values
-    pe = 0 if (pe < 0) else pe
+    pe = 0 if (pe <= 0) else pe
     ra = prec
     # Eq. 18 - Effective Rainfall
     rw = 0.83 * ra - 1.27
@@ -310,10 +310,10 @@ def daily_drought_code(dc_yda, temp, rh, prec, lat, mon, lat_adjust=True):
     smi = 800 * exp(-1 * dc_yda / 400)
     # Alteration to Eq. 21
     dr0 = dc_yda - 400 * log(1 + 3.937 * rw / smi)
-    dr0 = 0 if (dr0 < 0) else dr0
+    dr0 = 0 if (dr0 <= 0) else dr0
     # if precip is less than 2.8 then use yesterday's DC
     dr = dc_yda if (prec <= 2.8) else dr0
     # Alteration to Eq. 23
     dc1 = dr + pe
-    dc1 = 0 if (dc1 < 0) else dc1
+    dc1 = 0 if (dc1 <= 0) else dc1
     return dc1

@@ -148,7 +148,7 @@ buildup_index <- function(dmc, dc) {
     },
     bui
   )
-  bui <- ifelse(bui < 0, 0, bui)
+  bui <- ifelse(bui <= 0, 0, bui)
   return(bui)
 }
 
@@ -312,7 +312,7 @@ dmc_wetting <- function(rain_total, lastdmc) {
   wmi <- 20 + 280 / exp(0.023 * lastdmc)
   wmr <- wmi + 1000 * rw / (48.77 + b * rw)
   dmc <- 43.43 * (5.6348 - log(wmr - 20))
-  if (dmc < 0.0) {
+  if (dmc <= 0.0) {
     dmc <- 0.0
   }
   # total amount of wetting since lastdmc
