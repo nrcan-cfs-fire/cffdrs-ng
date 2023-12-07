@@ -22,18 +22,23 @@ IF (NOT WIN32)
 ENDIF()
 
 set(DIR_BIN ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-file(REMOVE_RECURSE ${DIR_BIN})
-file(MAKE_DIRECTORY ${DIR_BIN})
 
-add_custom_command(TARGET ${PROJECT_NAME}
-                   POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> ${DIR_BIN})
-add_custom_command(TARGET make_daily
-                   POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:make_daily> ${DIR_BIN})
-add_custom_command(TARGET make_minmax
-                   POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:make_minmax> ${DIR_BIN})
-add_custom_command(TARGET make_hourly
-                   POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:make_hourly> ${DIR_BIN})
+set_target_properties(${PROJECT_NAME} PROPERTIES
+                      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DIR_BIN}/
+                      RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DIR_BIN}/
+)
+
+set_target_properties(make_daily PROPERTIES
+                      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DIR_BIN}/
+                      RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DIR_BIN}/
+)
+
+set_target_properties(make_minmax PROPERTIES
+                      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DIR_BIN}/
+                      RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DIR_BIN}/
+)
+
+set_target_properties(make_hourly PROPERTIES
+                      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${DIR_BIN}/
+                      RUNTIME_OUTPUT_DIRECTORY_RELEASE ${DIR_BIN}/
+)
