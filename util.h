@@ -45,9 +45,13 @@ struct row_minmax
   double temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain;
 };
 /**
- * Read a row from a an hourly weather stream file
+ * Read a row from an hourly weather stream file
  */
 int read_row(FILE* inp, struct row* r);
+/**
+ * Read a row from a daily weather stream file
+ */
+int read_row_daily(FILE* inp, struct row_daily* r);
 /**
  * Read a row from a min/max weather stream file
  */
@@ -124,4 +128,7 @@ double seasonal_curing(int julian_date);
 
 /* C90 round() only rounds to int but want digits */
 double _round(double x, int digits);
+
+/* C90 max() also causing problems */
+double _max(double x, double y);
 #endif
