@@ -254,9 +254,16 @@ def dmc_wetting(rain_total, lastdmc):
             else (6.2 * log(lastdmc) - 17.2)
         )
     )
-    reff = 0.92 * rain_total - 1.27
+    rw = 0.92 * rain_total - 1.27
+    wmi = 20 + 280 / exp(0.023 * lastdmc)
     # This is the change in MC (moisturecontent)  from FULL DAY's rain
-    return 1000.0 * reff / (48.77 + b * reff)
+    wmr = wmi + 1000 * rw / (48.77 + b * rw)
+    dmc = 43.43 * (5.6348 - log(wmr - 20))
+    if dmc <= 0.0:
+        dmc = 0.0
+    # total amount of wetting since lastdmc
+    w = lastdmc - dmc
+    return w
 
 
 def dc_wetting(rain_total, lastdc):

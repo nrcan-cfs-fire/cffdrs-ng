@@ -321,9 +321,17 @@ double dmc_wetting(double rain_total, double lastdmc)
                    : (lastdmc <= 65
                         ? 14.0 - 1.3 * log(lastdmc)
                         : 6.2 * log(lastdmc) - 17.2);
-  const double reff = 0.92 * rain_total - 1.27;
-  /* This is the change in MC (moisturecontent)  from FULL DAY's rain  */
-  return 1000.0 * reff / (48.77 + b * reff);
+  const double rw = 0.92 * rain_total - 1.27;
+  const double wmi = 20 + 280 / exp(0.023 * lastdmc);
+  const double wmr = wmi + 1000 * rw / (48.77 + b * rw);
+  double dmc = 43.43 * (5.6348 - log(wmr - 20));
+  if (dmc <= 0.0)
+  {
+    dmc = 0.0;
+  }
+  /* total amount of wetting since lastdmc */
+  const double w = lastdmc - dmc;
+  return w;
 }
 
 double dc_wetting(double rain_total, double lastdc)
