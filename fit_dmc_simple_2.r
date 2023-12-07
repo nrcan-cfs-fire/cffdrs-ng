@@ -2,11 +2,19 @@ source("load_data.r")
 source("test_hFWI.r")
 source("NG_FWI_fitting.r")
 
+rmse  <- function(x, y) {
+  return(sqrt(mean((x - y) ^ 2)))
+}
+
+rrmse <- function(x, y) {
+  return(sqrt(mean((x - y) ^ 2) / sum(x ^ 2)))
+}
+
 HOUR_PEAK <<- 16
 
 # TODO: find k value with VPD instead
 
-do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offset_sunrise=2.5, offset_sunset=0.5, do_plot=FALSE) {
+do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offset_sunrise=2.5, offset_sunset=0.5, do_plot=FALSE, fct_score=rrmse) {
   FIT_TEMP_DMC <<- fit_temp
   FIT_DAYLIGHT_DMC <<- fit_daylight
   OFFSET_SUNRISE <<- offset_sunrise
@@ -14,7 +22,10 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offs
   OFFSET_TEMP_DMC <<- offset_temp
   hour_split <- HOUR_PEAK
   df_hourly <- copy(df_wx)
-  df_hourly <- df_hourly[TIMEZONE == timezone,]
+  if (!is.na(timezone)) {
+    df_hourly <- df_hourly[TIMEZONE == timezone,]
+  }
+  timezones <- unique(df_hourly$TIMEZONE)
   df_hourly[, DATE := as.Date(TIMESTAMP)]
   df_hourly[, FOR_DATE := fifelse(HR <= hour_split, DATE, DATE + 1)]
   df_hours <- df_hourly[, list(num_hours=.N), by=list(ID, FOR_DATE)]
@@ -33,27 +44,31 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offs
   df_noon <- df_hourly[12 == HR, ]
   # df_noon[, PE_DAILY := dmc_drying_daily(TEMP, MON)]
   # df_noon[, PE_DAILY := dmc_drying_daily(TEMP, MON)]
-  df_noon[, PE_DAILY := 1.894 * (TEMP + 1.1) * (100 - rh) * EL_DMC[[1]][MON] * 1e-04]
+  df_noon[, PE_DAILY := 1.894 * (TEMP + 1.1) * (100 - RH) * EL_DMC[[1]][MON] * 1e-04]
   df_noon <- df_noon[, list(ID, FOR_DATE, PE_DAILY)]
   df_hourly <- df_hourly[, list(ID, FOR_DATE, HR, IS_DAYLIGHT, TEMP, RH)]
   cmp_df <- function(x) {
-    HOURLY_K_DMC <- x[[1]]
+    k <- x[[1]]
     if (fit_temp) {
-      OFFSET_TEMP_DMC <- x[[2]]
+      offset_temp <- x[[2]]
+    } else {
+      offset_temp <- OFFSET_TEMP_DMC
     }
     df <- copy(df_hourly)
     if (FIT_DAYLIGHT_DMC) {
       df <- df["T" == IS_DAYLIGHT,]
     }
-    df[, DMC_DRY_HOURLY := pmax(0.0, HOURLY_K_DMC * (TEMP + OFFSET_TEMP_DMC) * (100.0 - RH) * 0.0001)]
+    df[, DMC_DRY_HOURLY := pmax(0.0, k * (TEMP + offset_temp) * (100.0 - RH) * 0.0001)]
     df_pe <- df[, list(PE_SUM=sum(DMC_DRY_HOURLY)), by=list(ID, FOR_DATE)]
     df <- merge(df_noon[, c("ID", "FOR_DATE", "PE_DAILY")], df_pe, by=c("ID", "FOR_DATE"))
-    return(sqrt(mean(df[, PE_DAILY - PE_SUM] ^ 2)))
+    return(fct_score(df$PE_DAILY, df$PE_SUM))
+    # return(sqrt(mean(df[, PE_DAILY - PE_SUM] ^ 2)))
   }
   r <- ifelse(fit_temp,
               optim(list(k=1.0, offset_temp=OFFSET_TEMP_DMC), cmp_df),
               optim(list(k=1.0), cmp_df, method="Brent", lower=1E-6, upper=10))
   r <- as.list(unlist(r))
+  score_all <- cmp_df(r)
   HOURLY_K_DMC <<- r[[1]]
   if (FIT_TEMP_DMC) {
     # OFFSET_TEMP_DMC <<- r$offset_temp
@@ -65,11 +80,19 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offs
   title <- sprintf("TIMEZONE=%d\n%s\npe <- K * (temp +`` %f) * (100 - rh) * 0.0001\nHOURLY_K_DMC <- %f", timezone, title_daylight, OFFSET_TEMP_DMC, HOURLY_K_DMC)
   print(sprintf("Fit is:\n%s", title))
   df_test <- fread("./data/wx_hourly.csv")
-  # HACK: just set id for now
-  df_test$id <- 1
   df_test$prec <- 0.0
-  df_fwi <- test_hfwi(df_test, timezone)
-  score <- sqrt(mean(df_fwi[hour(TIMESTAMP) == 16, (DMC - DDMC)] ^ 2))
+  df_fwi <- NULL
+  for (i in 1:length(timezones)) {
+    # # HACK: just set id for now
+    df_test$id <- i
+    df_tz <- test_hfwi(df_test, timezones[[i]])
+    df_fwi <- rbind(df_fwi, df_tz)
+  }
+  df_peak <- df_fwi[hour(TIMESTAMP) == 16, ]
+  score <- sqrt(mean(df_peak[, (DMC - DDMC)] ^ 2))
+  score_rmse <- rmse(df_peak$DMC, df_peak$DDMC)
+  score_rrmse <- rrmse(df_peak$DMC, df_peak$DDMC)
+
   title <- sprintf("RMSE: %0.3f\n%s", score, title)
   if (do_plot) {
     print(ggplot(df_fwi) +
@@ -80,34 +103,50 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=1.1, timezone = -6, offs
   }
   # df_fwi_all <- test_hfwi(df_all[TIMEZONE == timezone,], timezone)
   # score_all <- sqrt(mean(df_fwi_all[hour(TIMESTAMP) == 16, (DMC - DDMC)] ^ 2))
+  # df_test_all <- copy(df_wx)
+  # df_test_all$PREC <- 0.0
+  # df_fwi_all <- NULL
+  # for (timezone in unique(df_test_all$TIMEZONE)) {
+  #   df_fwi_all <- rbind(df_fwi_all, test_hfwi(df_test_all[TIMEZONE == timezone,], timezone))
+  # }
+  # score_ON <- sqrt(mean(df_fwi_all[hour(TIMESTAMP) == 16, (DMC - DDMC)] ^ 2))
   return(as.data.table(list(offset_sunrise=ifelse(fit_daylight, offset_sunrise, NA),
-                         offset_sunset=ifelse(fit_daylight, offset_sunset, NA),
-                         fit_temp=fit_temp,
-                         fit_daylight=fit_daylight,
-                         timezone=timezone,
-                         offset_temp=OFFSET_TEMP_DMC,
-                         k=HOURLY_K_DMC,
-                         score=score)))
+                            offset_sunset=ifelse(fit_daylight, offset_sunset, NA),
+                            fit_temp=fit_temp,
+                            fit_daylight=fit_daylight,
+                            timezone=timezone,
+                            offset_temp=OFFSET_TEMP_DMC,
+                            k=HOURLY_K_DMC,
+                            # score_ON=score_ON,
+                            score_all=score_all,
+                            score=score)))
 }
 
 df_all <- df_wx[, -c("SOLRAD", "SUNRISE", "SUNSET", "SUNLIGHT_HOURS")]
 df_all$PREC <- 0.0
 
-results <- NULL
+TIMEZONES <- c(-6, -5, NA)
 
+
+FCT_SCORE <- c(rmse=rmse, rrmse=rrmse)
+
+results <- NULL
 offsets <- list(c(0.0, 0.0), c(3.0, 0.0), c(2.5, 0.5), c(2.0, 1.0), c(1.5, 1.5), c(1.0, 2.0), c(0.5, 2.5), c(0.0, 3.0))
-for (k in 1:length(offsets)) {
-  offset_sunrise=offsets[[k]][[1]]
-  offset_sunset=offsets[[k]][[2]]
-  for (fit_daylight in c(FALSE, TRUE)) {
-    if (fit_daylight || (1 == k)) {
-      for (timezone in -6:-5) {
-        for (fit_temp in c(TRUE, FALSE)) {
-          if (fit_temp) {
-            results <- rbind(results, do_test(fit_temp=fit_temp, fit_daylight=fit_daylight, timezone=timezone, offset_sunrise=offset_sunrise, offset_sunset=offset_sunset))
-          } else {
-            for (offset_temp in c(1.1, 0.0)) {
-              results <- rbind(results, do_test(fit_temp=fit_temp, fit_daylight=fit_daylight, offset_temp=offset_temp, timezone=timezone, offset_sunrise=offset_sunrise, offset_sunset=offset_sunset))
+for (fct_name in names(FCT_SCORE)) {
+  fct_score <- FCT_SCORE[[fct_name]]
+  for (k in 1:length(offsets)) {
+    offset_sunrise=offsets[[k]][[1]]
+    offset_sunset=offsets[[k]][[2]]
+    for (fit_daylight in c(FALSE, TRUE)) {
+      if (fit_daylight || (1 == k)) {
+        for (timezone in TIMEZONES) {
+          for (fit_temp in c(TRUE, FALSE)) {
+            if (fit_temp) {
+              results <- rbind(results, cbind(fct_score=fct_name, do_test(fit_temp=fit_temp, fit_daylight=fit_daylight, timezone=timezone, offset_sunrise=offset_sunrise, offset_sunset=offset_sunset, fct_score=fct_score)))
+            } else {
+              for (offset_temp in c(1.1, 0.0)) {
+                results <- rbind(results, cbind(fct_score=fct_name, do_test(fit_temp=fit_temp, fit_daylight=fit_daylight, offset_temp=offset_temp, timezone=timezone, offset_sunrise=offset_sunrise, offset_sunset=offset_sunset, fct_score=fct_score)))
+              }
             }
           }
         }
@@ -116,7 +155,7 @@ for (k in 1:length(offsets)) {
   }
 }
 
-setorder(results, score)
+setorder(results, score_all)
 
 
 do_apply <- function(v) {
@@ -133,8 +172,11 @@ do_apply <- function(v) {
     # HACK: just set id for now
     df_test$ID <- 1
     df_fwi <- test_hfwi(df_test, timezone)
-    score <- sqrt(mean(df_fwi[hour(TIMESTAMP) == 16, (DMC - DDMC)] ^ 2))
-    return(list(df_fwi=df_fwi, score=score))
+    df_peak <- df_fwi[hour(TIMESTAMP) == 16, ]
+    score <- sqrt(mean(df_peak[, (DMC - DDMC)] ^ 2))
+    score_rmse <- rmse(df_peak$DMC, df_peak$DDMC)
+    score_rrmse <- rrmse(df_peak$DMC, df_peak$DDMC)
+    return(list(df_fwi=df_fwi, score=score, score_rmse=score_rmse, score_rrmse=score_rrmse))
   }
   plot_fit <- function(df_test) {
     title_daylight <- ifelse(FIT_DAYLIGHT_DMC,

@@ -596,7 +596,9 @@ rain_since_intercept_reset <- function(temp,
     cur$dsr <- daily_severity_rating(cur$fwi)
     mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
     cur$mcgfmc <- mcgfmc
+    # QUESTION: replace with GFMC function from C code?
     cur$gfmc <- fine_fuel_moisture_code(mcgfmc)
+    # still use mcgfmc
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, cur$grass_fuel_load)
     results <- rbind(results, cur)

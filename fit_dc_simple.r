@@ -1,7 +1,7 @@
 source("load_data.r")
 source("test_dc_k.r")
-source("test_hFWI_fitting.r")
-
+source("test_hFWI.r")
+source("NG_FWI_fitting.r")
 
 do_test <- function(fit_temp, fit_daylight, offset_temp=2.8, timezone = -6, offset_sunrise=2.5, offset_sunset=0.5, do_plot=FALSE) {
   FIT_TEMP <<- fit_temp
@@ -67,7 +67,7 @@ do_test <- function(fit_temp, fit_daylight, offset_temp=2.8, timezone = -6, offs
   print(sprintf("Fit is:\n%s", title))
   df_test <- fread("./data/wx_hourly.csv")
   df_test$prec <- 0.0
-  df_fwi <- test_hfwi(df_test, timezone, FLAG_NO_MONTH_FACTOR = FALSE)
+  df_fwi <- test_hfwi(df_test, timezone)
   score <- sqrt(mean(df_fwi[hour(TIMESTAMP) == 16, (DC - DDC)] ^ 2))
   title <- sprintf("RMSE: %0.3f\n%s", score, title)
   if (do_plot) {
@@ -152,7 +152,7 @@ do_apply <- function(v) {
   timezone <<- v$timezone
   calc_fit <- function(df_test) {
     names(df_test) <- toupper(names(df_test))
-    df_fwi <- test_hfwi(df_test, timezone, FLAG_NO_MONTH_FACTOR = FALSE)
+    df_fwi <- test_hfwi(df_test, timezone)
     score <- sqrt(mean(df_fwi[hour(TIMESTAMP) == 16, (DC - DDC)] ^ 2))
     return(list(df_fwi=df_fwi, score=score))
   }
