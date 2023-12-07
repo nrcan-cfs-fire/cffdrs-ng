@@ -415,7 +415,7 @@ double duff_moisture_code(double last_dmc,
   return dmc;
 }
 
-double dc_drying_hourly(temp)
+double dc_drying_hourly(double temp)
 {
   return _max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP));
 }
