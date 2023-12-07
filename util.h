@@ -85,7 +85,7 @@ double findrh(double q, double temp);
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-double sun(double lat, double lon, int mon, int day, int hour, int timezone, double* sunrise, double* sunset);
+double sun(double lat, double lon, int mon, int day, int hour, double timezone, double* sunrise, double* sunset);
 /**
  * Find solar radiation at a give time and place
  *
@@ -98,7 +98,7 @@ double sun(double lat, double lon, int mon, int day, int hour, int timezone, dou
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  * @return                  Solar radiation (kW/m^2)
  */
-double sun_julian(double lat, double lon, int jd, int hour, int timezone, double* sunrise, double* sunset);
+double sun_julian(double lat, double lon, int jd, int hour, double timezone, double* sunrise, double* sunset);
 /**
  * Find day of year. Does not properly deal with leap years.
  *

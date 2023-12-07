@@ -48,13 +48,13 @@ double findrh(double q, double temp)
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-double sun(double lat, double lon, int mon, int day, int hour, int timezone, double* sunrise, double* sunset)
+double sun(double lat, double lon, int mon, int day, int hour, double timezone, double* sunrise, double* sunset)
 {
   int jd = julian(mon, day);
   return sun_julian(lat, lon, jd, hour, timezone, sunrise, sunset);
 }
 
-double sun_julian(double lat, double lon, int jd, int hour, int timezone, double* sunrise, double* sunset)
+double sun_julian(double lat, double lon, int jd, int hour, double timezone, double* sunrise, double* sunset)
 {
   /*
 
