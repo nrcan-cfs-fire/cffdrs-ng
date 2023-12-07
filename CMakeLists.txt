@@ -22,20 +22,8 @@ IF (NOT WIN32)
 ENDIF()
 
 set(DIR_BIN ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-
-IF (NOT WIN32)
-    add_custom_command(TARGET ${PROJECT_NAME}
-                    PRE_BUILD
-                    COMMAND rm -rf ${DIR_BIN})
-ELSE()
-    add_custom_command(TARGET ${PROJECT_NAME}
-                    PRE_BUILD
-                    COMMAND del /s /q ${DIR_BIN})
-ENDIF()
-
-add_custom_command(TARGET ${PROJECT_NAME}
-                   PRE_BUILD
-                   COMMAND mkdir -p ${DIR_BIN})
+file(REMOVE_RECURSE ${DIR_BIN})
+file(MAKE_DIRECTORY ${DIR_BIN})
 
 add_custom_command(TARGET ${PROJECT_NAME}
                    POST_BUILD
