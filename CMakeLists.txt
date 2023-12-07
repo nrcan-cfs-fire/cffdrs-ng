@@ -21,10 +21,15 @@ IF (NOT WIN32)
     target_link_libraries(make_hourly m)
 ENDIF()
 
-set(DIR_BIN STRING ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+set(DIR_BIN ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
-add_custom_target(build-time-make-directory ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${DIR_BIN})
+add_custom_command(TARGET ${PROJECT_NAME}
+                   PRE_BUILD
+                   COMMAND rm -rf ${DIR_BIN})
+
+add_custom_command(TARGET ${PROJECT_NAME}
+                   PRE_BUILD
+                   COMMAND mkdir -p ${DIR_BIN})
 
 add_custom_command(TARGET ${PROJECT_NAME}
                    POST_BUILD
