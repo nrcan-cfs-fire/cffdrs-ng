@@ -72,7 +72,7 @@ double hourly_fine_fuel_moisture(const double temp,
                                  const double rain,
                                  const double lastmc)
 {
-  printf("%.1f,%.1f,%.1f,%.1f,%.1f\n", temp, rh, ws, rain, lastmc);
+  /* printf("%.1f,%.1f,%.1f,%.1f,%.1f\n", temp, rh, ws, rain, lastmc); */
   static const double rf = 42.5;
   static const double drf = 0.0579;
   /* Time since last observation (hours) */
@@ -102,7 +102,7 @@ double hourly_fine_fuel_moisture(const double temp,
   double m = mo < ed
              ? ew
              : ed;
-  printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m);
+  /* printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m); */
   if (mo != ed)
   {
     /* these are the same formulas with a different value for a1 */
@@ -112,7 +112,7 @@ double hourly_fine_fuel_moisture(const double temp,
     const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
     const double kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
     m += (mo - m) * pow(10, -kd_or_kw * time);
-    printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m);
+    /* printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m); */
   }
   return m;
 }
