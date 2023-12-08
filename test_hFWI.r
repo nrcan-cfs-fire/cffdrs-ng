@@ -2,7 +2,7 @@
 source("NG_FWI.r")
 source("old_cffdrs.r")
 
-test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, filename="out.csv") {
+test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, filename = "out.csv") {
   # set up as if we had called hFWI
   weatherstream <- data.table(df)
   r <- hFWI(weatherstream, timezone = timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT)
@@ -25,7 +25,7 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, fil
     c("FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR"),
     c("DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")
   )
-  cols_id <- intersect(names(r), c("ID", "LAT", "LONG", "TIMEZONE", "YR", "MON", "DAY"))
+  cols_id <- intersect(names(w), c("ID", "LAT", "LONG", "TIMEZONE", "YR", "MON", "DAY"))
   cols_daily <- c(cols_id, "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR")
   daily <- daily[, ..cols_daily]
   r <- merge(r,
@@ -38,10 +38,11 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, fil
   # taken from package code
   r[, DDSR := Vectorize(daily_severity_rating)(DFWI^1.77)]
   # output input and FWI columns so git can tell us if they change
-  cols_cmp <- c(cols_id,
-                "TIMESTAMP", "TEMP", "WS", "RH", "PREC",
-                "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR",
-                "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR"
+  cols_cmp <- c(
+    cols_id,
+    "TIMESTAMP", "TEMP", "WS", "RH", "PREC",
+    "FFMC", "DMC", "DC", "ISI", "BUI", "FWI", "DSR",
+    "DFFMC", "DDMC", "DDC", "DISI", "DBUI", "DFWI", "DDSR"
   )
   r <- r[, ..cols_cmp]
   if (!is.null(filename)) {
@@ -51,12 +52,10 @@ test_hfwi <- function(df = read.csv("./data/test_hffmc.csv"), timezone = -6, fil
 }
 
 plot_comparison <- function(r) {
-  # print(ggplot(r) +
-  #   geom_line(aes(TIMESTAMP, DMC)) +
-  #   geom_point(aes(TIMESTAMP, DDMC), data = r[hour(TIMESTAMP) == 16]))
   print(ggplot(r) +
-    # ggtitle(sprintf("Equation %dx%dx%d", eqn_k, eqn, eqn_j)) +
-    ggtitle(sprintf("K <- 0.0914 * 3.937 / 24.0 * F\n pe <- K * (temp + %f)\nF <- %f", OFFSET_TEMP, DC_K_HOURLY)) +
+    geom_line(aes(TIMESTAMP, DMC)) +
+    geom_point(aes(TIMESTAMP, DDMC), data = r[hour(TIMESTAMP) == 16]))
+  print(ggplot(r) +
     geom_line(aes(TIMESTAMP, DC)) +
     geom_point(aes(TIMESTAMP, DDC), data = r[hour(TIMESTAMP) == 16]))
 }
