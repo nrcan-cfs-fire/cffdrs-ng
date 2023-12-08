@@ -7,19 +7,27 @@ source("old_cffdrs.r")
 DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.937
 
-HOURLY_K_DMC <- 2.10
+DMC_K_VPD <- 0.1470379
+# DMC_K_HOURLY <- 2.10
+# DMC_OFFSET_TEMP <- 1.1
+# DMC_OFFSET_SUNRISE <- 2.5
+# DMC_OFFSET_SUNSET <- 0.5
+DMC_K_HOURLY <- 2.920826
+DMC_OFFSET_TEMP <- -7.468307
+DMC_ONLY_POSITIVE <- TRUE
+DMC_OFFSET_SUNRISE <- NA
+DMC_OFFSET_SUNSET <- NA
+
+
+
 # HOURLY_K_DC <- 0.017066
-# HOURLY_K_DMC <- 0.27
+# DMC_K_HOURLY <- 0.27
 HOURLY_K_DC <- 0.017
-DMC_OFFSET_TEMP <- 1.1
 DC_OFFSET_TEMP <- 0.0
 
 DC_DAILY_CONST <- 0.36
 DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
 
-
-OFFSET_SUNRISE <- 2.5
-OFFSET_SUNSET <- 0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
@@ -361,9 +369,37 @@ dc_wetting_between <- function(rain_total_previous, rain_total, lastdc) {
   return(current - previous)
 }
 
-dmc_drying_ratio <- function(temp, rh) {
-  return(pmax(0.0, HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001))
+dmc_drying_hourly <- function(temp,
+                              rh,
+                              sunrise,
+                              sunset,
+                              hour,
+                              k=DMC_K_HOURLY,
+                              only_positive=DMC_ONLY_POSITIVE,
+                              offset_sunrise=DMC_OFFSET_SUNRISE,
+                              offset_sunset=DMC_OFFSET_SUNSET) {
+  drying <- k * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001
+  if (only_positive) {
+    drying <- pmax(0.0, drying)
+  }
+  if (!is.na(offset_sunrise)) {
+    stopifnot(!is.na(offset_sunset))
+    sunrise_start <- round(sunrise + offset_sunrise)
+    sunset_start <- round(sunset + offset_sunset)
+    drying <- ifelse(hour >= sunrise_start & hour < sunset_start,
+                  drying,
+                  0.0)
+  }
+  return(drying)
 }
+
+dmc_drying_vpd <- function(temp, rh, sunrise, sunset, hour) {
+  vapour_pressure_saturation <- 0.61078 * exp(17.269 * temp / (temp + 237.3))
+  vapour_pressure_deficit <- vapour_pressure_saturation * (1.0 - rh / 100.0)
+  return(DMC_K_VPD * vapour_pressure_deficit)
+}
+
+fct_dmc_drying <- dmc_drying_hourly
 
 duff_moisture_code <- function(
     last_dmc,
@@ -390,12 +426,7 @@ duff_moisture_code <- function(
   )
   # at most apply same wetting as current value (don't go below 0)
   dmc <- pmax(0.0, last_dmc - dmc_wetting_hourly)
-  sunrise_start <- round(sunrise + OFFSET_SUNRISE)
-  sunset_start <- round(sunset + OFFSET_SUNSET)
-  dmc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
-    dmc_drying_ratio(temp, rh),
-    0.0
-  )
+  dmc_hourly <- fct_dmc_drying(temp, rh, sunrise, sunset, hour)
   dmc <- dmc + dmc_hourly
   # HACK: return two values since C uses a pointer to assign a value
   return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
