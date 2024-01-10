@@ -131,4 +131,7 @@ double _round(double x, int digits);
 
 /* C90 max() also causing problems */
 double _max(double x, double y);
+
+/* C90 min() also causing problems */
+double _min(double x, double y);
 #endif

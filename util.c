@@ -34,6 +34,11 @@ double _max(double x, double y)
   return (x > y ? x : y);
 }
 
+double _min(double x, double y)
+{
+  return (x < y ? x : y);
+}
+
 double findQ(double temp, double rh)
 {
   /* find absolute humidity */

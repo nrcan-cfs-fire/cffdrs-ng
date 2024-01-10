@@ -17,6 +17,7 @@ outputs min/max weather stream
 */
 double temp_min_max(double temp_noon, double rh_noon, double* temp_min, double* temp_max)
 {
+  /* FIX: verify what this should be if temp_noon is negative */
   double temp_range = 17 - 0.16 * rh_noon + 0.22 * temp_noon;
   if ((temp_noon < 3 && rh_noon == 100) || temp_range < 2)
   {
@@ -27,6 +28,13 @@ double temp_min_max(double temp_noon, double rh_noon, double* temp_min, double* 
   {
     *temp_max = temp_noon + 2;
     *temp_min = *temp_max - temp_range;
+  }
+  /* HACK: for now just sort so we know it's min, max */
+  if (*temp_max < *temp_min)
+  {
+    const double t = *temp_max;
+    *temp_max = *temp_min;
+    *temp_min = t;
   }
 }
 
@@ -61,16 +69,8 @@ int main(int argc, char* argv[])
     double temp_max;
     temp_min_max(cur.temp, cur.rh, &temp_min, &temp_max);
     double q = findQ(cur.temp, cur.rh);
-    double rh_min = findrh(q, temp_max);
-    if (rh_min <= 0)
-    {
-      rh_min = 0;
-    }
-    double rh_max = findrh(q, temp_min);
-    if (rh_max >= 100)
-    {
-      rh_max = 100;
-    }
+    double rh_min = _min(100, _max(0, findrh(q, temp_max)));
+    double rh_max = _min(100, _max(0, findrh(q, temp_min)));
     double ws_min = 0.15 * cur.wind;
     double ws_max = 1.25 * cur.wind;
     fprintf(out,
