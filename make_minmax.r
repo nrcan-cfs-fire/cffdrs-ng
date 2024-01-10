@@ -7,6 +7,7 @@ source("util.r")
 # Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
 # Written as a function to enable upgrading later if needs be
 temp_min_max <- function(temp_noon, rh_noon) {
+  # FIX: verify what this should be if temp_noon is negative
   temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
   temp_max <- ifelse(((temp_noon < 3) & (rh_noon == 100)) | (temp_range < 2),
     temp_noon + (temp_range / 2.0),
@@ -16,7 +17,8 @@ temp_min_max <- function(temp_noon, rh_noon) {
     temp_noon - (temp_range / 2.0),
     temp_max - temp_range
   )
-  return(list(temp_min, temp_max))
+  # HACK: for now just sort so we know it's min, max
+  return(list(pmin(temp_min, temp_max), pmax(temp_min, temp_max)))
 }
 #' Convert daily noon values stream to daily min/max values stream.
 #' Uses values from statistics to do the conversion.
@@ -32,10 +34,8 @@ daily_to_minmax <- function(df) {
   }
   df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
   df[, q := findQ(temp, rh)]
-  df[, rh_min := findrh(q, temp_max)]
-  df[, rh_min := ifelse(rh_min <= 0, 0, rh_min)]
-  df[, rh_max := findrh(q, temp_min)]
-  df[, rh_max := ifelse(rh_max >= 100, 100, rh_max)]
+  df[, rh_min := pmin(100, pmax(0, findrh(q, temp_max)))]
+  df[, rh_max := pmin(100, pmax(0, findrh(q, temp_min)))]
   df[, ws_min := 0.15 * ws]
   df[, ws_max := 1.25 * ws]
   if (hadId) {

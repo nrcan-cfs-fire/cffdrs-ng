@@ -9,6 +9,7 @@ from util import save_csv
 # Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
 # Written as a function to enable upgrading later if needs be
 def temp_min_max(temp_noon, rh_noon):
+    # FIX: verify what this should be if temp_noon is negative
     temp_range = 17 - 0.16 * rh_noon + 0.22 * temp_noon
     if (temp_noon < 3 and rh_noon == 100) or temp_range < 2:
         temp_max = temp_noon + (temp_range / 2.0)
@@ -16,7 +17,8 @@ def temp_min_max(temp_noon, rh_noon):
     else:
         temp_max = temp_noon + 2
         temp_min = temp_max - temp_range
-    return [temp_min, temp_max]
+    # HACK: for now just sort so we know it's min, max
+    return sorted([temp_min, temp_max])
 
 
 ##
@@ -36,9 +38,9 @@ def daily_to_minmax(df):
     )
     df["q"] = df.apply(lambda row: util.find_q(row["temp"], row["rh"]), axis=1)
     df["rh_min"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_max"]), axis=1)
-    df["rh_min"] = df["rh_min"].apply(lambda rh: max(0, rh))
+    df["rh_min"] = df["rh_min"].apply(lambda rh: min(100, max(0, rh)))
     df["rh_max"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_min"]), axis=1)
-    df["rh_max"] = df["rh_max"].apply(lambda rh: min(100, rh))
+    df["rh_max"] = df["rh_max"].apply(lambda rh: min(100, max(0, rh)))
     df["ws_min"] = 0.15 * df["ws"]
     df["ws_max"] = 1.25 * df["ws"]
     columns = [
