@@ -7,18 +7,16 @@ source("util.r")
 # Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
 # Written as a function to enable upgrading later if needs be
 temp_min_max <- function(temp_noon, rh_noon) {
-  # FIX: verify what this should be if temp_noon is negative
   temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
-  temp_max <- ifelse(((temp_noon < 3) & (rh_noon == 100)) | (temp_range < 2),
-    temp_noon + (temp_range / 2.0),
+  temp_max <- ifelse(temp_range <= 2,
+    temp_noon + 1,
     temp_noon + 2
   )
-  temp_min <- ifelse(((temp_noon < 3) & (rh_noon == 100)) | (temp_range < 2),
-    temp_noon - (temp_range / 2.0),
+  temp_min <- ifelse(temp_range <= 2,
+    temp_noon - 1,
     temp_max - temp_range
   )
-  # HACK: for now just sort so we know it's min, max
-  return(list(pmin(temp_min, temp_max), pmax(temp_min, temp_max)))
+  return(list(temp_min, temp_max))
 }
 #' Convert daily noon values stream to daily min/max values stream.
 #' Uses values from statistics to do the conversion.

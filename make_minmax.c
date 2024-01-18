@@ -15,26 +15,18 @@ outputs min/max weather stream
     Temp input in Celsius   RH input in Percent.   These should be that traditional 1pm values
      Written as a function to enable upgrading later if needs be
 */
-double temp_min_max(double temp_noon, double rh_noon, double* temp_min, double* temp_max)
+void temp_min_max(double temp_noon, double rh_noon, double* temp_min, double* temp_max)
 {
-  /* FIX: verify what this should be if temp_noon is negative */
   double temp_range = 17 - 0.16 * rh_noon + 0.22 * temp_noon;
-  if ((temp_noon < 3 && rh_noon == 100) || temp_range < 2)
+  if (temp_range <= 2)
   {
-    *temp_max = temp_noon + (temp_range / 2.0);
-    *temp_min = temp_noon - (temp_range / 2.0);
+    *temp_max = temp_noon + 1;
+    *temp_min = temp_noon - 1;
   }
   else
   {
     *temp_max = temp_noon + 2;
     *temp_min = *temp_max - temp_range;
-  }
-  /* HACK: for now just sort so we know it's min, max */
-  if (*temp_max < *temp_min)
-  {
-    const double t = *temp_max;
-    *temp_max = *temp_min;
-    *temp_min = t;
   }
 }
 
