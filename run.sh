@@ -18,6 +18,7 @@ LOG=`echo $OUTPUT | sed "s/\.csv/.log/g"`
 ) || (echo ERROR RUNNING: $* && exit -2)
 
 if [ -n "${CHECK_DIFF}" ]; then
-    (set -x diff ${OUTPUT_C} ${OUTPUT_PY}) || exit -1
-    (set -x diff ${OUTPUT_C} ${OUTPUT_R}) || exit -1
+    (set -x diff ${OUTPUT_C} ${OUTPUT_PY}) || (echo Python output does not match C && exit -1)
+    (set -x diff ${OUTPUT_C} ${OUTPUT_R}) || (echo R output does not match C && exit -1)
+    echo All files match ${OUTPUT_C}
 fi;
