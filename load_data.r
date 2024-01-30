@@ -82,7 +82,7 @@ if (!exists("ontario")) {
   # ontario <- ontario[MON > 3]
   # ontario <- ontario[MON < 10]
   ontario[, TIMEZONE := ifelse("EST" == TIMEZONE, -5, ifelse("CST" == TIMEZONE, -6, NA))]
-  ontario <- getSunlightDT(ontario)
+  ontario <- getSunlight(ontario)
 }
 df_wx <- ontario
 #

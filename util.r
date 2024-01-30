@@ -60,17 +60,34 @@ julian <- function(mon, day) {
   return(month[mon] + day)
 }
 
-getSunlightDT <- function(df) {
+
+getSunlight <- function(df, with_solrad = FALSE) {
   df_copy <- copy(df)
-  df_copy[, D := as_date(TIMESTAMP)]
-  df_dates <- unique(df_copy[, c("LAT", "LONG", "D", "TIMEZONE")])
+  stopifnot("LAT" %in% colnames(df))
+  stopifnot("LONG" %in% colnames(df))
+  stopifnot("TIMESTAMP" %in% colnames(df))
+  if (!("DATE" %in% colnames(df))) {
+    df_copy[, DATE := as_date(TIMESTAMP)]
+  }
+  # HACK: just get it working for now and clean up after
+  if (with_solrad) {
+    stopifnot("TIMEZONE" %in% colnames(df))
+    df_copy[, TEMP_RANGE := max(TEMP) - min(TEMP), by = c("LAT", "LONG", "DATE")]
+  }
+  # # not really required, but nice
+  # setorder(df_copy, ID, TIMESTAMP)
+  df_stn_dates <- unique(df_copy[, c("LAT", "LONG", "DATE", "TIMEZONE")])
   dechour <- 12.0
-  df_dates[, JD := julian(month(D), day(D))]
+  # calculate common values once
+  df_dates <- unique(df_stn_dates[, list(DATE)])
+  df_dates[, JD := julian(month(DATE), day(DATE))]
   df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
   df_dates[, EQTIME := 229.18 * (0.000075 + 0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) - 0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
   df_dates[, DECL := 0.006918 - 0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) - 0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) - 0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
-  df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
   df_dates[, ZENITH := 90.833 * pi / 180.0]
+  # at this point we actually need the LAT/LONG/TIMEZONE
+  df_dates <- merge(df_stn_dates, df_dates, by = c("DATE"))
+  df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
   # FIX: is this some kind of approximation that can be wrong?
   #       breaks with (67.1520291504819, -132.37538245496188)
   df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) - tan(LAT * pi / 180.0) * tan(DECL)]
@@ -79,38 +96,36 @@ getSunlightDT <- function(df) {
   df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
   df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
   df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  df_all <- merge(df_copy, df_dates, by = c("LAT", "LONG", "D", "TIMEZONE"))
-  df_all[, HR := hour(TIMESTAMP)]
-  df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
-  df_all[, HOURANGLE := TST / 4 - 180]
-  df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
-  df_all[, SOLRAD := 0.95 * cos(ZENITH)]
-  df_all[, SOLRAD := ifelse(SOLRAD <= 0, 0, SOLRAD)]
+  df_all <- merge(df_copy, df_dates, by = c("LAT", "LONG", "DATE", "TIMEZONE"))
+  if (with_solrad) {
+    df_all[, HR := hour(TIMESTAMP)]
+    df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
+    df_all[, HOURANGLE := TST / 4 - 180]
+    df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
+    ###########################################################################################
+    ##################################### DMC-UPDATE ##########################################
+    ## calculateing solar radiation using Hargraeves model suggested at:
+    ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
+    df_all[, ZENITH := pmin(pi / 2, ZENITH)]
+    # Extraterrestrial solar radiation in kW m-2
+    df_all[, SOLRAD_EXT := 1.367 * cos(ZENITH)]
+    # Daily total of Extra. Solar Rad in kJ m-2 day-1
+    df_all[, SOLRAD_EXT_SUM := sum(SOLRAD_EXT) * 3600, by = c("DATE")]
+    # Daily surface Solar Rad in kJ m-2 day-1
+    df_all[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * TEMP_RANGE^0.59]
+    # Hargreaves hourly surface solar rad in kW m-2
+    df_all[, SOLRAD := cos(ZENITH) / sum(cos(ZENITH)) * SOLRAD_DAY_SUM / 3600, by = c("DATE")]
+    # this was a reduction so it wasn't the full amount for the grass calculation?
+    # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
+    df_all[, SOLRAD := ifelse(SOLRAD <= 0, 0, SOLRAD)]
+  }
   colnames(df_all) <- toupper(colnames(df_all))
-  # remove temporary calculations
-  cols <- c(names(df), "SOLRAD", "SUNRISE", "SUNSET")
+  cols_sun <- intersect(c("SOLRAD", "SUNRISE", "SUNSET"), colnames(df_all))
+  # don't include temporary calculations
+  cols <- c(names(df), cols_sun)
   df_result <- df_all[, ..cols]
   df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
   return(df_result)
-}
-
-#' Find solar radiation at a give time and place
-#'
-#' @param dates             Datetimes to find solar radiation for
-#' @param timezone          Offset from GMT in hours
-#' @param latitude          Latitude (degrees)
-#' @param longitude         Longitude (degrees)
-#' @return                  Solar radiation (kW/m^2), sunrise, sunset, sunlight hours
-getSunlight <- function(dates, timezone, latitude, longitude) {
-  # replicate old function for now
-  df <- data.table(TIMESTAMP = dates)
-  df$TIMEZONE <- timezone
-  df$LAT <- latitude
-  df$LONG <- longitude
-  df_sunlight <- getSunlightDT(df)
-  setnames(df_sunlight, c("TIMESTAMP"), c("DATE"))
-  result <- df_sunlight[, c("DATE", "LAT", "LONG", "SOLRAD", "SUNRISE", "SUNSET", "SUNLIGHT_HOURS")]
-  return(result)
 }
 
 toDecimal <- function(t) {

@@ -692,13 +692,9 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
     for (yr in unique(by_stn$YR)) {
       by_year <- by_stn[YR == yr, ]
       print(paste0("Running ", stn, " for ", yr))
-      dates <- as_datetime(unique(by_year$TIMESTAMP))
-      latitude <- by_year$LAT[[1]]
-      longitude <- by_year$LONG[[1]]
-      sunlight <- getSunlight(dates, timezone, latitude, longitude)
-      setnames(sunlight, c("DATE"), c("TIMESTAMP"))
-      sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
-      w <- merge(by_year, sunlight, by = c("TIMESTAMP", "LAT", "LONG"))
+      # FIX: convert this to not need to do individual stations
+      by_year[, TIMEZONE := timezone]
+      w <- getSunlight(by_year, with_solrad = TRUE)
       r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
       results <- rbind(results, r)
     }
