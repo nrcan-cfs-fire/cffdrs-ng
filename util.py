@@ -68,16 +68,23 @@ def julian(mon, day):
 
 
 ##
-# Find solar radiation at a give time and place
+# Find solar radiation for a data frame's times and places
 #
-# @param lat               Latitude (degrees)
-# @param long              Longitude (degrees)
-# @param mon               Month (1-12)
-# @param day               Day of month
-# @param hour              Hour of day
-# @param timezone          Offset from GMT in hours
+# @param df                DataFrame to add columns to
+# @param with_solrad       Whether to include solar radiation
 # @return                  Solar radiation (kW/m^2), sunrise, sunset
-def sun(lat, lon, mon, day, hour, timezone):
+def getSunlight(df, with_solrad=False):
+    # columns to use as unique ID
+    COLS_ID = ["LAT", "LONG", "DATE", "TIMEZONE"]
+    cols_req = COLS_ID + ["TIMESTAMP"]
+    if with_solrad:
+        cols_req += ["TEMP"]
+    for n in cols_req:
+        if n not in df.columns:
+            raise RuntimeError(f"Expected column '{n}' not found")
+    df_copy = df.iloc[:]
+    # just make date column so we know what type it is
+    df_copy["DATE"] = df_copy["TIMESTAMP"].apply(lambda x: x.date())
     # this routine approximately calcualtes sunrise and sunset and daylength
     # REally any routine like this could be used,  some are more precise than others.
     #
@@ -97,51 +104,122 @@ def sun(lat, lon, mon, day, hour, timezone):
     #
     #
     # bmw
-    dechour = 12.0
-    jd = julian(mon, day)
-    fracyear = 2.0 * pi / 365.0 * (jd - 1.0 + (dechour - 12.0) / 24.0)
-    eqtime = 229.18 * (
-        0.000075
-        + 0.001868 * cos(fracyear)
-        - 0.032077 * sin(fracyear)
-        - 0.014615 * cos(2.0 * fracyear)
-        - 0.040849 * sin(2.0 * fracyear)
+    # FIX: need to work on data frame because we need all 24 hours?
+    df_stn_dates = df_copy[COLS_ID].drop_duplicates()
+    dec_hour = 12.0
+    df_dates = df_stn_dates[["DATE"]].drop_duplicates()
+    df_dates["JD"] = df_dates["DATE"].apply(lambda x: julian(x.month, x.day))
+    df_dates["FRACYEAR"] = df_dates["JD"].apply(
+        lambda jd: 2.0 * pi / 365.0 * (jd - 1.0 + (dec_hour - 12.0) / 24.0)
     )
-    decl = (
-        0.006918
-        - 0.399912 * cos(fracyear)
-        + 0.070257 * sin(fracyear)
-        - 0.006758 * cos(fracyear * 2.0)
-        + 0.000907 * sin(2.0 * fracyear)
-        - 0.002697 * cos(3.0 * fracyear)
-        + 0.00148 * sin(3.0 * fracyear)
+    df_dates["EQTIME"] = df_dates["FRACYEAR"].apply(
+        lambda fracyear: 229.18
+        * (
+            0.000075
+            + 0.001868 * cos(fracyear)
+            - 0.032077 * sin(fracyear)
+            - 0.014615 * cos(2.0 * fracyear)
+            - 0.040849 * sin(2.0 * fracyear)
+        )
     )
-    timeoffset = eqtime + 4 * lon - 60 * timezone
-    tst = hour * 60.0 + timeoffset
-    hourangle = tst / 4 - 180
-    zenith = acos(
-        sin(lat * pi / 180) * sin(decl)
-        + cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180)
+    df_dates["DECL"] = df_dates["FRACYEAR"].apply(
+        lambda fracyear: (
+            0.006918
+            - 0.399912 * cos(fracyear)
+            + 0.070257 * sin(fracyear)
+            - 0.006758 * cos(fracyear * 2.0)
+            + 0.000907 * sin(2.0 * fracyear)
+            - 0.002697 * cos(3.0 * fracyear)
+            + 0.00148 * sin(3.0 * fracyear)
+        )
     )
-    solrad = 0.95 * cos(zenith)
-    if solrad <= 0:
-        solrad = 0.0
-    # print(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f".format(jd, hour, fracyear, decl,
-    #                                                                                          timeoffset, tst,
-    #                                                                                          hourangle, zenith,
-    #                                                                                          solrad))
-    zenith = 90.833 * pi / 180.0
+    df_dates["ZENITH"] = 90.833 * pi / 180.0
+    # at this point we actually need the LAT/LONG/TIMEZONE
+    df_dates = pd.merge(df_stn_dates, df_dates, on=["DATE"])
+    df_dates["TIMEOFFSET"] = df_dates.apply(
+        lambda x: x["EQTIME"] + 4 * x["LONG"] - 60 * x["TIMEZONE"], axis=1
+    )
     # FIX: is this some kind of approximation that can be wrong?
     #       breaks with (67.1520291504819, -132.37538245496188)
-    x_tmp = cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) - tan(
-        lat * pi / 180.0
-    ) * tan(decl)
+    df_dates["X_TMP"] = df_dates.apply(
+        lambda x: cos(x["ZENITH"]) / (cos(x["LAT"] * pi / 180.0) * cos(x["DECL"]))
+        - tan(x["LAT"] * pi / 180.0) * tan(x["DECL"]),
+        axis=1,
+    )
     # HACK: keep in range
-    x_tmp = max(-1, min(1, x_tmp))
-    halfday = 180.0 / pi * acos(x_tmp)
-    sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone
-    sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone
-    return solrad, sunrise, sunset
+    df_dates["X_TMP"] = df_dates["X_TMP"].apply(lambda x_tmp: max(-1, min(1, x_tmp)))
+    df_dates["HALFDAY"] = df_dates["X_TMP"].apply(
+        lambda x_tmp: 180.0 / pi * acos(x_tmp)
+    )
+    df_dates["SUNRISE"] = df_dates.apply(
+        lambda x: (720.0 - 4.0 * (x["LONG"] + x["HALFDAY"]) - x["EQTIME"]) / 60
+        + x["TIMEZONE"],
+        axis=1,
+    )
+    df_dates["SUNSET"] = df_dates.apply(
+        lambda x: (720.0 - 4.0 * (x["LONG"] - x["HALFDAY"]) - x["EQTIME"]) / 60
+        + x["TIMEZONE"],
+        axis=1,
+    )
+    df_all = pd.merge(df_copy, df_dates, on=COLS_ID)
+    if with_solrad:
+        df_all["TST"] = df_all.apply(
+            lambda x: x["TIMESTAMP"].hour * 60.0 + x["TIMEOFFSET"], axis=1
+        )
+        df_all["HOURANGLE"] = df_all.apply(lambda x: x["TST"] / 4 - 180, axis=1)
+        df_all["ZENITH"] = df_all.apply(
+            lambda x: acos(
+                sin(x["LAT"] * pi / 180) * sin(x["DECL"])
+                + cos(x["LAT"] * pi / 180)
+                * cos(x["DECL"])
+                * cos(x["HOURANGLE"] * pi / 180)
+            ),
+            axis=1,
+        )
+        ###########################################################################################
+        ##################################### DMC-UPDATE ##########################################
+        ## calculateing solar radiation using Hargraeves model suggested at:
+        ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
+        df_all["ZENITH"] = df_all["ZENITH"].apply(lambda zenith: min(pi / 2, zenith))
+        # need later so keep column
+        df_all["COS_ZENITH"] = df_all["ZENITH"].apply(cos)
+        # Extraterrestrial solar radiation in kW m-2
+        df_all["SOLRAD_EXT"] = df_all["COS_ZENITH"] * 1.367
+        # Daily total of Extra. Solar Rad in kJ m-2 day-1
+        df_solrad = df_all.groupby(COLS_ID)[["SOLRAD_EXT", "COS_ZENITH"]].agg("sum")
+        df_solrad["SOLRAD_EXT"] *= 3600
+        df_temp_range = df_all.groupby(COLS_ID)["TEMP"].agg(lambda x: max(x) - min(x))
+        # not sure why it won't merge on groups
+        df_solrad = pd.merge(df_solrad.reset_index(), df_temp_range.reset_index())
+        df_solrad = df_solrad.rename(
+            columns={
+                "SOLRAD_EXT": "SOLRAD_EXT_SUM",
+                "COS_ZENITH": "SUM_COS_ZENITH",
+                "TEMP": "TEMP_RANGE",
+            }
+        )
+        # Daily surface Solar Rad in kJ m-2 day-1
+        df_solrad["SOLRAD_DAY_SUM"] = df_solrad.apply(
+            lambda x: 0.11 * x["SOLRAD_EXT_SUM"] * (x["TEMP_RANGE"] ** 0.59), axis=1
+        )
+        df_all = pd.merge(df_all, df_solrad, on=COLS_ID)
+        # Hargreaves hourly surface solar rad in kW m-2
+        df_all["SOLRAD"] = df_all.apply(
+            lambda x: x["COS_ZENITH"]
+            / x["SUM_COS_ZENITH"]
+            * x["SOLRAD_DAY_SUM"]
+            / 3600,
+            axis=1,
+        )
+        df_all["SOLRAD"] = df_all["SOLRAD"].apply(lambda x: max(x, 0))
+    cols_sun = [x for x in ["SOLRAD", "SUNRISE", "SUNSET"] if x in df_all.columns]
+    cols = list(df.columns) + cols_sun
+    df_result = df_all.loc[:, cols]
+    df_result["SUNLIGHT_HOURS"] = df_result.apply(
+        lambda x: x["SUNSET"] - x["SUNRISE"], axis=1
+    )
+    # df_result = df_result.sort_values(COLS_ID + ["TIMESTAMP"])
+    return df_result
 
 
 def seasonal_curing(julian_date):

@@ -603,14 +603,11 @@ def hFWI(
             ),
             axis=1,
         )
-    # print(solrad, sunrise, sunset)
-    wx[["SOLRAD", "SUNRISE", "SUNSET"]] = wx.apply(
-        lambda row: util.sun(
-            row["LAT"], row["LONG"], row["MON"], row["DAY"], row["HR"], timezone
-        ),
-        axis=1,
-        result_type="expand",
-    )
+    # solar radiation function relies on all hours of the day, so need to pass
+    # whole frame
+    # print(solrad, sunrise, sunset)t
+    wx["TIMEZONE"] = timezone
+    wx = util.getSunlight(wx, with_solrad = True)
     if "PERCENT_CURED" not in wx.columns:
         wx["JULIAN"] = wx.apply(lambda row: util.julian(row["MON"], row["DAY"]), axis=1)
         wx["PERCENT_CURED"] = wx["JULIAN"].apply(util.seasonal_curing)

@@ -63,20 +63,17 @@ julian <- function(mon, day) {
 
 getSunlight <- function(df, with_solrad = FALSE) {
   df_copy <- copy(df)
-  stopifnot("LAT" %in% colnames(df))
-  stopifnot("LONG" %in% colnames(df))
-  stopifnot("TIMESTAMP" %in% colnames(df))
-  if (!("DATE" %in% colnames(df))) {
-    df_copy[, DATE := as_date(TIMESTAMP)]
-  }
-  # HACK: just get it working for now and clean up after
+  COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
+  cols_req <- c(COLS_ID, "TIMESTAMP")
   if (with_solrad) {
-    stopifnot("TIMEZONE" %in% colnames(df))
-    df_copy[, TEMP_RANGE := max(TEMP) - min(TEMP), by = c("LAT", "LONG", "DATE")]
+    cols_req <- c(cols_req, "TEMP")
   }
-  # # not really required, but nice
-  # setorder(df_copy, ID, TIMESTAMP)
-  df_stn_dates <- unique(df_copy[, c("LAT", "LONG", "DATE", "TIMEZONE")])
+  for (n in cols_req) {
+    stopifnot(n %in% colnames(df))
+  }
+  # just make date column so we know what type it is
+  df_copy[, DATE := as_date(TIMESTAMP)]
+  df_stn_dates <- unique(df_copy[, ..COLS_ID])
   dechour <- 12.0
   # calculate common values once
   df_dates <- unique(df_stn_dates[, list(DATE)])
@@ -96,7 +93,7 @@ getSunlight <- function(df, with_solrad = FALSE) {
   df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
   df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
   df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  df_all <- merge(df_copy, df_dates, by = c("LAT", "LONG", "DATE", "TIMEZONE"))
+  df_all <- merge(df_copy, df_dates, by = COLS_ID)
   if (with_solrad) {
     df_all[, HR := hour(TIMESTAMP)]
     df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
@@ -107,19 +104,27 @@ getSunlight <- function(df, with_solrad = FALSE) {
     ## calculateing solar radiation using Hargraeves model suggested at:
     ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
     df_all[, ZENITH := pmin(pi / 2, ZENITH)]
+    # need later so keep column
+    df_all[, COS_ZENITH := cos(ZENITH)]
     # Extraterrestrial solar radiation in kW m-2
-    df_all[, SOLRAD_EXT := 1.367 * cos(ZENITH)]
+    df_all[, SOLRAD_EXT := 1.367 * COS_ZENITH]
     # Daily total of Extra. Solar Rad in kJ m-2 day-1
-    df_all[, SOLRAD_EXT_SUM := sum(SOLRAD_EXT) * 3600, by = c("DATE")]
+    df_solrad <- df_all[, list(
+      SOLRAD_EXT_SUM = sum(SOLRAD_EXT) * 3600,
+      SUM_COS_ZENITH = sum(COS_ZENITH),
+      TEMP_RANGE = max(TEMP) - min(TEMP)
+    ), by = COLS_ID]
     # Daily surface Solar Rad in kJ m-2 day-1
-    df_all[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * TEMP_RANGE^0.59]
+    df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
+    df_all <- merge(df_all, df_solrad, by = COLS_ID)
     # Hargreaves hourly surface solar rad in kW m-2
-    df_all[, SOLRAD := cos(ZENITH) / sum(cos(ZENITH)) * SOLRAD_DAY_SUM / 3600, by = c("DATE")]
+    df_all[, SOLRAD := COS_ZENITH / SUM_COS_ZENITH * SOLRAD_DAY_SUM / 3600]
     # this was a reduction so it wasn't the full amount for the grass calculation?
     # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
-    df_all[, SOLRAD := ifelse(SOLRAD <= 0, 0, SOLRAD)]
+    df_all[, SOLRAD := pmax(0, SOLRAD)]
+    df_all <- merge(df_all, df_solrad, by = COLS_ID)
   }
-  colnames(df_all) <- toupper(colnames(df_all))
+  # colnames(df_all) <- toupper(colnames(df_all))
   cols_sun <- intersect(c("SOLRAD", "SUNRISE", "SUNSET"), colnames(df_all))
   # don't include temporary calculations
   cols <- c(names(df), cols_sun)
