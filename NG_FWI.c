@@ -24,7 +24,6 @@ static const double OFFSET_SUNSET = 0.5;
 
 /* Fuel Load (kg/m^2) */
 static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
-static const double MAX_SOLAR_PROPAGATION = 0.85;
 
 /* default startup values */
 static const double FFMC_DEFAULT = 85;
@@ -514,23 +513,10 @@ void rain_since_intercept_reset(double temp,
   canopy->rain_total += rain;
 }
 
-int populate_row(FILE* inp, struct row* cur, double TZadjust)
-{
-  int err = read_row(inp, cur);
-  cur->solrad = sun(cur->lat, cur->lon, cur->mon, cur->day, cur->hour, TZadjust, &(cur->sunrise), &(cur->sunset));
-  double julian_day = julian(cur->mon, cur->day);
-  /* assuming we want curing to change based on current day and not remain */
-  /* the same across entire period based on start date */
-  cur->percent_cured = seasonal_curing(julian_day);
-  /* FIX: use a constant grass fuel load for now */
-  cur->grass_fuel_load = DEFAULT_GRASS_FUEL_LOAD;
-  return err;
-}
-
 void main(int argc, char* argv[])
 {
   /*  CSV headers */
-  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
   static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load";
   if (7 != argc)
   {
@@ -580,30 +566,26 @@ void main(int argc, char* argv[])
   /* check that the header matches what is expected */
   check_header(inp, header);
   struct row cur;
-  int err = populate_row(inp, &cur, TZadjust);
-  struct row old = cur;
+  int err = read_row_inputs(inp, &cur);
+  struct row old = {0};
   double dmc = dmc_old;
   double dmc_before_rain = dmc_old;
   double dc = dc_old;
   double dc_before_rain = dc_old;
+  double sunrise;
+  double sunset;
   struct rain_intercept canopy = {0.0, 0.0, 0.0};
   FILE* out = fopen(argv[6], "w");
   fprintf(out, "%s\n", header_out);
   while (err > 0)
   {
-    /*
     if (cur.day != old.day || cur.mon != old.mon)
     {
-      printf("here : %f %f  %d   %d %d  SUNrise=%5.2f  sunset=%5.2f\n",
-             cur.lat,
-             cur.lon,
-             cur.year,
-             cur.mon,
-             cur.day,
-             cur.sunrise,
-             cur.sunset);
+      /* Only need to calculate sunrise/sunset once per day */
+      sunrise_sunset(cur.lat, cur.lon, cur.mon, cur.day, TZadjust, &sunrise, &sunset);
     }
-    */
+    cur.sunrise = sunrise;
+    cur.sunset = sunset;
     rain_since_intercept_reset(
       cur.temp,
       cur.rh,
@@ -716,7 +698,7 @@ void main(int argc, char* argv[])
                cur.percent_cured,
                cur.grass_fuel_load); */
     old = cur;
-    err = populate_row(inp, &cur, TZadjust);
+    err = read_row_inputs(inp, &cur);
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
     {
       printf("Latitude and Longitude must be constant\n");

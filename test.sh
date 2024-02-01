@@ -9,8 +9,11 @@ cmake --build ./build
 
 mkdir -p ./out
 
-./run.sh NG_FWI -6 85 6 15 ./data/wx_hourly.csv ./out/wx_hourly_fwi.csv
-./run.sh NG_FWI -6 85 6 15 ./data/test_hffmc.csv ./out/test_hffmc_fwi.csv
+./run.sh make_inputs -6 ./data/wx_hourly.csv ./out/inputs_hourly.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_hourly.csv ./out/wx_hourly_fwi.csv
+
+./run.sh make_inputs -6 ./data/test_hffmc.csv ./out/inputs_hffmc.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_hffmc.csv ./out/test_hffmc_fwi.csv
 
 ./run.sh make_daily ./data/wx_hourly.csv ./out/wx_daily.csv
 
@@ -20,8 +23,14 @@ mkdir -p ./out
 # FIX: C code doesn't match right now
 ./run.sh make_hourly -6 ./out/wx_minmax.csv ./out/wx_diurnal.csv
 
-./run.sh NG_FWI -6 85 6 15 ./out/wx_diurnal.csv ./out/wx_diurnal_fwi.csv
+./run.sh make_inputs -6 ./out/wx_diurnal.csv ./out/inputs_diurnal.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_diurnal.csv ./out/wx_diurnal_fwi.csv
 
-./run.sh NG_FWI -6 85 6 15 ./data/wx_windy.csv ./out/wx_windy_fwi.csv
-./run.sh NG_FWI -6 85 6 15 ./data/wx_rh100.csv ./out/wx_rh100_fwi.csv
-./run.sh NG_FWI -6 85 6 15 ./data/wx_rh0.csv ./out/wx_rh0_fwi.csv
+./run.sh make_inputs -6 ./data/wx_windy.csv ./out/inputs_windy.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_windy.csv ./out/wx_windy_fwi.csv
+
+./run.sh make_inputs -6 ./data/wx_rh100.csv ./out/inputs_rh100.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_rh100.csv ./out/wx_rh100_fwi.csv
+
+./run.sh make_inputs -6 ./data/wx_rh0.csv ./out/inputs_rh0.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_rh0.csv ./out/wx_rh0_fwi.csv

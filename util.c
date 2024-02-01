@@ -54,35 +54,20 @@ double findrh(double q, double temp)
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-double sun(double lat, double lon, int mon, int day, int hour, double timezone, double* sunrise, double* sunset)
+/*
+ * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
+ */
+void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr* solrad)
 {
   int jd = julian(mon, day);
-  return sun_julian(lat, lon, jd, hour, timezone, sunrise, sunset);
+  solar_radiation_julian(lat, lon, jd, timezone, temp_range, solrad);
 }
 
-double sun_julian(double lat, double lon, int jd, int hour, double timezone, double* sunrise, double* sunset)
+void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr* solrad)
 {
   /*
-
-  this routine approximately calcualtes sunrise and sunset and daylength
-  Really any routine like this could be used,  some are more precise than others.
-
-  It takes in:
-  latitude:   in degrees north -  positive number
-  longtitude: in degress EAST(standard)  - WEST hemisphere is a negative
-  month:
-  day:
-  adjust:  hours off of Greenich mean time (for EST = -5  (EDT=-4)   CST=-6 MST=-7  PST=-8)
-
-  It returns (as pass by reference from the funciton call line)
-  SUNRISE in decimal hours  (in the local time zone specified)
-  SUNSET in decimal hours  (in the local time zone specified)
-
-  and the function itself returns
-  DAYLENGTH (in hours)
-
-
-  bmw
+    Completely disconnect from sunrise/sunset code so nothing changes there
+     if we change how solar radiation is calculated
   */
   double dechour = 12.0;
   double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
@@ -91,46 +76,73 @@ double sun_julian(double lat, double lon, int jd, int hour, double timezone, dou
               - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
               - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
   double timeoffset = eqtime + 4 * lon - 60 * timezone;
-  double tst = (float)hour * 60.0 + timeoffset;
-  double hourangle = tst / 4 - 180;
-  double zenith = acos(sin(lat * M_PI / 180) * sin(decl)
-                       + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180));
-  double solrad = 0.95 * cos(zenith);
-  if (solrad <= 0)
-  {
-    solrad = 0.0;
-  }
+  struct double_24hr cos_zenith;
+  double sum_24hr_solrad_ext = 0;
+  double sum_24hr_cos_zenith = 0;
   /*
-  printf(" SOLAR: %d  %d fracyear=%f dec=%f  toff=%f  tst=%fha=%f zen=%f  solrad=%f\n",
-         jd,
-         hour,
-         fracyear,
-         decl,
-         timeoffset,
-         tst,
-         hourangle,
-         zenith,
-         solrad);
+    calculating solar radiation using Hargraeves model suggested at:
+    (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
   */
-  zenith = 90.833 * M_PI / 180.0;
+  for (int h = 0; h < 24; ++h)
+  {
+    double tst = (float)h * 60.0 + timeoffset;
+    double hourangle = tst / 4 - 180;
+    /* Extraterrestrial solar radiation in kW/m^2 */
+    cos_zenith.hour[h] = cos(_min(M_PI / 2,
+                                  acos(sin(lat * M_PI / 180) * sin(decl)
+                                       + cos(lat * M_PI / 180) * cos(decl)
+                                           * cos(hourangle * M_PI / 180))));
+    sum_24hr_cos_zenith += cos_zenith.hour[h];
+    double solrad_ext = 1.367 * cos_zenith.hour[h];
+    /* Daily total of Extra. Solar Rad in kJ/m^2/day */
+    sum_24hr_solrad_ext += (solrad_ext * 3600);
+  }
+  /* Daily surface Solar Rad in kJ/m^2/day */
+  double sum_24hr_solrad = 0.11 * sum_24hr_solrad_ext * (pow(temp_range, 0.59));
+  /* Hargreaves hourly surface solar rad in kW/m^2 */
+  for (int h = 0; h < 24; ++h)
+  {
+    solrad->hour[h] = _max(
+      0,
+      cos_zenith.hour[h] / sum_24hr_cos_zenith * sum_24hr_solrad / 3600);
+  }
+}
+
+/*
+ * Find sunrise and sunset for a given date and location.
+ */
+void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double* sunrise, double* sunset)
+{
+  int jd = julian(mon, day);
+  sunrise_sunset_julian(lat, lon, jd, timezone, sunrise, sunset);
+}
+
+void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double* sunrise, double* sunset)
+{
+  /*
+  this routine approximately calcualtes sunrise and sunset and daylength
+  Really any routine like this could be used,  some are more precise than others.
+
+  bmw
+  */
+  double dechour = 12.0;
+  double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + (dechour - 12.0) / 24.0);
+  double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
+  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
+              - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
+              - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
+  double timeoffset = eqtime + 4 * lon - 60 * timezone;
+  double zenith = 90.833 * M_PI / 180.0;
   /*
    * FIX: is this some kind of approximation that can be wrong?
    *       breaks with (67.1520291504819, -132.37538245496188)
    */
   double x_tmp = cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) - tan(lat * M_PI / 180.0) * tan(decl);
   /* HACK: keep in range */
-  if (x_tmp < -1)
-  {
-    x_tmp = -1;
-  }
-  else if (x_tmp > 1)
-  {
-    x_tmp = 1;
-  }
+  x_tmp = _max(-1, _min(1, x_tmp));
   double halfday = 180.0 / M_PI * acos(x_tmp);
   *sunrise = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60 + timezone;
   *sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone;
-  return solrad;
 }
 
 int julian(int mon, int day)
@@ -164,7 +176,7 @@ void check_header(FILE* input, const char* header)
   }
 }
 
-void check_inputs(double temp, double rh, double wind, double rain)
+void check_weather(double temp, double rh, double wind, double rain)
 {
   /* just do basic checks, but use this so we can expand checks if desired */
   if (rh < 0 || rh > 100)
@@ -180,6 +192,26 @@ void check_inputs(double temp, double rh, double wind, double rain)
   if (rain < 0)
   {
     printf("Rain must be positive, but got %f\n", rain);
+    exit(1);
+  }
+}
+void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load)
+{
+  check_weather(temp, rh, wind, rain);
+  /* just do basic checks, but use this so we can expand checks if desired */
+  if (solrad < 0)
+  {
+    printf("Solar radiation must be positive, but got %f\n", rh);
+    exit(1);
+  }
+  if (percent_cured < 0 || percent_cured > 100)
+  {
+    printf("Percent cured must be 0-100, but got %f\n", rh);
+    exit(1);
+  }
+  if (grass_fuel_load < 0)
+  {
+    printf("Grass fuel load must be positive, but got %f\n", wind);
     exit(1);
   }
 }
@@ -211,7 +243,45 @@ int read_row(FILE* inp, struct row* r)
                    &r->rain);
   if (err > 0)
   {
-    check_inputs(r->temp, r->rh, r->ws, r->rain);
+    check_weather(r->temp, r->rh, r->ws, r->rain);
+  }
+  return err;
+}
+
+int read_row_inputs(FILE* inp, struct row* r)
+{
+  /* this is declared as an array just to make it a pointer ...for reading commas easily*/
+  char a[1];
+  int err = fscanf(inp,
+                   "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
+                   &r->lat,
+                   a,
+                   &r->lon,
+                   a,
+                   &r->year,
+                   a,
+                   &r->mon,
+                   a,
+                   &r->day,
+                   a,
+                   &r->hour,
+                   a,
+                   &r->temp,
+                   a,
+                   &r->rh,
+                   a,
+                   &r->ws,
+                   a,
+                   &r->rain,
+                   a,
+                   &r->solrad,
+                   a,
+                   &r->percent_cured,
+                   a,
+                   &r->grass_fuel_load);
+  if (err > 0)
+  {
+    check_inputs(r->temp, r->rh, r->ws, r->rain, r->solrad, r->percent_cured, r->grass_fuel_load);
   }
   return err;
 }
@@ -241,7 +311,7 @@ int read_row_daily(FILE* inp, struct row_daily* r)
                    &r->rain);
   if (err > 0)
   {
-    check_inputs(r->temp, r->rh, r->wind, r->rain);
+    check_weather(r->temp, r->rh, r->wind, r->rain);
   }
   return err;
 }
@@ -277,8 +347,8 @@ int read_row_minmax(FILE* inp, struct row_minmax* r)
                    &r->rain);
   if (err > 0)
   {
-    check_inputs(r->temp_min, r->rh_min, r->ws_min, r->rain);
-    check_inputs(r->temp_max, r->rh_max, r->ws_max, r->rain);
+    check_weather(r->temp_min, r->rh_min, r->ws_min, r->rain);
+    check_weather(r->temp_max, r->rh_max, r->ws_max, r->rain);
   }
   return err;
 }

@@ -106,18 +106,18 @@ getSunlight <- function(df, with_solrad = FALSE) {
     df_all[, ZENITH := pmin(pi / 2, ZENITH)]
     # need later so keep column
     df_all[, COS_ZENITH := cos(ZENITH)]
-    # Extraterrestrial solar radiation in kW m-2
+    # Extraterrestrial solar radiation in kW/m^2
     df_all[, SOLRAD_EXT := 1.367 * COS_ZENITH]
-    # Daily total of Extra. Solar Rad in kJ m-2 day-1
+    # Daily total of Extra. Solar Rad in kJ/m^2/day
     df_solrad <- df_all[, list(
       SOLRAD_EXT_SUM = sum(SOLRAD_EXT) * 3600,
       SUM_COS_ZENITH = sum(COS_ZENITH),
       TEMP_RANGE = max(TEMP) - min(TEMP)
     ), by = COLS_ID]
-    # Daily surface Solar Rad in kJ m-2 day-1
+    # Daily surface Solar Rad in kJ/m^2/day
     df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
     df_all <- merge(df_all, df_solrad, by = COLS_ID)
-    # Hargreaves hourly surface solar rad in kW m-2
+    # Hargreaves hourly surface solar rad in kW/m^2
     df_all[, SOLRAD := COS_ZENITH / SUM_COS_ZENITH * SOLRAD_DAY_SUM / 3600]
     # this was a reduction so it wasn't the full amount for the grass calculation?
     # df_all[, SOLRAD := 0.95 * cos(ZENITH)]

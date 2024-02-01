@@ -77,14 +77,14 @@ def getSunlight(df, with_solrad=False):
     # columns to use as unique ID
     COLS_ID = ["LAT", "LONG", "DATE", "TIMEZONE"]
     cols_req = COLS_ID + ["TIMESTAMP"]
+    # just make date column so we know what type it is
+    df_copy = df.loc[:]
+    df_copy.loc[:, "DATE"] = df_copy["TIMESTAMP"].apply(lambda x: x.date())
     if with_solrad:
         cols_req += ["TEMP"]
     for n in cols_req:
-        if n not in df.columns:
+        if n not in df_copy.columns:
             raise RuntimeError(f"Expected column '{n}' not found")
-    df_copy = df.iloc[:]
-    # just make date column so we know what type it is
-    df_copy["DATE"] = df_copy["TIMESTAMP"].apply(lambda x: x.date())
     # this routine approximately calcualtes sunrise and sunset and daylength
     # REally any routine like this could be used,  some are more precise than others.
     #
@@ -183,9 +183,9 @@ def getSunlight(df, with_solrad=False):
         df_all["ZENITH"] = df_all["ZENITH"].apply(lambda zenith: min(pi / 2, zenith))
         # need later so keep column
         df_all["COS_ZENITH"] = df_all["ZENITH"].apply(cos)
-        # Extraterrestrial solar radiation in kW m-2
+        # Extraterrestrial solar radiation in kW/m^2
         df_all["SOLRAD_EXT"] = df_all["COS_ZENITH"] * 1.367
-        # Daily total of Extra. Solar Rad in kJ m-2 day-1
+        # Daily total of Extra. Solar Rad in kJ/m^2/day
         df_solrad = df_all.groupby(COLS_ID)[["SOLRAD_EXT", "COS_ZENITH"]].agg("sum")
         df_solrad["SOLRAD_EXT"] *= 3600
         df_temp_range = df_all.groupby(COLS_ID)["TEMP"].agg(lambda x: max(x) - min(x))
@@ -198,12 +198,12 @@ def getSunlight(df, with_solrad=False):
                 "TEMP": "TEMP_RANGE",
             }
         )
-        # Daily surface Solar Rad in kJ m-2 day-1
+        # Daily surface Solar Rad in kJ/m^2/day
         df_solrad["SOLRAD_DAY_SUM"] = df_solrad.apply(
             lambda x: 0.11 * x["SOLRAD_EXT_SUM"] * (x["TEMP_RANGE"] ** 0.59), axis=1
         )
         df_all = pd.merge(df_all, df_solrad, on=COLS_ID)
-        # Hargreaves hourly surface solar rad in kW m-2
+        # Hargreaves hourly surface solar rad in kW/m^2
         df_all["SOLRAD"] = df_all.apply(
             lambda x: x["COS_ZENITH"]
             / x["SUM_COS_ZENITH"]

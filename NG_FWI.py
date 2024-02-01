@@ -538,7 +538,6 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
 # @param     ffmc_old        previous value for Fine Fuel Moisture Code
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
-# @param     percent_cured   Grass curing (percent, 0-100)
 # @return                    hourly values FWI and weather stream
 def hFWI(
     df_wx,
@@ -603,16 +602,6 @@ def hFWI(
             ),
             axis=1,
         )
-    # solar radiation function relies on all hours of the day, so need to pass
-    # whole frame
-    # print(solrad, sunrise, sunset)t
-    wx["TIMEZONE"] = timezone
-    wx = util.getSunlight(wx, with_solrad = True)
-    if "PERCENT_CURED" not in wx.columns:
-        wx["JULIAN"] = wx.apply(lambda row: util.julian(row["MON"], row["DAY"]), axis=1)
-        wx["PERCENT_CURED"] = wx["JULIAN"].apply(util.seasonal_curing)
-    if "GRASS_FUEL_LOAD" not in wx.columns:
-        wx["GRASS_FUEL_LOAD"] = DEFAULT_GRASS_FUEL_LOAD
     #########################################
     # PROCESS HERE
     #########################################
@@ -620,6 +609,8 @@ def hFWI(
     for idx, by_year in wx.groupby(["ID", "YR"]):
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
+        w.loc[:, "TIMEZONE"] = timezone
+        w = util.getSunlight(w, with_solrad=False)
         r = _stnHFWI(
             w,
             ffmc_old,

@@ -103,10 +103,10 @@ void main(int argc, char* argv[])
     static const int LST_NOON = 12;
     int jd = julian(cur.mon, cur.day);
     double sunrise, sunset;
-    double solar = sun_julian(cur.lat, cur.lon, jd, LST_NOON, TZadjust, &sunrise, &sunset);
+    sunrise_sunset_julian(cur.lat, cur.lon, jd, TZadjust, &sunrise, &sunset);
     double solarnoon = (sunset - sunrise) / 2.0 + sunrise;
     double sunrise_tom, sunset_tom;
-    double solar_tom = sun_julian(cur.lat, cur.lon, jd + 1, LST_NOON, TZadjust, &sunrise_tom, &sunset_tom);
+    sunrise_sunset_julian(cur.lat, cur.lon, jd + 1, TZadjust, &sunrise_tom, &sunset_tom);
     double atemp[24], arh[24], aws[24], arain[24];
     int h;
     for (h = 0; h < 24; ++h)

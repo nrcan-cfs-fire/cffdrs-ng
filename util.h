@@ -25,6 +25,14 @@ struct row
   double grass_fuel_load;
 };
 
+/*
+ * Make a structure that's a day's worth of data so we can pass it easily.
+ */
+struct double_24hr
+{
+  double hour[24];
+};
+
 /**
  * A row from the input file for a daily weather stream
  */
@@ -49,6 +57,10 @@ struct row_minmax
  */
 int read_row(FILE* inp, struct row* r);
 /**
+ * Read a row from an hourly fwi inputs stream file
+ */
+int read_row_inputs(FILE* inp, struct row* r);
+/**
  * Read a row from a daily weather stream file
  */
 int read_row_daily(FILE* inp, struct row_daily* r);
@@ -72,8 +84,32 @@ double findQ(double temp, double rh);
  * @return            Relative humidity (percent, 0-100)
  */
 double findrh(double q, double temp);
+
 /**
- * Find solar radiation at a give time and place
+ * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
+ *
+ * @param lat               Latitude (degrees)
+ * @param lon               Longitude (degrees)
+ * @param mon               Month
+ * @param day               Day of month
+ * @param timezone          Offset from GMT in hours
+ * @param temp_range        Range in temperature during the period (Celcius)
+ * @param[out] solrad       Hourly solar radiation (kW/m^2)
+ */
+void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr* solrad);
+/**
+ * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
+ *
+ * @param lat               Latitude (degrees)
+ * @param lon               Longitude (degrees)
+ * @param jday              Day of year
+ * @param timezone          Offset from GMT in hours
+ * @param temp_range        Range in temperature during the period (Celcius)
+ * @param[out] solrad       Hourly solar radiation (kW/m^2)
+ */
+void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr* solrad);
+/**
+ * Find sunrise and sunset for a given date and location.
  *
  * @param lat               Latitude (degrees)
  * @param lon               Longitude (degrees)
@@ -83,11 +119,10 @@ double findrh(double q, double temp);
  * @param timezone          Offset from GMT in hours
  * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
- * @return                  Solar radiation (kW/m^2)
  */
-double sun(double lat, double lon, int mon, int day, int hour, double timezone, double* sunrise, double* sunset);
+void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double* sunrise, double* sunset);
 /**
- * Find solar radiation at a give time and place
+ * Find sunrise and sunset for a given date and location.
  *
  * @param lat               Latitude (degrees)
  * @param lon               Longitude (degrees)
@@ -96,9 +131,8 @@ double sun(double lat, double lon, int mon, int day, int hour, double timezone, 
  * @param timezone          Offset from GMT in hours
  * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
- * @return                  Solar radiation (kW/m^2)
  */
-double sun_julian(double lat, double lon, int jd, int hour, double timezone, double* sunrise, double* sunset);
+void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double* sunrise, double* sunset);
 /**
  * Find day of year. Does not properly deal with leap years.
  *
@@ -122,8 +156,19 @@ void check_header(FILE* input, const char* header);
  * @param wind        Wind speed (km/h)
  * @param rain        Rain (mm)
  */
-void check_inputs(double temp, double rh, double wind, double rain);
-
+void check_weather(double temp, double rh, double wind, double rain);
+/**
+ * Check that FWI input parameters are valid
+ *
+ * @param temp            Temperature (Celcius)
+ * @param rh              Relative humidity (percent, 0-100)
+ * @param wind            Wind speed (km/h)
+ * @param rain            Rain (mm)
+ * @param solrad          Solar radiation (kW/m^2)
+ * @param percent_cured   Grass curing (percent, 0-100)
+ * @param grass_fuel_load Grass fuel load ((kg/m^2))
+ */
+void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load);
 double seasonal_curing(int julian_date);
 
 /* C90 round() only rounds to int but want digits */

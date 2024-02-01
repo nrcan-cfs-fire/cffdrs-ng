@@ -207,15 +207,16 @@ hourly_grass_fuel_moisture <- function(temp, rh, ws, rain, solrad, lastmc) {
   # Time since last observation (hours)
   time <- 1.0
   mo <- lastmc
-  if (rain != 0) {
-    #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
-    # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-    # *100 to convert to %...  *1/.3 because of 0.3mm=100%
-    mo <- mo + (rain / 0.3 * 100.0)
-    if (mo > 250.0) {
-      mo <- 250.0
-    }
-  }
+  mo <- ifelse(rain != 0,
+    {
+      #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
+      # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
+      # *100 to convert to %...  *1/.3 because of 0.3mm=100%
+      mo <- mo + (rain / 0.3 * 100.0)
+      mo <- ifelse(mo > 250.0, 250.0, mo)
+      mo
+    },
+    mo)
   # fuel temp from CEVW*/
   tf <- temp + 17.9 * solrad * exp(-0.034 * ws)
   # fuel humidity
@@ -657,14 +658,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   if (wasHour) {
     setnames(wx, c("HOUR"), c("HR"))
   }
-  if (!("PERCENT_CURED" %in% names(wx))) {
-    wx$JULIAN <- julian(wx$MON, wx$DAY)
-    wx$PERCENT_CURED <- seasonal_curing(wx$JULIAN)
-  }
-  if (!("GRASS_FUEL_LOAD" %in% names(wx))) {
-    wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
-  }
-  cols_extra_solar <- intersect(names(wx), c("SOLRAD", "SUNRISE", "SUNSET", "SUNLIGHT_HOURS"))
+  cols_extra_solar <- intersect(names(wx), c("SUNRISE", "SUNSET", "SUNLIGHT_HOURS"))
   if (0 < length(cols_extra_solar)) {
     warning(sprintf("Ignoring and recalculating columns: [%s]", paste0(cols_extra_solar, collapse = ", ")))
     wx <- wx[, -..cols_extra_solar]
@@ -674,6 +668,9 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   stopifnot(all(wx$PREC >= 0))
   stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
   stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
+  stopifnot(wx$SOLRAD >= 0)
+  stopifnot(wx$GRASS_FUEL_LOAD >= 0)
+  stopifnot(wx$PERCENT_CURED >= 0 & wx$PERCENT_CURED <= 100)
   stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
@@ -694,7 +691,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
       print(paste0("Running ", stn, " for ", yr))
       # FIX: convert this to not need to do individual stations
       by_year[, TIMEZONE := timezone]
-      w <- getSunlight(by_year, with_solrad = TRUE)
+      w <- getSunlight(by_year, with_solrad = FALSE)
       r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
       results <- rbind(results, r)
     }
