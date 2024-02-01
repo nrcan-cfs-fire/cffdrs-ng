@@ -140,12 +140,13 @@ int julian(int mon, int day)
 
 void check_header(FILE* input, const char* header)
 {
+  /* printf("Checking header matches:\n\t%s\n", header); */
   /* check that the header matches what is expected */
   char a[1];
-  const int header_len = strlen(header);
+  const int n = strlen(header);
   int i;
   /* do this one character at a time because unsure how long line would be if we used %s */
-  for (i = 0; i < header_len; ++i)
+  for (i = 0; i < n + 1; ++i)
   {
     int err = fscanf(input, "%c", a);
     if (0 == err)
@@ -153,7 +154,8 @@ void check_header(FILE* input, const char* header)
       printf("Error reading file\n");
       exit(1);
     }
-    if (a[0] != header[i])
+    /* need a newline at end or else it's not really a match */
+    if ((i == n && '\n' != a[0]) || (i < n && a[0] != header[i]))
     {
       printf("Expected columns to be '%s'\n", header);
       exit(1);
