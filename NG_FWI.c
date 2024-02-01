@@ -264,32 +264,169 @@ double hourly_grass_fuel_moisture(double temp,
   return m;
 }
 
-/**
- * Calculate Grass Spread Index (GSI)
- *
- * @param ws              Wind Speed (km/h)
- * @param mc              Grass moisture content (percent)
- * @param cur             Degree of curing (percent, 0-100)
- * @return                Grass Spread Index
+ double Pign(double mc,  double wind2m, double Cint, double Cmc, double Cws)
+ /* Thisd is the general standard form for the probability of sustained flaming models for each FF cover type
+    here :
+      mc is cured moisture (%) in the litter fuels being ignited
+      wind2m (km/h)  is the estimated 2 metre standard height for wind at hte site of the fire ignition
+      Cint, Cmc and Cws   are coefficients for the standard Pign model form for a given FF cover type
+
+      return >> is the Probability of Sustained flaming from a single small flaming ember/brand
  */
-double grass_spread_index(double ws, double mc, double cur)
+ {
+     const double Prob = 1.0/(1.0 + exp(-1.0*(Cint + Cmc*mc + Cws*wind2m)));
+
+     return Prob;
+ }
+
+ double curing_factor(double cur)
+/*  cur is the percentage cure of the grass fuel complex.  100= fully cured
+  ....The OPPOSITE (100-x) of greenness...
+
+   This is the Cruz et al (2015) model with the original precision of the coefficent estimates
+   and as in CSIRO code:https://research.csiro.au/spark/resources/model-library/csiro-grassland-models/
+
+   */
+ {
+   double cf;
+   if ( cur >= 20.0) cf=1.036 / (1 + 103.989 * exp(-0.0996 * (cur - 20)));
+   else cf=0.0;
+
+   return  cf;
+ }
+
+double grass_moisture_code( double mc,  double cur,  double wind)
+{
+  /* THIS is the way to get the CODE value from cured grassland moisture
+    IT takes fully cured grass moisture  (from the grass moisture model (100% cured)  (from the FMS...updated version of Wotton 2009)
+       and a estimate of the fuel complex curing (as percent cured)
+       and estimated wind speed (necessary for a calc
+    and calculated the probability of sustainable flaming ignition  (a funciton of MC  and wind)
+    THEN it accounts for curing effect on probability of fire spread sustainability, using the curing factor from Cruz et al (2015) for grass
+    THEN from this calcuates an 'effective moisture content' which is the moisture content that would be required to achieve
+       the curing adjusted probabiltiy of sustained flaming if one were calcuating it directly through the standard Pign equation.
+    and THEN converts this effective moisture content to a CODE value via the FF-scale the FFMC uses for consistency
+
+    relies on models of:
+       Prob of sustained flaming for grass model (PsusF(grass)
+       and  the curing_factor  function
+       AND and estiamte of open 10 m to 2 m wind reduction (0.75)...hardcoded in here now.....
+
+MC is moisture content (%)
+cur=percent curing of the grassland  (%)
+wind=  10 m open wind (km/h)
+
+    currently (NOv 2023) the coefficients for the PsusF(grass) models are hardcoded into the GFMC function
+  */
+
+    const double wind2m_open_factor=0.75;
+    double probign,wind2m,newPign, egmc;
+
+    const double  Intercept=1.49;
+    const double  Cmoisture=-0.11;
+    const double  Cwind=0.075;
+    /* GRASS: these coefficients (above) could change down the road .....explicitly coded in above*/
+
+    wind2m=wind2m_open_factor * wind;   /* convert from 10 m wind in open to 2 m wind in open COULD be updated */
+
+    probign = Pign(mc,wind2m, Intercept, Cmoisture, Cwind);
+
+    /* adjust ignition diretctly with the curing function on ROS */
+    newPign=curing_factor(cur)*probign;
+
+    /* now to back calc effective moisture - algebraically reverse the Pign equation*/
+    if (newPign>0.0)egmc= (log(newPign/(1.0-newPign))-Intercept-Cwind*wind2m)/Cmoisture;
+    else egmc=250;  /* a saturation value just a check*/
+
+    return 59.5*(250.0-egmc)/(147.2772773+egmc);   /*   convert to code with FF-scale */
+ }
+
+
+ double matted_grass_spread_ROS(double ws, double mc, double cur)
+ /*  CUT grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code
+  We use this for MATTED grass in our post-winter context
+  --ws=10 m open wind km/h
+  --mc = moisture content in  cured grass  (%)
+  --cur = percentage of grassland cured  (%)
+  output should be ROS in m/min   */
+
 {
   const double fw = 16.67 * (ws < 5 ? 0.054 + 0.209 * ws : 1.1 + 0.715 * (ws - 5.0) * 0.844);
+
   /* NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10 */
-  /* using 0.6838 instead would mean this is always less than ws >= 10 */
+  /* using 0.6838 instead would mean this is always less than ws >= 10
+  ........this is fine with me   BMW*/
   /* mc < 23.9 because of check at start of function, so last expression is any ws >= 10 */
+
   const double fm = mc < 12
                     ? exp(-0.108 * mc)
                     : (mc < 20.0 && ws < 10.0
-                         ? 0.684 - 0.0342 * mc
+                         ? 0.6838 - 0.0342 * mc
                          : (mc < 23.9 && ws >= 10.0
                               ? 0.547 - 0.0228 * mc
                               : 0.0));
-  const double cf = cur > 20
-                    ? 1.034 / (1 + 104 * exp(-0.1 * (cur - 20)))
-                    : 0.0;
-  return 1.11 * fw * fm * cf;
+
+  const double cf = curing_factor(cur);
+
+
+  return  (fw * fm * cf);
 }
+
+
+ double standing_grass_spread_ROS(double ws, double mc, double cur)
+ /*  standing grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code)
+  We use this for standing grass in our post-winter context
+  ITS only the WIND function that chnges here between cut and standing
+
+  --ws=10 m open wind km/h
+  --mc = moisture content in grass  (%)
+  --cur = percentage of grassland cured  (%)
+  output should be ROS in m/min   */
+
+{
+  const double fw = 16.67 * (ws < 5 ? 0.054 + 0.269 * ws : 1.4 + 0.838 * (ws - 5.0) * 0.844);
+
+  /* NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10 */
+  /* using 0.6838 instead would mean this is always less than ws >= 10
+  ........this is fine with me   BMW*/
+  /* mc < 23.9 because of check at start of function, so last expression is any ws >= 10 */
+
+  const double fm = mc < 12
+                    ? exp(-0.108 * mc)
+                    : (mc < 20.0 && ws < 10.0
+                         ? 0.6838 - 0.0342 * mc
+                         : (mc < 23.9 && ws >= 10.0
+                              ? 0.547 - 0.0228 * mc
+                              : 0.0));
+
+  const double cf = curing_factor(cur);
+
+
+  return  fw * fm * cf;
+}
+
+
+ /**
+ * Calculate Grass Spread Index (GSI)
+ *
+ * @param ws              10 metre OPEN Wind Speed (km/h)
+ * @param mc              Grass moisture content (fully cured grass) (percent)
+ * @param cur             Degree of curing (percent, 0-100)
+ * @return                Grass Spread Index
+ */
+double grass_spread_index(double ws, double mc, double cur )
+/*
+   So we don't have to transition midseason between standing and matted grass spread rate models
+   We will simply scale   GSI   by the average of the   matted and standing spread rates
+
+*/
+
+{
+
+  const double ros = ( matted_grass_spread_ROS(ws,  mc,  cur) + standing_grass_spread_ROS(ws,  mc,  cur)  ) / 2.0;
+  return 1.11 * ros;
+}
+
 
 /**
  * Calculate Grass Fire Weather Index
@@ -640,7 +777,7 @@ void main(int argc, char* argv[])
     double fwi = fire_weather_index(isi, bui);
     double dsr = daily_severity_rating(fwi);
     mcgfmc = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc);
-    double gfmc = fine_fuel_moisture_code(mcgfmc);
+    double gfmc = grass_moisture_code(mcgfmc, cur.percent_cured, cur.ws);
     double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured);
     double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     /* printf("\n"); */
