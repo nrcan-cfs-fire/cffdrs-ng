@@ -115,7 +115,7 @@ def buildup_index(dmc, dc):
     bui = 0.0 if (0 == dmc and 0 == dc) else (0.8 * dc * dmc / (dmc + 0.4 * dc))
     if bui < dmc:
         p = (dmc - bui) / dmc
-        cc = 0.92 * pow(0.0114 * dmc, 1.7)
+        cc = 0.92 + pow(0.0114 * dmc, 1.7)
         bui = dmc - cc * p
         if bui <= 0:
             bui = 0.0
