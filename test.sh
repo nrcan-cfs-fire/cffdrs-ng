@@ -15,6 +15,9 @@ mkdir -p ./out
 ./run.sh make_inputs -6 ./data/test_hffmc.csv ./out/inputs_hffmc.csv
 ./run.sh NG_FWI -6 85 6 15 ./out/inputs_hffmc.csv ./out/test_hffmc_fwi.csv
 
+./run.sh make_inputs -6 ./data/test_hffmc.csv ./out/inputs_hffmc.csv
+./run.sh NG_FWI -6 85 6 15 ./out/inputs_hffmc.csv ./out/test_hffmc_fwi.csv
+
 ./run.sh make_daily ./data/wx_hourly.csv ./out/wx_daily.csv
 
 # use same starting csv so any error in previous step doesn't carry forward
