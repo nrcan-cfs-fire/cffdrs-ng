@@ -130,8 +130,8 @@ double initial_spread_index(double ws, double ffmc)
   const double fw = 40 <= ws
                     ? 12 * (1 - exp(-0.0818 * (ws - 28)))
                     : exp(0.05039 * ws);
-  const double sf = 19.115 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
-  const double isi = sf * fw;
+  const double ff = 91.9 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
+  const double isi = 0.208 * fw * ff;
   return isi;
 }
 

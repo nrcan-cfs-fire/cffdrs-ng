@@ -100,8 +100,8 @@ def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
 def initial_spread_index(ws, ffmc):
     fm = fine_fuel_moisture_from_code(ffmc)
     fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= ws) else exp(0.05039 * ws)
-    sf = 19.1152 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
-    isi = sf * fw
+    ff = 91.9 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
+    isi = 0.208 * fw * ff
     return isi
 
 

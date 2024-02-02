@@ -124,8 +124,8 @@ initial_spread_index <- function(ws, ffmc) {
     12 * (1 - exp(-0.0818 * (ws - 28))),
     exp(0.05039 * ws)
   )
-  sf <- 19.1152 * exp(-0.1386 * fm) * (1.0 + (fm^5.31) / 4.93e07)
-  isi <- sf * fw
+  ff <- 91.9 * exp(-0.1386 * fm) * (1.0 + (fm^5.31) / 4.93e07)
+  isi <- 0.208 * fw * ff
   return(isi)
 }
 
