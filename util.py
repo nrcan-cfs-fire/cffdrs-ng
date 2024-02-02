@@ -196,7 +196,8 @@ def save_csv(df, file):
     COLS_LOC = ["lat", "long"]
     COLS_DATE = ["yr", "mon", "day", "hr"]
     COLS_RH = ["rh"]
-    COLS_WX = ["temp", "ws", "prec"]
+    COLS_WX = ["temp", "ws"]
+    COLS_PREC = ["prec"]
     COLS_SOLRAD = ["solrad"]
     COLS_INDICES = [
         "ffmc",
@@ -237,6 +238,7 @@ def save_csv(df, file):
     apply_format(COLS_DATE, "{:02d}", True)
     apply_format(COLS_RH, "{:.0f}")
     apply_format(COLS_WX, "{:.1f}")
+    apply_format(COLS_PREC, "{:.2f}")
     apply_format(COLS_SOLRAD, "{:.4f}")
     apply_format(COLS_INDICES, "{:.1f}")
     apply_format(COLS_EXTRA, "{:.4f}")

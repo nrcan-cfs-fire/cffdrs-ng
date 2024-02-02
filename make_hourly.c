@@ -89,7 +89,7 @@ void main(int argc, char* argv[])
       /* error but we still want to figure out today's values */
       tom = cur;
     }
-    printf("%d %d %d  %5.1f  %5.1f %5.1f %5.1f %5.1f %5.1f %5.1f\n",
+    printf("%d %d %d  %5.1f  %5.1f %5.1f %5.1f %5.1f %5.1f %5.2f\n",
            cur.year,
            cur.mon,
            cur.day,
@@ -126,7 +126,7 @@ void main(int argc, char* argv[])
       {
         arh[h] = 100 * (1.0 - arh[h]);
         fprintf(out,
-                "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+                "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
                 cur.lat,
                 cur.lon,
                 cur.year,

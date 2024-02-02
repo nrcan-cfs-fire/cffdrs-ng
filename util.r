@@ -164,7 +164,8 @@ save_csv <- function(df, file) {
   COLS_LOC <- c("lat", "long")
   COLS_DATE <- c("yr", "mon", "day", "hr")
   COLS_RH <- c("rh")
-  COLS_WX <- c("temp", "ws", "prec")
+  COLS_WX <- c("temp", "ws")
+  COLS_PREC <- c("prec")
   COLS_SOLRAD <- c("solrad")
   COLS_INDICES <- c(
     "ffmc",
@@ -205,6 +206,7 @@ save_csv <- function(df, file) {
   apply_format(COLS_DATE, "%02d", TRUE)
   apply_format(COLS_RH, "%.0f")
   apply_format(COLS_WX, "%.1f")
+  apply_format(COLS_PREC, "%.2f")
   apply_format(COLS_SOLRAD, "%.4f")
   apply_format(COLS_INDICES, "%.1f")
   apply_format(COLS_EXTRA, "%.4f")

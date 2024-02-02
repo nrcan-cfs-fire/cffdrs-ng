@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
     double ws_min = 0.15 * cur.wind;
     double ws_max = 1.25 * cur.wind;
     fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.1f\n",
+            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.2f\n",
             cur.lat,
             cur.lon,
             cur.year,
@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
             ws_min,
             ws_max,
             cur.rain);
-    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.1f\n",
+    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.2f\n",
            cur.lat,
            cur.lon,
            cur.year,

@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
     } /* end the while to read thru a day */
     double rain24 = rain_am + rain_pm_old;
     fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
             old.lat,
             old.lon,
             old.year,
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
             arh[LST_NOON],
             awind[LST_NOON],
             rain24);
-    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.1f\n",
+    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
            old.lat,
            old.lon,
            old.year,
