@@ -133,10 +133,10 @@ void main(int argc, char* argv[])
                 cur.mon,
                 cur.day,
                 h,
-                atemp[h],
+                _round(atemp[h], 1),
                 arh[h],
-                aws[h],
-                arain[h]);
+                _round(aws[h], 1),
+                _round(arain[h], 2));
       }
     }
     else

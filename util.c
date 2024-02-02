@@ -26,7 +26,8 @@ double _round(double x, int digits)
   {
     printf("round(%.8f,%d) -> %d,%.8f,%.8f\n", x, digits, p, o, y);
   } */
-  return y;
+  /* Ensure we don't have negative zero because it carries forward into outputs */
+  return ((0.0 == y) ? 0.0 : y);
 }
 
 double _max(double x, double y)
