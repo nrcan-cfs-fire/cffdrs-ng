@@ -124,7 +124,7 @@ void main(int argc, char* argv[])
     {
       for_day[h].solrad = solrad.hour[h];
       fprintf(out,
-              "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.1f,%.4f,%.1f,%.2f\n",
+              "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f\n",
               for_day[h].lat,
               for_day[h].lon,
               for_day[h].year,
