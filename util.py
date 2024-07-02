@@ -1,7 +1,7 @@
 import datetime
 import logging
 from math import acos, cos, exp, log, pi, sin, tan
-
+import re
 import numpy as np
 import pandas as pd
 
@@ -303,7 +303,7 @@ def save_csv(df, file):
             if as_int:
                 x = int(x)
             # HACK: deal with negative 0
-            return fmt.format(0 if 0 == x else x)
+            return(re.sub("^-0\\.0*$", "0.0", fmt.format(x)))
 
         for col in result.columns:
             # HACK: deal with min/max columns

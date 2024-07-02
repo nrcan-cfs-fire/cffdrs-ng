@@ -210,7 +210,8 @@ save_csv <- function(df, file) {
       if (as_int) {
         x <- as.integer(x)
       }
-      return(sprintf(fmt, ifelse(0 == x, 0, x)))
+      # HACK: deal with negative 0
+      return(gsub("^-0\\.0*$", "0.0", sprintf(fmt, x)))
     })
 
     for (col in names(result)) {
