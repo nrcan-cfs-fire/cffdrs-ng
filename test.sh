@@ -33,9 +33,7 @@ mkdir -p ./out
 ./run.sh NG_FWI -6 85 6 15 ./out/inputs_windy.csv ./out/wx_windy_fwi.csv
 
 ./run.sh make_inputs -6 ./data/wx_rh100.csv ./out/inputs_rh100.csv
-# FIX
 ./run.sh NG_FWI -6 85 6 15 ./out/inputs_rh100.csv ./out/wx_rh100_fwi.csv
 
 ./run.sh make_inputs -6 ./data/wx_rh0.csv ./out/inputs_rh0.csv
-# FIX
 ./run.sh NG_FWI -6 85 6 15 ./out/inputs_rh0.csv ./out/wx_rh0_fwi.csv

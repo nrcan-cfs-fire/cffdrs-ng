@@ -41,7 +41,7 @@ static const double DC_DEFAULT = 15;
 static const double DEFAULT_LATITUDE = 55.0;
 static const double DEFAULT_LONGITUDE = -120.0;
 
-static const double MPCT_TO_MC = 147.2772277;
+static const double MPCT_TO_MC = 250.0 * 59.5 / 101.0;
 static const double FFMC_INTERCEPT = 0.5;
 static const double DMC_INTERCEPT = 1.5;
 static const double DC_INTERCEPT = 2.8;
@@ -51,7 +51,7 @@ static const double DC_INTERCEPT = 2.8;
  */
 double fine_fuel_moisture_code(double moisture_percent)
 {
-  return (59.5 * (250 - moisture_percent) / (MPCT_TO_MC + moisture_percent));
+  return (59.5 * (250.0 - moisture_percent) / (MPCT_TO_MC + moisture_percent));
 }
 
 /*
@@ -59,7 +59,7 @@ double fine_fuel_moisture_code(double moisture_percent)
  */
 double fine_fuel_moisture_from_code(double moisture_code)
 {
-  return MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code);
+  return MPCT_TO_MC * (101.0 - moisture_code) / (59.5 + moisture_code);
 }
 
 /**
@@ -345,7 +345,7 @@ wind=  10 m open wind (km/h)
     if (newPign>0.0)egmc= (log(newPign/(1.0-newPign))-Intercept-Cwind*wind2m)/Cmoisture;
     else egmc=250;  /* a saturation value just a check*/
 
-    return 59.5*(250.0-egmc)/(147.2772773+egmc);   /*   convert to code with FF-scale */
+    return fine_fuel_moisture_code(egmc);   /*   convert to code with FF-scale */
  }
 
 
