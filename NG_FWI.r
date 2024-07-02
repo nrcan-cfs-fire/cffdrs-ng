@@ -23,7 +23,6 @@ OFFSET_SUNSET <- 0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
-MAX_SOLAR_PROPAGATION <- 0.85
 
 # default startup values
 FFMC_DEFAULT <- 85
@@ -521,8 +520,6 @@ dc_drying_hourly <- function(temp) {
 
 drought_code <- function(
     last_dc,
-    lat,
-    lon,
     temp,
     rh,
     ws,
@@ -688,8 +685,6 @@ rain_since_intercept_reset <- function(temp,
     cur$dmc <- dmc_$dmc
     dc_ <- drought_code(
       dc_$dc,
-      cur$lat,
-      cur$long,
       cur$temp,
       cur$rh,
       cur$ws,

@@ -15,9 +15,16 @@ bmw/2021
 #include "util.h"
 #include <stdlib.h>
 
-static const double HOURLY_K_DMC = 2.10;
-static const double HOURLY_K_DC = 0.017;
+static const double DAILY_K_DMC_DRYING = 1.894;
+static const double DAILY_K_DC_DRYING = 3.937;
+
+static const double HOURLY_K_DMC = 2.22;
+static const double HOURLY_K_DC = 0.085;
+static const double DMC_OFFSET_TEMP = 0.0;
 static const double DC_OFFSET_TEMP = 0.0;
+
+static const double DC_DAILY_CONST = 0.36;
+static const double DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING;
 
 static const double OFFSET_SUNRISE = 2.5;
 static const double OFFSET_SUNSET = 0.5;
@@ -513,7 +520,7 @@ double dc_wetting_between(double rain_total_previous, double rain_total, double 
 
 double dmc_drying_ratio(double temp, double rh)
 {
-  return _max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001);
+  return _max(0.0, HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001);
 }
 
 double duff_moisture_code(double last_dmc,
@@ -545,8 +552,8 @@ double duff_moisture_code(double last_dmc,
   double sunrise_start = _round(sunrise + OFFSET_SUNRISE, 0);
   double sunset_start = _round(sunset + OFFSET_SUNSET, 0);
   double dmc_hourly = (((hour >= sunrise_start) && (hour < sunset_start))
-                         ? (HOURLY_K_DMC * dmc_drying_ratio(temp, rh))
-                         : 0.0);
+                           ? (dmc_drying_ratio(temp, rh))
+                           : 0.0);
   dmc = dmc + dmc_hourly;
   /* printf("%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
          *dmc_before_rain,

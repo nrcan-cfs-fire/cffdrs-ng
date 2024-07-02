@@ -13,12 +13,16 @@ from util import save_csv
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
-# HOUR_TO_START_FROM = 12
+DAILY_K_DMC_DRYING = 1.894
+DAILY_K_DC_DRYING = 3.937
 
-HOURLY_K_DMC = 2.10
-HOURLY_K_DC = 0.017
-DMC_OFFSET_TEMP = 1.1
+HOURLY_K_DMC = 2.22
+HOURLY_K_DC = 0.085
+DMC_OFFSET_TEMP = 0.0
 DC_OFFSET_TEMP = 0.0
+
+DC_DAILY_CONST = 0.36
+DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
 
 OFFSET_SUNRISE = 2.5
 OFFSET_SUNSET = 0.5
@@ -35,6 +39,8 @@ DC_DEFAULT = 15
 # FIX: figure out what this should be
 DEFAULT_LATITUDE = 55.0
 DEFAULT_LONGITUDE = -120.0
+
+# HOUR_TO_START_FROM = 12
 
 MPCT_TO_MC = 147.2772277
 FFMC_INTERCEPT = 0.5
@@ -406,7 +412,11 @@ def dc_wetting_between(rain_total_previous, rain_total, lastdc):
 
 
 def dmc_drying_ratio(temp, rh):
-    return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
+    # return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
+    return(
+        max(0.0,
+            HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001)
+            )
 
 
 def duff_moisture_code(
@@ -436,7 +446,7 @@ def duff_moisture_code(
     sunrise_start = round(sunrise + OFFSET_SUNRISE)
     sunset_start = round(sunset + OFFSET_SUNSET)
     dmc_hourly = (
-        HOURLY_K_DMC * dmc_drying_ratio(temp, rh)
+        dmc_drying_ratio(temp, rh)
         if (hour >= sunrise_start and hour < sunset_start)
         else 0.0
     )
