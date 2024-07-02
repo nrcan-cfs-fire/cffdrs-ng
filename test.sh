@@ -2,7 +2,7 @@
 set -e
 
 export CHECK_DIFF=$*
-python make_inputs.py
+python create_inputs.py
 
 cmake -S. -B./build
 cmake --build ./build
