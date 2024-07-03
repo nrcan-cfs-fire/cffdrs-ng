@@ -12,7 +12,7 @@ static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
 static const double DEFAULT_LATITUDE = 55.0;
 static const double DEFAULT_LONGITUDE = -120.0;
 
-int populate_row(FILE* inp, struct row* cur, double TZadjust)
+int populate_row(FILE *inp, struct row *cur, double TZadjust)
 {
   int err = read_row(inp, cur);
   double julian_day = julian(cur->mon, cur->day);
@@ -29,11 +29,11 @@ int populate_row(FILE* inp, struct row* cur, double TZadjust)
   return err;
 }
 
-void main(int argc, char* argv[])
+void main(int argc, char *argv[])
 {
   /*  CSV headers */
-  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
-  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
+  static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
   if (4 != argc)
   {
     printf("Command line:   %s <local GMToffset> <input file> <output file>\n\n", argv[0]);
@@ -44,7 +44,7 @@ void main(int argc, char* argv[])
     exit(1);
   }
 
-  FILE* inp = fopen(argv[2], "r");
+  FILE *inp = fopen(argv[2], "r");
   printf("Opening input file >>> %s   \n", argv[2]);
   if (inp == NULL)
   {
@@ -63,7 +63,7 @@ void main(int argc, char* argv[])
   int err = populate_row(inp, &cur, TZadjust);
   struct row for_day[24];
   struct row old = cur;
-  FILE* out = fopen(argv[3], "w");
+  FILE *out = fopen(argv[3], "w");
   fprintf(out, "%s\n", header_out);
   while (err > 0)
   {

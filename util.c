@@ -57,13 +57,13 @@ double findrh(double q, double temp)
 /*
  * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
  */
-void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr* solrad)
+void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad)
 {
   int jd = julian(mon, day);
   solar_radiation_julian(lat, lon, jd, timezone, temp_range, solrad);
 }
 
-void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr* solrad)
+void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad)
 {
   /*
     Completely disconnect from sunrise/sunset code so nothing changes there
@@ -72,9 +72,7 @@ void solar_radiation_julian(double lat, double lon, int jd, double timezone, dou
   double dechour = 12.0;
   double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
   double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
-  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
-              - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
-              - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
+  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
   double timeoffset = eqtime + 4 * lon - 60 * timezone;
   struct double_24hr cos_zenith;
   double sum_24hr_solrad_ext = 0;
@@ -89,9 +87,7 @@ void solar_radiation_julian(double lat, double lon, int jd, double timezone, dou
     double hourangle = tst / 4 - 180;
     /* Extraterrestrial solar radiation in kW/m^2 */
     cos_zenith.hour[h] = cos(_min(M_PI / 2,
-                                  acos(sin(lat * M_PI / 180) * sin(decl)
-                                       + cos(lat * M_PI / 180) * cos(decl)
-                                           * cos(hourangle * M_PI / 180))));
+                                  acos(sin(lat * M_PI / 180) * sin(decl) + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180))));
     sum_24hr_cos_zenith += cos_zenith.hour[h];
     double solrad_ext = 1.367 * cos_zenith.hour[h];
     /* Daily total of Extra. Solar Rad in kJ/m^2/day */
@@ -103,21 +99,21 @@ void solar_radiation_julian(double lat, double lon, int jd, double timezone, dou
   for (int h = 0; h < 24; ++h)
   {
     solrad->hour[h] = _max(
-      0,
-      cos_zenith.hour[h] / sum_24hr_cos_zenith * sum_24hr_solrad / 3600);
+        0,
+        cos_zenith.hour[h] / sum_24hr_cos_zenith * sum_24hr_solrad / 3600);
   }
 }
 
 /*
  * Find sunrise and sunset for a given date and location.
  */
-void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double* sunrise, double* sunset)
+void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset)
 {
   int jd = julian(mon, day);
   sunrise_sunset_julian(lat, lon, jd, timezone, sunrise, sunset);
 }
 
-void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double* sunrise, double* sunset)
+void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double *sunrise, double *sunset)
 {
   /*
   this routine approximately calcualtes sunrise and sunset and daylength
@@ -128,9 +124,7 @@ void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, doub
   double dechour = 12.0;
   double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + (dechour - 12.0) / 24.0);
   double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
-  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear)
-              - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear)
-              - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
+  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
   double timeoffset = eqtime + 4 * lon - 60 * timezone;
   double zenith = 90.833 * M_PI / 180.0;
   /*
@@ -151,7 +145,7 @@ int julian(int mon, int day)
   return month[mon - 1] + day;
 }
 
-void check_header(FILE* input, const char* header)
+void check_header(FILE *input, const char *header)
 {
   /* printf("Checking header matches:\n\t%s\n", header); */
   /* check that the header matches what is expected */
@@ -216,7 +210,7 @@ void check_inputs(double temp, double rh, double wind, double rain, double solra
   }
 }
 
-int read_row(FILE* inp, struct row* r)
+int read_row(FILE *inp, struct row *r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
@@ -248,7 +242,7 @@ int read_row(FILE* inp, struct row* r)
   return err;
 }
 
-int read_row_inputs(FILE* inp, struct row* r)
+int read_row_inputs(FILE *inp, struct row *r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
@@ -286,7 +280,7 @@ int read_row_inputs(FILE* inp, struct row* r)
   return err;
 }
 
-int read_row_daily(FILE* inp, struct row_daily* r)
+int read_row_daily(FILE *inp, struct row_daily *r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
@@ -316,7 +310,7 @@ int read_row_daily(FILE* inp, struct row_daily* r)
   return err;
 }
 
-int read_row_minmax(FILE* inp, struct row_minmax* r)
+int read_row_minmax(FILE *inp, struct row_minmax *r)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];

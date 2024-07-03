@@ -12,12 +12,12 @@ const double C_TEMP[3] = {0.2, 2.0, -2.9};
 const double C_RH[3] = {0.4, 1.9, -2.9};
 const double C_WIND[3] = {1.2, 1.7, -1.5};
 
-double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly);
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly);
 
-void main(int argc, char* argv[])
+void main(int argc, char *argv[])
 {
-  static const char* header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
-  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char *header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
+  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
   FILE *inp, *out;
   int err;
 
@@ -172,7 +172,7 @@ void main(int argc, char* argv[])
  * @param hourly[24]          array of calculated output values by hour for today
  * @return                    value at sunset today
  */
-double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly)
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly)
 {
   const double c_alpha = abg[0];
   const double c_beta = abg[1];

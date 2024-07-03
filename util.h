@@ -55,19 +55,19 @@ struct row_minmax
 /**
  * Read a row from an hourly weather stream file
  */
-int read_row(FILE* inp, struct row* r);
+int read_row(FILE *inp, struct row *r);
 /**
  * Read a row from an hourly fwi inputs stream file
  */
-int read_row_inputs(FILE* inp, struct row* r);
+int read_row_inputs(FILE *inp, struct row *r);
 /**
  * Read a row from a daily weather stream file
  */
-int read_row_daily(FILE* inp, struct row_daily* r);
+int read_row_daily(FILE *inp, struct row_daily *r);
 /**
  * Read a row from a min/max weather stream file
  */
-int read_row_minmax(FILE* inp, struct row_minmax* r);
+int read_row_minmax(FILE *inp, struct row_minmax *r);
 /**
  * Find specific humidity
  *
@@ -96,7 +96,7 @@ double findrh(double q, double temp);
  * @param temp_range        Range in temperature during the period (Celcius)
  * @param[out] solrad       Hourly solar radiation (kW/m^2)
  */
-void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr* solrad);
+void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad);
 /**
  * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
  *
@@ -107,7 +107,7 @@ void solar_radiation(double lat, double lon, int mon, int day, double timezone, 
  * @param temp_range        Range in temperature during the period (Celcius)
  * @param[out] solrad       Hourly solar radiation (kW/m^2)
  */
-void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr* solrad);
+void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad);
 /**
  * Find sunrise and sunset for a given date and location.
  *
@@ -120,7 +120,7 @@ void solar_radiation_julian(double lat, double lon, int jd, double timezone, dou
  * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  */
-void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double* sunrise, double* sunset);
+void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset);
 /**
  * Find sunrise and sunset for a given date and location.
  *
@@ -132,7 +132,7 @@ void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, d
  * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
  */
-void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double* sunrise, double* sunset);
+void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double *sunrise, double *sunset);
 /**
  * Find day of year. Does not properly deal with leap years.
  *
@@ -147,7 +147,7 @@ int julian(int mon, int day);
  * @param input       Input file to check for string
  * @param header      String to match
  */
-void check_header(FILE* input, const char* header);
+void check_header(FILE *input, const char *header);
 /**
  * Check that weather parameters are valid
  *
