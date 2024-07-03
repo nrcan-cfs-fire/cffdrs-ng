@@ -74,17 +74,17 @@ int main(int argc, char *argv[])
       err = read_row(inp, &cur);
     } /* end the while to read thru a day */
     double rain24 = rain_am + rain_pm_old;
-    fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
-            old.lat,
-            old.lon,
-            old.year,
-            old.mon,
-            old.day,
-            atemp[LST_NOON],
-            arh[LST_NOON],
-            awind[LST_NOON],
-            rain24);
+    save_csv(out,
+             "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
+             old.lat,
+             old.lon,
+             old.year,
+             old.mon,
+             old.day,
+             atemp[LST_NOON],
+             arh[LST_NOON],
+             awind[LST_NOON],
+             rain24);
     printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
            old.lat,
            old.lon,

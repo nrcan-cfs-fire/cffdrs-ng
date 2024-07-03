@@ -1,6 +1,8 @@
 #include "util.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 /* abs() isn't working either */
 double _abs(double x)
@@ -14,20 +16,6 @@ double _copysign(double x, double y)
 {
   /* >=0 to account for negative zero */
   return _abs(x) * ((y >= 0) ? 1 : -1);
-}
-
-double _round(double x, int digits)
-{
-  const int p = pow(10, digits);
-  /* want to move away from 0 */
-  const double o = _copysign(0.5, x);
-  const double y = (double)((int)(x * p + o)) / p;
-  /* if (0 == digits)
-  {
-    printf("round(%.8f,%d) -> %d,%.8f,%.8f\n", x, digits, p, o, y);
-  } */
-  /* Ensure we don't have negative zero because it carries forward into outputs */
-  return ((0.0 == y) ? 0.0 : y);
 }
 
 double _max(double x, double y)
@@ -370,4 +358,137 @@ double seasonal_curing(int julian_date)
   /* should be the fractional position in the 10 day period  */
   const double period_frac = (julian_date % 10) / 10.0;
   return (first + (last - first) * period_frac);
+}
+
+// // HACK: use sprintf and then copy so we can replace -0.0 without screwing things up with bad rounding
+// int _fprintf(FILE *__restrict __stream, const char *__restrict __fmt, ...)
+// {
+//   char buffer[4096];
+//   va_list args;
+//   va_start(args, __fmt);
+//   const size_t len = vsnprintf(
+//       buffer,
+//       sizeof(buffer),
+//       __fmt,
+//       args);
+//   if (len >= sizeof(buffer))
+//   {
+//     printf("**** ERROR: could not write because buffer is too small for %s:\n\t", buffer);
+//     exit(-1);
+//   }
+//   va_end(args);
+//   // now replace -0.0 anywhere
+// }
+
+int save_rounded(FILE *file, const char *fmt, const double value)
+{
+  char buffer[4096];
+  const size_t len = snprintf(
+      buffer,
+      sizeof(buffer),
+      fmt,
+      value);
+  if (len >= sizeof(buffer))
+  {
+    printf("**** ERROR: could not write because buffer is too small for %s:\n\t", buffer);
+    exit(-1);
+  }
+  if (0 == strcmp(buffer, "-0.0"))
+  {
+#ifndef NDEBUG
+    printf("Converting %s with %f to 0.0\n", fmt, value);
+#endif
+    fprintf(file, "0.0");
+  }
+  else
+  {
+#ifndef NDEBUG
+    printf("Converting %s with %f to %s\n", fmt, value, buffer);
+#endif
+    fprintf(file, "%s", buffer);
+  }
+  return len;
+}
+
+// HACK: act like other languages for printing based on columns so results are the same
+void save_csv(FILE *file, const char *fmt_all, ...)
+{
+  char buffer[strlen(fmt_all) + 1];
+  strcpy(buffer, fmt_all);
+  va_list args;
+#ifndef NDEBUG
+  va_start(args, fmt_all);
+  // can't reuse args after vprintf()
+  printf("Called save_csv() with %s\n", fmt_all);
+  vprintf(fmt_all, args);
+  va_end(args);
+#endif
+  va_start(args, fmt_all);
+  // int done = 0;
+  // int i = 0;
+  int j = 0;
+  char delim_buffer[2];
+  delim_buffer[1] = '\0';
+  while (buffer[j] != '\0')
+  {
+    // if (done > n)
+    // {
+    //   printf("***** ERROR: more values than format string defines for %s\n:", fmt_all);
+    //   // should crash here?
+    //   vprintf(fmt_all, args);
+    //   exit(-1);
+    // }
+    int k = j;
+    // find next delimeter or end of format
+    while (buffer[k] != '\n' && buffer[k] != '\0' && buffer[k] != ',')
+    {
+      ++k;
+    }
+    delim_buffer[0] = fmt_all[k];
+    // just replace with '\0' and then undo so we can use printf on substring
+    buffer[k] = '\0';
+    if (k == j)
+    {
+      // nothing there so must be done?
+      break;
+    }
+    // all format strings should end in a letter?
+#ifndef NDEBUG
+    printf("Checking for %s\n", &(buffer[j]));
+#endif
+    switch (buffer[k - 1])
+    {
+    case 'd':
+      int value_int = va_arg(args, int);
+      // no need to guard against "-0.0"
+#ifndef NDEBUG
+      printf("Converting %s with %d to ", &(buffer[j]), value_int);
+      printf(&(buffer[j]), value_int);
+      printf("\n");
+#endif
+      fprintf(file, &(buffer[j]), value_int);
+      break;
+    case 'f':
+    // fall through
+    case 'g':
+      double value_double = va_arg(args, double);
+#ifndef NDEBUG
+      printf("formatting %s with %f\n", &(buffer[j]), value_double);
+#endif
+      save_rounded(file, &(buffer[j]), value_double);
+      break;
+    default:
+      printf("***** ERROR: invalid format string %s", buffer);
+      exit(-1);
+    }
+    buffer[k] = delim_buffer[0];
+    if (delim_buffer[0] != '\0')
+    {
+      fprintf(file, "%s", delim_buffer);
+    }
+    j = k + 1;
+    // ++i;
+    // ++done;
+  }
+  va_end(args);
 }

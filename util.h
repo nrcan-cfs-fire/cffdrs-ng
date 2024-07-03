@@ -171,12 +171,14 @@ void check_weather(double temp, double rh, double wind, double rain);
 void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load);
 double seasonal_curing(int julian_date);
 
-/* C90 round() only rounds to int but want digits */
-double _round(double x, int digits);
-
 /* C90 max() also causing problems */
 double _max(double x, double y);
 
 /* C90 min() also causing problems */
 double _min(double x, double y);
+
+void save_csv(FILE *file, const char *fmt_all, ...);
+
+/* HACK: format and then output to prevent -0.0 */
+int save_rounded(FILE *file, const char *fmt, const double value);
 #endif

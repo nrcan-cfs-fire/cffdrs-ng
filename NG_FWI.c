@@ -543,8 +543,8 @@ double duff_moisture_code(double last_dmc,
       *dmc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
   double dmc = _max(0.0, last_dmc - dmc_wetting_hourly);
-  double sunrise_start = _round(sunrise + OFFSET_SUNRISE, 0);
-  double sunset_start = _round(sunset + OFFSET_SUNSET, 0);
+  double sunrise_start = round(sunrise + OFFSET_SUNRISE);
+  double sunset_start = round(sunset + OFFSET_SUNSET);
   double dmc_hourly = (((hour >= sunrise_start) && (hour < sunset_start))
                            ? (dmc_drying_ratio(temp, rh))
                            : 0.0);
@@ -782,33 +782,33 @@ void main(int argc, char *argv[])
     double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured);
     double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     /* printf("\n"); */
-    fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
-            cur.lat,
-            cur.lon,
-            cur.year,
-            cur.mon,
-            cur.day,
-            cur.hour,
-            _round(cur.temp, 1),
-            cur.rh,
-            _round(cur.ws, 1),
-            _round(cur.rain, 2),
-            cur.solrad,
-            ffmc,
-            dmc,
-            dc,
-            isi,
-            bui,
-            fwi,
-            dsr,
-            gfmc,
-            gsi,
-            gfwi,
-            mcffmc,
-            mcgfmc,
-            cur.percent_cured,
-            cur.grass_fuel_load);
+    save_csv(out,
+             "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
+             cur.lat,
+             cur.lon,
+             cur.year,
+             cur.mon,
+             cur.day,
+             cur.hour,
+             cur.temp,
+             cur.rh,
+             cur.ws,
+             cur.rain,
+             cur.solrad,
+             ffmc,
+             dmc,
+             dc,
+             isi,
+             bui,
+             fwi,
+             dsr,
+             gfmc,
+             gsi,
+             gfwi,
+             mcffmc,
+             mcgfmc,
+             cur.percent_cured,
+             cur.grass_fuel_load);
     /*     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
                cur.lat,
                cur.lon,

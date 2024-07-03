@@ -125,18 +125,18 @@ void main(int argc, char *argv[])
       for (h = 0; h < 24; ++h)
       {
         arh[h] = 100 * (1.0 - arh[h]);
-        fprintf(out,
-                "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
-                cur.lat,
-                cur.lon,
-                cur.year,
-                cur.mon,
-                cur.day,
-                h,
-                _round(atemp[h], 1),
-                arh[h],
-                _round(aws[h], 1),
-                _round(arain[h], 2));
+        save_csv(out,
+                 "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
+                 cur.lat,
+                 cur.lon,
+                 cur.year,
+                 cur.mon,
+                 cur.day,
+                 h,
+                 atemp[h],
+                 arh[h],
+                 aws[h],
+                 arain[h]);
       }
     }
     else

@@ -123,21 +123,21 @@ void main(int argc, char *argv[])
     for (int h = hour_min; h <= hour_max; ++h)
     {
       for_day[h].solrad = solrad.hour[h];
-      fprintf(out,
-              "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f\n",
-              for_day[h].lat,
-              for_day[h].lon,
-              for_day[h].year,
-              for_day[h].mon,
-              for_day[h].day,
-              for_day[h].hour,
-              for_day[h].temp,
-              for_day[h].rh,
-              for_day[h].ws,
-              for_day[h].rain,
-              for_day[h].solrad,
-              for_day[h].percent_cured,
-              for_day[h].grass_fuel_load);
+      save_csv(out,
+               "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f\n",
+               for_day[h].lat,
+               for_day[h].lon,
+               for_day[h].year,
+               for_day[h].mon,
+               for_day[h].day,
+               for_day[h].hour,
+               for_day[h].temp,
+               for_day[h].rh,
+               for_day[h].ws,
+               for_day[h].rain,
+               for_day[h].solrad,
+               for_day[h].percent_cured,
+               for_day[h].grass_fuel_load);
     }
   } /* end the main while(err>0)  */
 

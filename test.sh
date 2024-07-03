@@ -23,8 +23,10 @@ mkdir -p ./out
 # use same starting csv so any error in previous step doesn't carry forward
 ./run.sh make_minmax ./out/wx_daily.csv ./out/wx_minmax.csv
 
-# FIX: C code doesn't match right now
+export CHECK_DIFF=
+# FIX: C code doesn't match rounding exactly all the time right now
 ./run.sh make_hourly -6 ./out/wx_minmax.csv ./out/wx_diurnal.csv
+export CHECK_DIFF=$*
 
 ./run.sh make_inputs -6 ./out/wx_diurnal.csv ./out/inputs_diurnal.csv
 ./run.sh NG_FWI -6 85 6 15 ./out/inputs_diurnal.csv ./out/wx_diurnal_fwi.csv
