@@ -19,8 +19,8 @@ static const double HOURLY_K_DMC = 2.10;
 static const double HOURLY_K_DC = 0.017;
 static const double DC_OFFSET_TEMP = 0.0;
 
-static const double OFFSET_SUNRISE = 2.5;
-static const double OFFSET_SUNSET = 0.5;
+static const double OFFSET_SUNRISE = 0.0; //2.5;
+static const double OFFSET_SUNSET = 0.0; //0.5;
 
 /* Fuel Load (kg/m^2) */
 static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
@@ -110,7 +110,7 @@ double hourly_fine_fuel_moisture(const double temp,
                       ? rh / 100.0
                       : (100.0 - rh) / 100.0;
     const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
-    const double kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp);
+    const double kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp);
     m += (mo - m) * pow(10, -kd_or_kw * time);
     /* printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m); */
   }
@@ -428,6 +428,72 @@ double dc_drying_hourly(double temp)
   return _max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP));
 }
 
+double drought_code_mike_version(
+    double last_dc,
+    double temp,
+    double rh,
+    double ws,
+    double rain,
+    int mon,
+    int hour,
+    double solrad,
+    double sunrise,
+    double sunset,
+    double* dc_before_rain,
+    double rain_total_prev,
+    double rain_total){
+  double offset = 3.0;
+  double mult = 0.015;
+  double pe = 0.0;
+  double rw = 0.0;
+  double mr = 0.0;
+  double mcdc = 0.0;
+  
+  last_mc_dc = 400*exp(-last_dc/400);
+  double TIME_INCREMENT = 1.0;
+  if (temp > 0){
+    pe = mult * temp + offset/16.0;
+  }
+  
+  double invtau = pe/400.0;
+  
+  if (rain_total_prev + rain <= 2.8){
+    mr = last_mc_dc;
+  }
+  else {
+    if (rain_total_prev <= 2.8){
+      rw = (rain_total + rain)*0.83 - 1.27;
+    }
+    else {
+      rw = rain*0.83;
+    }
+    mr = last_mc_dc + 3.937*rw/2.0;
+  }
+  
+  if(mr > 400.0){
+    mr = 400.0;
+  }
+  
+  boolean is_daytime = FALSE;
+  if((hour >= sunrise) && (hour <= sunset)){
+    is_daytime = TRUE;
+  }
+  
+  if(is_daytime){
+    mcdc = 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau);
+  }
+  else{
+    mcdc = mr;
+  }
+  if (mcdc > 400.0){
+    mcdc = 400.0;
+  }
+  double dc = 400.0*log(400.0/mcdc);
+  return dc;
+  
+}
+
+
 double drought_code(double last_dc,
                     double temp,
                     double rh,
@@ -442,6 +508,32 @@ double drought_code(double last_dc,
                     double rain_total_prev,
                     double rain_total)
 {
+  
+  //#################################################################################
+  // for now we are using Mike's method for calculating DC
+  if (0 == rain_total){
+    *dc_before_rain = last_dc;
+  }
+  double dc = drought_code_mike_version(
+    last_dc = last_dc,
+    temp = temp,
+    rh = rh,
+    ws = ws,
+    rain = rain,
+    mon = mon,
+    hour = hour,
+    solrad = solrad,
+    sunrise = sunrise,
+    sunset = sunset,
+    dc_before_rain = &dc_before_rain,
+    rain_total_prev = rain_total_prev,
+    rain_total = rain_total);
+  return dc;
+  
+  //###################################################################################
+  
+  
+  
   if (0 == rain_total)
   {
     *dc_before_rain = last_dc;
