@@ -20,8 +20,8 @@ HOURLY_K_DC = 0.017
 DMC_OFFSET_TEMP = 1.1
 DC_OFFSET_TEMP = 0.0
 
-OFFSET_SUNRISE = 2.5
-OFFSET_SUNSET = 0.5
+OFFSET_SUNRISE = 0 #2.5
+OFFSET_SUNSET = 0 #0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
@@ -342,7 +342,7 @@ def dc_drying_hourly(temp):
     return max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP))
 
 
-def droght_code_mike_version(
+def drought_code_mike_version(
   last_dc,
   temp,
   rh,
@@ -353,7 +353,7 @@ def droght_code_mike_version(
   solrad,
   sunrise,
   sunset,
-  dc_berore_rain,
+  dc_before_rain,
   rain_total_prev,
   rain_total
   ):
@@ -384,7 +384,7 @@ def droght_code_mike_version(
     
     is_daytime = False
     if (hour >= sunrise) and (hour <= sunset):
-      is_daytime = TRUE
+      is_daytime = True
       
     if is_daytime:
       mcdc = 0.0 + (mr + 0.0)*exp(-1.0*TIME_INCREMENT*invtau)
@@ -420,7 +420,7 @@ def drought_code(
   if 0 == rain_total:
     dc_before_rain = last_dc
   
-  dc = = drought_code_mike_version(
+  dc =  drought_code_mike_version(
     last_dc = last_dc,
     temp = temp,
     rh = rh,
@@ -440,22 +440,22 @@ def drought_code(
   ###################################################################################
   
   
-    if 0 == rain_total:
-        dc_before_rain = last_dc
+    #if 0 == rain_total:
+     #   dc_before_rain = last_dc
     # apply wetting since last period
-    dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
-    assert 0 <= dc_wetting_hourly
+    #dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    #assert 0 <= dc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
-    dc = max(0.0, last_dc - dc_wetting_hourly)
-    dc_hourly = dc_drying_hourly(temp)
+    #dc = max(0.0, last_dc - dc_wetting_hourly)
+    #dc_hourly = dc_drying_hourly(temp)
     # print(
     #     "last_dc={:0.2f}, dc_wetting_hourly={:0.2f}, dc={:0.2f}, dc_hourly={:0.2f}".format(
     #         last_dc, dc_wetting_hourly, dc, dc_hourly
     #     )
     # )
-    dc = dc + dc_hourly
+    #dc = dc + dc_hourly
     # HACK: return two values since C uses a pointer to assign a value
-    return (dc, dc_before_rain)
+    #return (dc, dc_before_rain)
 
 
 # Calculate number of drying "units" this hour contributes
