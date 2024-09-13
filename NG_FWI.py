@@ -24,8 +24,8 @@ DC_OFFSET_TEMP = 0.0
 DC_DAILY_CONST = 0.36
 DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
 
-OFFSET_SUNRISE = 2.5
-OFFSET_SUNSET = 0.5
+OFFSET_SUNRISE = 0 #2.5
+OFFSET_SUNSET = 0 #0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
@@ -92,7 +92,7 @@ def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
         # these are the same formulas with a different value for a1
         a1 = (rh / 100.0) if (mo > ed) else ((100.0 - rh) / 100.0)
         k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
-        kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp)
+        kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp)
         m += (mo - m) * pow(10, (-kd_or_kw * time))
     return m
 
@@ -458,6 +458,60 @@ def duff_moisture_code(
 def dc_drying_hourly(temp):
     return max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP))
 
+def drought_code_mike_version(
+  last_dc,
+  temp,
+  rh,
+  ws,
+  rain,
+  mon,
+  hour,
+  solrad,
+  sunrise,
+  sunset,
+  dc_before_rain,
+  rain_total_prev,
+  rain_total
+  ):
+    offset = 3.0
+    mult = 0.015
+    pe = 0
+    rw = 0
+    mr = 0
+    mcdc = 0
+    
+    last_mc_dc = 400*exp(-last_dc/400)
+    TIME_INCREMENT = 1.0
+    if temp > 0:
+      pe = mult*temp + offset/16.0
+      
+    invtau = pe/400.0
+    if (rain_total_prev + rain) <= 2.8:
+      mr = last_mc_dc
+    else:
+      if rain_total_prev <= 2.8:
+        rw = (rain_total_prev + rain)*0.83 - 1.27
+      else:
+        rw = rain*0.83
+      mr = last_mc_dc + 3.937*rw/2.0
+    
+    if mr > 400.0:
+      mr = 400.0
+    
+    is_daytime = False
+    if (hour >= sunrise) and (hour <= sunset):
+      is_daytime = True
+      
+    if is_daytime:
+      mcdc = 0.0 + (mr + 0.0)*exp(-1.0*TIME_INCREMENT*invtau)
+    else:
+      mcdc = mr
+      
+    if mcdc > 400.0:
+      mcdc= 400.0
+      
+    dc = 400.0*log(400/mcdc)
+    return dc
 
 def drought_code(
     last_dc,
@@ -474,22 +528,47 @@ def drought_code(
     rain_total_prev,
     rain_total,
 ):
-    if 0 == rain_total:
-        dc_before_rain = last_dc
+  ###################################################################################
+  ## for now we are using Mike's method for calculating DC
+  if 0 == rain_total:
+    dc_before_rain = last_dc
+  
+  dc =  drought_code_mike_version(
+    last_dc = last_dc,
+    temp = temp,
+    rh = rh,
+    ws = ws,
+    rain = rain,
+    mon = mon,
+    hour = hour,
+    solrad = solrad,
+    sunrise = sunrise,
+    sunset = sunset,
+    dc_before_rain = dc_before_rain,
+    rain_total_prev = rain_total_prev,
+    rain_total = rain_total
+  )
+  return (dc, dc_before_rain)
+  
+  ###################################################################################
+  
+    
+   # if 0 == rain_total:
+    #    dc_before_rain = last_dc
     # apply wetting since last period
-    dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
-    assert 0 <= dc_wetting_hourly
+    #dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    #assert 0 <= dc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
-    dc = max(0.0, last_dc - dc_wetting_hourly)
-    dc_hourly = dc_drying_hourly(temp)
+    #dc = max(0.0, last_dc - dc_wetting_hourly)
+    #dc_hourly = dc_drying_hourly(temp)
     # print(
     #     "last_dc={:0.2f}, dc_wetting_hourly={:0.2f}, dc={:0.2f}, dc_hourly={:0.2f}".format(
     #         last_dc, dc_wetting_hourly, dc, dc_hourly
     #     )
     # )
-    dc = dc + dc_hourly
+    #dc = dc + dc_hourly
     # HACK: return two values since C uses a pointer to assign a value
-    return (dc, dc_before_rain)
+    #return (dc, dc_before_rain)
 
 
 # Calculate number of drying "units" this hour contributes
