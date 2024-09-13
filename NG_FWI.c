@@ -14,6 +14,7 @@ bmw/2021
 
 #include "util.h"
 #include <stdlib.h>
+#include <stdbool.h>
 
 static const double HOURLY_K_DMC = 2.10;
 static const double HOURLY_K_DC = 0.017;
@@ -449,7 +450,7 @@ double drought_code_mike_version(
   double mr = 0.0;
   double mcdc = 0.0;
   
-  last_mc_dc = 400*exp(-last_dc/400);
+  double last_mc_dc = 400*exp(-last_dc/400);
   double TIME_INCREMENT = 1.0;
   if (temp > 0){
     pe = mult * temp + offset/16.0;
@@ -474,9 +475,9 @@ double drought_code_mike_version(
     mr = 400.0;
   }
   
-  boolean is_daytime = FALSE;
+  bool is_daytime = false;
   if((hour >= sunrise) && (hour <= sunset)){
-    is_daytime = TRUE;
+    is_daytime = true;
   }
   
   if(is_daytime){
@@ -525,7 +526,7 @@ double drought_code(double last_dc,
     solrad = solrad,
     sunrise = sunrise,
     sunset = sunset,
-    dc_before_rain = &dc_before_rain,
+    dc_before_rain = dc_before_rain,
     rain_total_prev = rain_total_prev,
     rain_total = rain_total);
   return dc;
@@ -534,15 +535,15 @@ double drought_code(double last_dc,
   
   
   
-  if (0 == rain_total)
-  {
-    *dc_before_rain = last_dc;
-  }
+  //if (0 == rain_total)
+  //{
+    //*dc_before_rain = last_dc;
+  //}
   /* apply wetting since last period */
-  double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
+  //double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
   /* at most apply same wetting as current value (don't go below 0) */
-  double dc = _max(0.0, last_dc - dc_wetting_hourly);
-  double dc_hourly = dc_drying_hourly(temp);
+  //double dc = _max(0.0, last_dc - dc_wetting_hourly);
+  //double dc_hourly = dc_drying_hourly(temp);
   /*   double drying = HOURLY_K_DC * (temp + DC_OFFSET_TEMP);
     printf("temp=%0.2f, HOURLY_K_DC=%0.3f, DC_OFFSET_TEMP=%0.2f, drying=%0.2f, _max=%0.2f, last_dc=%0.2f, dc_wetting_hourly=%0.2f, dc=%0.2f, dc_hourly=%0.2f\n",
            temp,
@@ -554,8 +555,8 @@ double drought_code(double last_dc,
            dc_wetting_hourly,
            dc,
            dc_hourly); */
-  dc = dc + dc_hourly;
-  return dc;
+  //dc = dc + dc_hourly;
+  //return dc;
 }
 
 /*
