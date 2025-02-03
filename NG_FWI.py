@@ -13,15 +13,19 @@ from util import save_csv
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
-# HOUR_TO_START_FROM = 12
+DAILY_K_DMC_DRYING = 1.894
+DAILY_K_DC_DRYING = 3.937
 
-HOURLY_K_DMC = 2.10
-HOURLY_K_DC = 0.017
-DMC_OFFSET_TEMP = 1.1
+HOURLY_K_DMC = 2.22
+HOURLY_K_DC = 0.085
+DMC_OFFSET_TEMP = 0.0
 DC_OFFSET_TEMP = 0.0
 
-OFFSET_SUNRISE = 2.5
-OFFSET_SUNSET = 0.5
+DC_DAILY_CONST = 0.36
+DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
+
+OFFSET_SUNRISE = 0 #2.5
+OFFSET_SUNSET = 0 #0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
@@ -36,11 +40,15 @@ DC_DEFAULT = 15
 DEFAULT_LATITUDE = 55.0
 DEFAULT_LONGITUDE = -120.0
 
-MPCT_TO_MC = 147.2772277
+# HOUR_TO_START_FROM = 12
+
+MPCT_TO_MC = 250.0 * 59.5 / 101.0
 FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
+
+DATE_GRASS = 181
 
 # Fine Fuel Moisture Code (FFMC) from moisture %
 def fine_fuel_moisture_code(moisture_percent):
@@ -74,7 +82,7 @@ def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
         mo += rf * rain * exp(-100.0 / (251 - lastmc)) * (1.0 - exp(-6.93 / rain))
         if lastmc > 150:
             mo += 0.0015 * pow(lastmc - 150, 2) * sqrt(rain)
-        if mo > 250:
+        if mo > 250: 
             mo = 250
     # duplicated in both formulas, so calculate once
     e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)))
@@ -86,7 +94,7 @@ def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
         # these are the same formulas with a different value for a1
         a1 = (rh / 100.0) if (mo > ed) else ((100.0 - rh) / 100.0)
         k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
-        kd_or_kw = drf * k0_or_k1 * exp(0.0365 * temp)
+        kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp)
         m += (mo - m) * pow(10, (-kd_or_kw * time))
     return m
 
@@ -189,43 +197,199 @@ def hourly_grass_fuel_moisture(temp, rh, ws, rain, solrad, lastmc):
     # GRASS EMC
     ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1
     ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1
-    m = ew if (mo < ed and mo < ew) else ed
-    if mo > ed or (mo < ed and mo < ew):
-        # these are the same formulas with a different value for a1
-        a1 = (rhf / 100.0) if (mo > ed) else ((100.0 - rhf) / 100.0)
-        k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
-        kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf)
-        m += (mo - m) * pow(10, -kd_or_kw * time)
+    
+    
+    moed = mo - ed
+    moew = mo - ew
+    
+    e = None
+    a1 = None
+    m = None
+    moe = None
+    
+    if (moed == 0) or (moew >= 0 and moed < 0):
+      m = mo
+      if (moed == 0):
+        e = ed
+      if moew >= 0:
+        e = ew
+    else:
+      if moed > 0:
+        a1 = rhf/100.0
+        e = ed
+        moe = moed
+      else:
+        a1 = (100.0 - rhf)/100.0
+        e = ew
+        moe = moew
+      if(a1 < 0):
+         #avoids complex number in a1^1.7 xkd calculation
+         a1 = 0
+      xkd = (0.424*(1-a1**1.7)+(0.0694*sqrt(ws)*(1-a1**8)))
+      xkd = xkd*drf*exp(0.0365*tf)
+      m = e+moe*exp(-1.0*log(10.0)*xkd*time)
+    
+    
+    #m = ew if (mo < ed and mo < ew) else ed
+    #if mo > ed or (mo < ed and mo < ew):
+    #    # these are the same formulas with a different value for a1
+    #    a1 = (rhf / 100.0) if (mo > ed) else ((100.0 - rhf) / 100.0)
+    #    k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
+    #    kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf)
+    #    m += (mo - m) * pow(10, -kd_or_kw * time)
     return m
 
 
-##
-# Calculate Grass Spread Index (GSI)
-#
-# @param ws              Wind Speed (km/h)
-# @param mc              Grass moisture content (percent)
-# @param cur             Degree of curing (percent, 0-100)
-# @return                Grass Spread Index
-def grass_spread_index(ws, mc, cur):
-    fw = 16.67 * (
-        (0.054 + 0.209 * ws) if (ws < 5) else (1.1 + 0.715 * (ws - 5.0) * 0.844)
+def Pign(mc, wind2m, Cint, Cmc, Cws):
+    #  Thisd is the general standard form for the probability of sustained flaming models for each FF cover type
+    #     here :
+    #       mc is cured moisture (%) in the litter fuels being ignited
+    #       wind2m (km/h)  is the estimated 2 metre standard height for wind at hte site of the fire ignition
+    #       Cint, Cmc and Cws   are coefficients for the standard Pign model form for a given FF cover type
+
+    #       return >> is the Probability of Sustained flaming from a single small flaming ember/brand
+    Prob = 1.0 / (1.0 + exp(-1.0 * (Cint + Cmc * mc + Cws * wind2m)))
+    return Prob
+
+
+def curing_factor(cur):
+    # cur is the percentage cure of the grass fuel complex.  100= fully cured
+    #   ....The OPPOSITE (100-x) of greenness...
+
+    #    This is the Cruz et al (2015) model with the original precision of the coefficent estimates
+    #    and as in CSIRO code:https://research.csiro.au/spark/resources/model-library/csiro-grassland-models/
+    cf = (1.036 / (1 + 103.989 * exp(-0.0996 * (cur - 20)))) if (cur >= 20.0) else 0.0
+    return cf
+
+
+def grass_moisture_code(mc, cur, wind):
+    #   THIS is the way to get the CODE value from cured grassland moisture
+    #     IT takes fully cured grass moisture  (from the grass moisture model (100% cured)  (from the FMS...updated version of Wotton 2009)
+    #        and a estimate of the fuel complex curing (as percent cured)
+    #        and estimated wind speed (necessary for a calc
+    #     and calculated the probability of sustainable flaming ignition  (a funciton of MC  and wind)
+    #     THEN it accounts for curing effect on probability of fire spread sustainability, using the curing factor from Cruz et al (2015) for grass
+    #     THEN from this calcuates an 'effective moisture content' which is the moisture content that would be required to achieve
+    #        the curing adjusted probabiltiy of sustained flaming if one were calcuating it directly through the standard Pign equation.
+    #     and THEN converts this effective moisture content to a CODE value via the FF-scale the FFMC uses for consistency
+
+    #     relies on models of:
+    #        Prob of sustained flaming for grass model (PsusF(grass)
+    #        and  the curing_factor  function
+    #        AND and estiamte of open 10 m to 2 m wind reduction (0.75)...hardcoded in here now.....
+
+    # MC is moisture content (%)
+    # cur=percent curing of the grassland  (%)
+    # wind=  10 m open wind (km/h)
+
+    #     currently (NOv 2023) the coefficients for the PsusF(grass) models are hardcoded into the GFMC function
+
+    wind2m_open_factor = 0.75
+
+    Intercept = 1.49
+    Cmoisture = -0.11
+    Cwind = 0.075
+    # GRASS: these coefficients (above) could change down the road .....explicitly coded in above*/
+    # /* convert from 10 m wind in open to 2 m wind in open COULD be updated */
+    wind2m = wind2m_open_factor * wind
+
+    probign = Pign(mc, wind2m, Intercept, Cmoisture, Cwind)
+
+    # /* adjust ignition diretctly with the curing function on ROS */
+    newPign = curing_factor(cur) * probign
+
+    # /* now to back calc effective moisture - algebraically reverse the Pign equation*/
+    # /* 250 is a saturation value just a check*/
+    egmc = (
+        ((log(newPign / (1.0 - newPign)) - Intercept - Cwind * wind2m) / Cmoisture)
+        if (newPign > 0.0)
+        else 250
     )
-    # NOTE: between [12, ~12.01754] the value for ws < 10 is greater than ws >= 10
-    # using 0.6838 instead would mean this is always less than ws >= 10
-    # mc < 23.9 because of check at start of function, so last expression is any ws >= 10
+    # /*   convert to code with FF-scale */
+    # return (59.5*(250.0-egmc)/(MPCT_TO_MC + egmc))
+    if egmc > 250.0:
+      egmc = 250.0
+    return fine_fuel_moisture_code(egmc)
+
+
+def matted_grass_spread_ROS(ws, mc, cur):
+    #  /*  CUT grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code
+    #   We use this for MATTED grass in our post-winter context
+    #   --ws=10 m open wind km/h
+    #   --mc = moisture content in  cured grass  (%)
+    #   --cur = percentage of grassland cured  (%)
+    #   output should be ROS in m/min   */
+    fw = 16.67 * (
+        (0.054 + 0.209 * ws) if (ws < 5) else (1.1 + 0.715 * (ws - 5.0) ** 0.844)
+    )
     fm = (
         exp(-0.108 * mc)
         if mc < 12
         else (
-            0.684 - 0.0342 * mc
+            0.6838 - 0.0342 * mc
             if (mc < 20.0 and ws < 10.0)
             else 0.547 - 0.0228 * mc
             if (mc < 23.9 and ws >= 10.0)
             else 0.0
         )
     )
-    cf = 1.034 / (1 + 104 * exp(-0.1 * (cur - 20))) if cur > 20 else 0.0
-    return 1.11 * fw * fm * cf
+    if (fm < 0):
+      fm = 0.0
+    cf = curing_factor(cur)
+    return fw * fm * cf
+
+
+def standing_grass_spread_ROS(ws, mc, cur):
+    #  /*  standing grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code)
+    #   We use this for standing grass in our post-winter context
+    #   ITS only the WIND function that chnges here between cut and standing
+    #   --ws=10 m open wind km/h
+    #   --mc = moisture content in grass  (%)
+    #   --cur = percentage of grassland cured  (%)
+    #   output should be ROS in m/min   */
+    fw = 16.67 * (
+        (0.054 + 0.269 * ws) if (ws < 5) else (1.4 + 0.838 * (ws - 5.0) ** 0.844)
+    )
+    fm = (
+        exp(-0.108 * mc)
+        if mc < 12
+        else (
+            0.6838 - 0.0342 * mc
+            if (mc < 20.0 and ws < 10.0)
+            else 0.547 - 0.0228 * mc
+            if (mc < 23.9 and ws >= 10.0)
+            else 0.0
+        )
+    )
+    if (fm < 0):
+      fm = 0.0
+    cf = curing_factor(cur)
+    return fw * fm * cf
+
+
+#' Calculate Grass Spread Index (GSI)
+#'
+#' @param ws              Wind Speed (km/h)
+#' @param mc              Grass moisture content (percent)
+#' @param cur             Degree of curing (percent, 0-100)
+#' @param standing        Grass standing (True/False)
+#' @return                Grass Spread Index
+def grass_spread_index(ws, mc, cur, standing):
+    #  So we don't have to transition midseason between standing and matted grass spread rate models
+    #  We will simply scale   GSI   by the average of the   matted and standing spread rates
+    
+    #now allowing switch between standing and matted grass
+    ros = None
+    if (standing):
+      #standing
+      ros = standing_grass_spread_ROS(ws, mc, cur)
+    
+    else:
+      #matted
+      ros = matted_grass_spread_ROS(ws, mc, cur)
+    
+    
+    return 1.11 * ros
 
 
 ##
@@ -299,7 +463,11 @@ def dc_wetting_between(rain_total_previous, rain_total, lastdc):
 
 
 def dmc_drying_ratio(temp, rh):
-    return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
+    # return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
+    return(
+        max(0.0,
+            HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001)
+            )
 
 
 def duff_moisture_code(
@@ -329,7 +497,7 @@ def duff_moisture_code(
     sunrise_start = round(sunrise + OFFSET_SUNRISE)
     sunset_start = round(sunset + OFFSET_SUNSET)
     dmc_hourly = (
-        HOURLY_K_DMC * dmc_drying_ratio(temp, rh)
+        dmc_drying_ratio(temp, rh)
         if (hour >= sunrise_start and hour < sunset_start)
         else 0.0
     )
@@ -357,22 +525,71 @@ def drought_code(
     rain_total_prev,
     rain_total,
 ):
-    if 0 == rain_total:
-        dc_before_rain = last_dc
+  ###################################################################################
+  ## for now we are using Mike's method for calculating DC
+  if 0 == rain_total:
+    dc_before_rain = last_dc
+  
+  offset = 3.0
+  mult = 0.015
+  pe = 0
+  rw = 0
+  mr = 0
+  mcdc = 0
+    
+  last_mc_dc = 400*exp(-last_dc/400)
+  TIME_INCREMENT = 1.0
+  if temp > 0:
+    pe = mult*temp + offset/16.0
+      
+  invtau = pe/400.0
+  if (rain_total_prev + rain) <= 2.8:
+    mr = last_mc_dc
+  else:
+    if rain_total_prev <= 2.8:
+      rw = (rain_total_prev + rain)*0.83 - 1.27
+    else:
+      rw = rain*0.83
+    mr = last_mc_dc + 3.937*rw/2.0
+    
+  if mr > 400.0:
+    mr = 400.0
+    
+  is_daytime = False
+  if (hour >= sunrise) and (hour <= sunset):
+    is_daytime = True
+      
+  if is_daytime:
+    mcdc = 0.0 + (mr + 0.0)*exp(-1.0*TIME_INCREMENT*invtau)
+  else:
+    mcdc = mr
+      
+  if mcdc > 400.0:
+    mcdc= 400.0
+      
+  dc = 400.0*log(400/mcdc)
+
+  return (dc, dc_before_rain)
+  
+  ###################################################################################
+  
+    
+   # if 0 == rain_total:
+    #    dc_before_rain = last_dc
     # apply wetting since last period
-    dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
-    assert 0 <= dc_wetting_hourly
+    #dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    #assert 0 <= dc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
-    dc = max(0.0, last_dc - dc_wetting_hourly)
-    dc_hourly = dc_drying_hourly(temp)
+    #dc = max(0.0, last_dc - dc_wetting_hourly)
+    #dc_hourly = dc_drying_hourly(temp)
     # print(
     #     "last_dc={:0.2f}, dc_wetting_hourly={:0.2f}, dc={:0.2f}, dc_hourly={:0.2f}".format(
     #         last_dc, dc_wetting_hourly, dc, dc_hourly
     #     )
     # )
-    dc = dc + dc_hourly
+    #dc = dc + dc_hourly
     # HACK: return two values since C uses a pointer to assign a value
-    return (dc, dc_before_rain)
+    #return (dc, dc_before_rain)
 
 
 # Calculate number of drying "units" this hour contributes
@@ -421,6 +638,8 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
     r.columns = map(str.lower, r.columns)
     mcffmc = fine_fuel_moisture_from_code(ffmc_old)
     mcgfmc = mcffmc
+    mcgfmc_matted = mcffmc
+    mcgfmc_standing = mcffmc 
     # just use previous index values from current hour regardless of time
     # # HACK: always start from daily value at noon
     # while 12 != r.iloc[0]["hr"]:
@@ -517,13 +736,36 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
         cur["bui"] = buildup_index(dmc, dc)
         cur["fwi"] = fire_weather_index(cur["isi"], cur["bui"])
         cur["dsr"] = daily_severity_rating(cur["fwi"])
-        mcgfmc = hourly_grass_fuel_moisture(
-            cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc
+        
+        mcgfmc_matted = hourly_grass_fuel_moisture(
+            cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc_matted
         )
+        #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
+        #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
+        #which averages 6% or so for rains  (<5mm...between 7% and 5%,    lower for larger rains)(NO intercept)
+        #AND the solar radiation exposure is less, and the cooling from the wind is stronger.  SO we assume there is effectively no extra
+        #heating of the grass from solar
+        #working at the margin like this should make a nice bracket for moisture between the matted and standing that users can use
+        #...reality will be in between the matt and stand
+        mcgfmc_standing = hourly_grass_fuel_moisture(
+            cur["temp"], cur["rh"], cur["ws"], cur["prec"]*0.06, 0.0, mcgfmc_standing
+        )
+        #mcgfmc = hourly_grass_fuel_moisture(
+        #    cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc
+        #)
+        
+        mcgfmc = mcgfmc_standing
+        standing = True
+        if (util.julian(cur["mon"], cur["day"]) < DATE_GRASS):
+          standing = False
+          mcgfmc = mcgfmc_matted
+        
+        
         cur["mcgfmc"] = mcgfmc
-        cur["gfmc"] = fine_fuel_moisture_code(mcgfmc)
-        cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"])
-        cur["gfwi"] = grass_fire_weather_index(cur["gsi"], cur["grass_fuel_load"])
+        cur["gfmc"] = grass_moisture_code(mcgfmc, cur["percent_cured"], cur["ws"])
+        cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
+        cur["gfwi"] = grass_fire_weather_index(cur["gsi"], DEFAULT_GRASS_FUEL_LOAD)
+        cur["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
         results.append(cur)
     r = pd.DataFrame(results)
     del r["index"]
@@ -538,7 +780,6 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
 # @param     ffmc_old        previous value for Fine Fuel Moisture Code
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
-# @param     percent_cured   Grass curing (percent, 0-100)
 # @return                    hourly values FWI and weather stream
 def hFWI(
     df_wx,
@@ -603,19 +844,19 @@ def hFWI(
             ),
             axis=1,
         )
-    # print(solrad, sunrise, sunset)
-    wx[["SOLRAD", "SUNRISE", "SUNSET"]] = wx.apply(
-        lambda row: util.sun(
-            row["LAT"], row["LONG"], row["MON"], row["DAY"], row["HR"], timezone
-        ),
-        axis=1,
-        result_type="expand",
-    )
-    if "PERCENT_CURED" not in wx.columns:
-        wx["JULIAN"] = wx.apply(lambda row: util.julian(row["MON"], row["DAY"]), axis=1)
-        wx["PERCENT_CURED"] = wx["JULIAN"].apply(util.seasonal_curing)
-    if "GRASS_FUEL_LOAD" not in wx.columns:
-        wx["GRASS_FUEL_LOAD"] = DEFAULT_GRASS_FUEL_LOAD
+    if not ("PERCENT_CURED" in new_names):
+      wx["JULIAN"] = wx.apply(
+            lambda row: util.julian(
+                row["MON"], row["DAY"]
+            ),
+            axis=1,
+        )
+      wx["PERCENT_CURED"] = wx.apply(
+            lambda row: util.seasonal_curing(
+                row["JULIAN"]
+            ),
+            axis=1,
+        )
     #########################################
     # PROCESS HERE
     #########################################
@@ -623,6 +864,11 @@ def hFWI(
     for idx, by_year in wx.groupby(["ID", "YR"]):
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
+        w.loc[:, "TIMEZONE"] = timezone
+        needs_solrad = False
+        if not ("SOLRAD" in w.columns):
+           needs_solrad = True
+        w = util.getSunlight(w, with_solrad=needs_solrad)
         r = _stnHFWI(
             w,
             ffmc_old,
@@ -643,7 +889,13 @@ def hFWI(
         "rh",
         "ws",
         "prec",
+        "date",
+        "timestamp",
+        "timezone",
         "solrad",
+        "sunrise",
+        "sunset",
+        "sunlight_hours",
         "ffmc",
         "dmc",
         "dc",
@@ -662,6 +914,9 @@ def hFWI(
     if "id" in results.columns:
         colnames_out = ["id"] + colnames_out
     results = results[colnames_out]
+
+    results = results[["id", "lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec", "percent_cured", "date", "timestamp", "timezone", "solrad", "sunrise", "sunset", "sunlight_hours", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi"]]
+
     return results
 
 

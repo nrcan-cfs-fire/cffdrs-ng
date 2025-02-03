@@ -165,14 +165,10 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
   r[, MON := month(TIMESTAMP)]
   r[, DAY := day(TIMESTAMP)]
   r[, HR := hour(TIMESTAMP)]
-  dates <- as_datetime(unique(r$TIMESTAMP))
-  latitude <- r$LAT[[1]]
-  longitude <- r$LONG[[1]]
-  sunlight <- getSunlight(dates, timezone, latitude, longitude)
-  setnames(sunlight, c("DATE"), c("TIMESTAMP"))
-  sunlight$TIMESTAMP <- as_datetime(sunlight$TIMESTAMP)
-  r <- merge(r, sunlight, by = c("TIMESTAMP", "LAT", "LONG"))
-  # # FIX: is solar noon just midpoint between sunrise and sunset?
+  # FIX: convert this to not need to do individual stations
+  r[, TIMEZONE := timezone]
+  r <- getSunlight(r, with_solrad = FALSE)
+  # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
   r[, RH_OPP_MIN := 1 - RH_MAX / 100]
   r[, RH_OPP_MAX := 1 - RH_MIN / 100]

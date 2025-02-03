@@ -12,12 +12,12 @@ const double C_TEMP[3] = {0.2, 2.0, -2.9};
 const double C_RH[3] = {0.4, 1.9, -2.9};
 const double C_WIND[3] = {1.2, 1.7, -1.5};
 
-double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly);
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly);
 
-void main(int argc, char* argv[])
+void main(int argc, char *argv[])
 {
-  static const char* header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
-  static const char* header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char *header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
+  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
   FILE *inp, *out;
   int err;
 
@@ -103,10 +103,10 @@ void main(int argc, char* argv[])
     static const int LST_NOON = 12;
     int jd = julian(cur.mon, cur.day);
     double sunrise, sunset;
-    double solar = sun_julian(cur.lat, cur.lon, jd, LST_NOON, TZadjust, &sunrise, &sunset);
+    sunrise_sunset_julian(cur.lat, cur.lon, jd, TZadjust, &sunrise, &sunset);
     double solarnoon = (sunset - sunrise) / 2.0 + sunrise;
     double sunrise_tom, sunset_tom;
-    double solar_tom = sun_julian(cur.lat, cur.lon, jd + 1, LST_NOON, TZadjust, &sunrise_tom, &sunset_tom);
+    sunrise_sunset_julian(cur.lat, cur.lon, jd + 1, TZadjust, &sunrise_tom, &sunset_tom);
     double atemp[24], arh[24], aws[24], arain[24];
     int h;
     for (h = 0; h < 24; ++h)
@@ -125,18 +125,18 @@ void main(int argc, char* argv[])
       for (h = 0; h < 24; ++h)
       {
         arh[h] = 100 * (1.0 - arh[h]);
-        fprintf(out,
-                "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
-                cur.lat,
-                cur.lon,
-                cur.year,
-                cur.mon,
-                cur.day,
-                h,
-                _round(atemp[h], 1),
-                arh[h],
-                _round(aws[h], 1),
-                _round(arain[h], 2));
+        save_csv(out,
+                 "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
+                 cur.lat,
+                 cur.lon,
+                 cur.year,
+                 cur.mon,
+                 cur.day,
+                 h,
+                 atemp[h],
+                 arh[h],
+                 aws[h],
+                 arain[h]);
       }
     }
     else
@@ -172,7 +172,7 @@ void main(int argc, char* argv[])
  * @param hourly[24]          array of calculated output values by hour for today
  * @return                    value at sunset today
  */
-double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double* abg, double* hourly)
+double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly)
 {
   const double c_alpha = abg[0];
   const double c_beta = abg[1];

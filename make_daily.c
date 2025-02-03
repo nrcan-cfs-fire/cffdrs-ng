@@ -10,11 +10,11 @@ outputs daily weather stream
 #include <string.h>
 #include "util.h"
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   /*  CSV headers */
-  static const char* header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
-  static const char* header_out = "lat,long,yr,mon,day,temp,rh,ws,prec";
+  static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  static const char *header_out = "lat,long,yr,mon,day,temp,rh,ws,prec";
   static const int LST_NOON = 12;
   double atemp[24] = {0.0};
   double arh[24] = {0.0};
@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
     exit(1);
   }
 
-  FILE* inp = fopen(argv[1], "r");
+  FILE *inp = fopen(argv[1], "r");
   printf("Opening input file >>> %s   \n", argv[1]);
   if (NULL == inp)
   {
@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
 
   check_header(inp, header);
 
-  FILE* out = fopen(argv[2], "w");
+  FILE *out = fopen(argv[2], "w");
   fprintf(out, "%s\n", header_out);
 
   struct row cur;
@@ -74,17 +74,17 @@ int main(int argc, char* argv[])
       err = read_row(inp, &cur);
     } /* end the while to read thru a day */
     double rain24 = rain_am + rain_pm_old;
-    fprintf(out,
-            "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
-            old.lat,
-            old.lon,
-            old.year,
-            old.mon,
-            old.day,
-            atemp[LST_NOON],
-            arh[LST_NOON],
-            awind[LST_NOON],
-            rain24);
+    save_csv(out,
+             "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
+             old.lat,
+             old.lon,
+             old.year,
+             old.mon,
+             old.day,
+             atemp[LST_NOON],
+             arh[LST_NOON],
+             awind[LST_NOON],
+             rain24);
     printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.0f,%.1f,%.2f\n",
            old.lat,
            old.lon,
