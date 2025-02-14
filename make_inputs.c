@@ -29,7 +29,7 @@ int populate_row(FILE *inp, struct row *cur, double TZadjust)
   return err;
 }
 
-void main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   /*  CSV headers */
   static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
@@ -144,4 +144,6 @@ void main(int argc, char *argv[])
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  return 0;
 }

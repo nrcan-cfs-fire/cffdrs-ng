@@ -525,6 +525,7 @@ generate_daily_summaries <- function(hourly_data){
   
   results <- NULL
   for (stn in unique(hourly_data$id)) {
+    
     by_stn <- hourly_data[id == stn]
     by_stn[,pseudo_DATE := pseudo_date(yr,mon,day,hr)]
     
@@ -533,6 +534,9 @@ generate_daily_summaries <- function(hourly_data){
       by_date <- by_stn[pseudo_DATE == p_date, ]
       
       peak_time_traditional_spot <- which(by_date$hr == 17)
+      if(length(peak_time_traditional_spot) == 0){
+        next
+      }
       
       peak_time <- -1
       duration <- 0
@@ -546,7 +550,7 @@ generate_daily_summaries <- function(hourly_data){
       bui <- 0
       fwi <- 0
       dsr <- 0
-      
+    
       for (i in 1:nrow(by_date)){
         
         smooth_isi <- 0
@@ -600,7 +604,7 @@ generate_daily_summaries <- function(hourly_data){
         pick_day <- pick_day[1]
       }
       
-      
+     
       sunrise_val <- by_date[peak_time, sunrise]
       sunset_val <- by_date[peak_time, sunset]
       
@@ -611,13 +615,15 @@ generate_daily_summaries <- function(hourly_data){
       
       daily_report <- c(unique(by_date$id), pick_year, pick_month, pick_day, peak_time, duration, smooth_ws_peak, peak_isi_smooth, ffmc, dmc, dc, isi, bui, fwi, dsr, max_ffmc, sunrise, sunset)
       
+
+      
       results <- rbind(results, daily_report)
       
       
       
     }
   }
-  
+
   colnames(results) <- c("wstind","year","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr", "max_ffmc", "sunrise", "sunset")
   
   results <- results[,c("wstind","year","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr", "sunrise", "sunset")]

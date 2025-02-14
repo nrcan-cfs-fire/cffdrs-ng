@@ -14,6 +14,7 @@ bmw/2021
 
 #include "util.h"
 #include <stdlib.h>
+#include <stdbool.h>
 
 static const double DAILY_K_DMC_DRYING = 1.894;
 static const double DAILY_K_DC_DRYING = 3.937;
@@ -24,7 +25,7 @@ static const double DMC_OFFSET_TEMP = 0.0;
 static const double DC_OFFSET_TEMP = 0.0;
 
 static const double DC_DAILY_CONST = 0.36;
-static const double DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING;
+static const double DC_HOURLY_CONST =   0.36/3.397; //DC_DAILY_CONST / DAILY_K_DC_DRYING;
 
 static const double OFFSET_SUNRISE = 0.0; //2.5;
 static const double OFFSET_SUNSET = 0.0; //0.5;
@@ -740,7 +741,7 @@ void rain_since_intercept_reset(double temp,
   canopy->rain_total += rain;
 }
 
-void main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   /*  CSV headers */
   static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
@@ -943,4 +944,6 @@ void main(int argc, char *argv[])
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  return 0;
 }
