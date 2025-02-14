@@ -574,7 +574,15 @@ def generate_daily_summaries(hourly_data):
     
     for p_date in by_stn["pseudo_DATE"].unique():
       by_date = by_stn.loc[by_stn["pseudo_DATE"] == p_date]
+
+
+      if ((by_date.reset_index()).index[by_date["hr"] == 17].tolist().__len__() == 0):
+        continue
+
       peak_time_traditional_spot = (by_date.reset_index()).index[by_date["hr"] == 17].tolist()[0]
+      
+      
+      
       peak_time = -1
       duration = 0
       wind_smooth = smooth_5pt(by_date["ws"])
