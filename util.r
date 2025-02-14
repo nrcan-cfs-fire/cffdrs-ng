@@ -628,6 +628,8 @@ generate_daily_summaries <- function(hourly_data){
   
   results <- results[,c("wstind","year","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr", "sunrise", "sunset")]
   
+  results <- data.frame(results)
+  
   return(results)
 }
 
