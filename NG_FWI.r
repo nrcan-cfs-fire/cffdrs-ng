@@ -427,6 +427,8 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
     0.054 + 0.269 * ws,
     1.4 + 0.838 * (ws - 5.0)**0.844
   )
+  print_out <- c(mc,ws)
+  print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
     ifelse(mc < 20.0 && ws < 10.0,
@@ -877,6 +879,7 @@ rain_since_intercept_reset <- function(temp,
     
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
+    cur$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
     results <- rbind(results, cur)
   }
   return(results)
@@ -982,7 +985,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
     }
   }
 
-  results <- results[,c('id', 'lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec', 'percent_cured', 'date', 'timestamp', 'timezone', 'solrad', 'sunrise', 'sunset', 'sunlight_hours', 'ffmc', 'dmc', 'dc', 'isi', 'bui', 'fwi', 'dsr', 'gfmc', 'gsi', 'gfwi')]
+  #results <- results[,c('id', 'lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec', 'percent_cured', 'date', 'timestamp', 'timezone', 'solrad', 'sunrise', 'sunset', 'sunlight_hours', 'ffmc', 'dmc', 'dc', 'isi', 'bui', 'fwi', 'dsr', 'gfmc', 'gsi', 'gfwi')]
   
   # # this is all just to remove dummy variables that we added
   # if (!is.null(results)) {
@@ -1058,7 +1061,12 @@ if ("--args" %in% commandArgs()) {
       "rh",
       "ws",
       "prec",
+      "date",
+      "timestamp",
+      "timezone",
       "solrad",
+      "sunrise",
+      "sunset",
       "ffmc",
       "dmc",
       "dc",
@@ -1074,12 +1082,15 @@ if ("--args" %in% commandArgs()) {
       "percent_cured",
       "grass_fuel_load"
     )
+    print(colnames_out)
     if ("id" %in% names(df_fwi)) {
       colnames_out <- c("id", colnames_out)
     }
     df_fwi <- df_fwi[, ..colnames_out]
     save_csv(df_fwi, file_out)
   } else {
-    message("Wrong number of arguments")
+    if(args[1] != "SILENCE"){
+      message("Wrong number of arguments") 
+    }
   }
 }

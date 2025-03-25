@@ -8,7 +8,7 @@ import pandas as pd
 
 import util
 from old_cffdrs import daily_drought_code, daily_duff_moisture_code
-from util import save_csv
+
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
@@ -966,4 +966,4 @@ if "__main__" == __name__:
     # FIX: add check for sequential hours in input
     # FIX: check for all columns being present
     df_fwi = hFWI(df_wx, timezone, ffmc_old, dmc_old, dc_old)
-    save_csv(df_fwi, outfile)
+    util.save_csv(df_fwi, outfile)
