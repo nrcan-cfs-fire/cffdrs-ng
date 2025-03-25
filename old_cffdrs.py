@@ -181,7 +181,7 @@ def daily_duff_moisture_code(dmc_yda, temp, rh, prec, lat, mon, lat_adjust=True)
     ell04 = [11.5, 10.5, 9.2, 7.9, 6.8, 6.2, 6.5, 7.4, 8.7, 10, 11.2, 11.8]
     # For latitude near the equator, we simple use a factor of 9 for all months
     # constrain low end of temperature
-    temp = -1.1 if (temp == 1.1) else temp
+    temp = -1.1 if (temp <= -1.1) else temp
     # Eq. 16 - The log drying rate
     rk = 1.894 * (temp + 1.1) * (100 - rh) * ell01[mon] * 1e-04
     # Adjust the day length  and thus the drying r, based on latitude and month
@@ -294,7 +294,7 @@ def daily_drought_code(dc_yda, temp, rh, prec, lat, mon, lat_adjust=True):
     fl02 = [6.4, 5, 2.4, 0.4, -1.6, -1.6, -1.6, -1.6, -1.6, 0.9, 3.8, 5.8]
     # Near the equator, we just use 1.4 for all months.
     # Constrain temperature
-    temp = -2.8 if (temp == 2.8) else temp
+    temp = -2.8 if (temp <= -2.8) else temp
     # Eq. 22 - Potential Evapotranspiration
     pe = (0.36 * (temp + 2.8) + fl01[mon]) / 2
     # Daylength factor adjustment by latitude for Potential Evapotranspiration
