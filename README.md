@@ -1,35 +1,45 @@
-# Interim Revisions  to the CFFDRS
-The Canadian Forest Fire Danger Rating System (CFFDRS) is the principal source of fire information for all wildland fire management agencies across Canada.  It has widespread use as a regional and fireline safety and awareness tool. The CFFDRS is undergoing extensive revisions under the name Next Generation CFFDRS (NG-CFFDRS), with rollout to practitioners occurring during 2024, 2025, and beyond. The primary goal is to meet the evolving needs of advanced users while maintaining it’s simplicity and effectiveness.  For a full list of revision topics and more discussion, see the 2021 *An overview of the next generation of the Canadian Forest Fire Danger Rating System* at https://ostrnrcan-dostrncan.canada.ca/handle/1845/245411 and French at https://ostrnrcan-dostrncan.canada.ca/entities/publication/4666ae3e-bcd4-4012-b6ef-d8a86ea3bb22?fromSearchPage=true .
-The revisions to CFFDRS will be released in stages and are referred to as CFFDRS205.  The Fire Weather Index System (FWI2025) is the first module.
-Users will see this repository contains three programming languages: R, Python, and C. These three versions are all written to produce the same result and were created so the user can choose the version that fits their own software systems.
-News, resources and information about CFFDRS2025 can be found on the Next Generation CFFDRS github.io https://cffdrs.github.io/website_en .
+# NG-CFFDRS GitHub Repository
+The [Canadian Forest Fire Danger Rating System (CFFDRS)](https://natural-resources.canada.ca/our-natural-resources/forests/wildland-fires-insects-disturbances/canadian-forest-fire-danger-rating-system/14470) is the principal source of fire information for all [wildland fire management agencies](https://ciffc.ca/mobilization-stats/member-agencies) across Canada. It has widespread use as a regional and fireline safety and awareness tool. The CFFDRS is undergoing extensive revisions under the name [Next Generation CFFDRS (NG-CFFDRS)](https://ostrnrcan-dostrncan.canada.ca/handle/1845/245411), with rollout to practitioners occurring during 2024, 2025, and beyond. This GitHub repository is home to the NG-CFFDRS code as it is developed by us, the [Canadian Forest Service](https://natural-resources.canada.ca/corporate/corporate-overview/canadian-forest-service) Fire Danger Group. For more details about implementation and development, check out: 
 
-## Revisions to the Fire Weather Index System
-The next generation Fire Weather Index System (FWI2025) remains a daily, landscape level planning tool.  Changes aim to better track daily weather, align versions of System’s codes and indices, and introduce new codes and indices.  
-Details on changes to the FWI2025 on the Resources  pages.
-### Run FWI2025 (Next Generation FWI System)
-Detailed instructions on how to run FWI2025 System scripts can be found on our Tutorials page.
-To generate FWI2025 System estimates of fire danger, two scripts are required.
-1.	NG_FWI (.r, or .py, or .c) : Holds the functions and equations for generating FWI2025 outputs.
-2.	util (.r, or .py, or .c and .h) : Includes basic functions that are not part of FWI2025 equations, but generate intermediate information for the calculation of the FWI2025 components.
+1. Our website at [cffdrs.github.io/website_en](https://cffdrs.github.io/website_en)
+2. The 2021 document on [*An overview of the next generation of the Canadian Forest Fire Danger Rating System*](https://ostrnrcan-dostrncan.canada.ca/handle/1845/245411)
+3. [Sign up to our newsletter](https://forms.office.com/r/jmT8HVrsK8) where you can specifically select to receive code updates 
 
-### Hourly Fire Weather 
-FWI2025 requires hourly weather data. Some weather stations, forecasts, and gridded datasets provide this directly. However, for non-hourly sources (e.g., daily min/max forecasts, single daily observations at 1300h), hourly values must be estimated before running the NG_FWI code. This repository provides methods for this conversion, including specific methods for 1300h observations. Users with other non-hourly datasets must similarly convert them to hourly data before using them with FWI2025.
-To estimate hourly weather from daily min/max or single 1300h observations:
-- daily min/max values:  make_hourly.r, make_hourly.py OR make_hourly.c. Instructions on how to use the scripts and their inputs can be found in our documentation pages.  
-- daily noon values : make_minmax.r, make_minmax.py OR make_minmax.c.  Instructions on how to use the scripts and their inputs can be found in our documentation  pages.  
+This repository contains three programming languages: R, Python, and C (**all C code is still under development**). These three versions are written to produce the same results so users can choose the version that fits their own software systems.  
 
-## Feedback and Bug Reports
-We welcome your feedback and bug reports!  While we're not actively seeking code contributions at this time, your input is invaluable for improving the project.  If you encounter any issues, have suggestions for improvements, or simply want to share your experience with the scripts, please let us know.
-How to Provide Feedback:
-The best way to provide feedback is by [creating an issue]( https://github.com/nrcan-cfs-fire/cffdrs-ng/issues) on this GitHub repository.  When submitting an issue, please include the following information:
-Clear and concise description of the issue:  Explain the problem you encountered or the suggestion you have.
-Steps to reproduce the issue (if applicable):   Provide specific instructions on how to recreate the problem.
- Relevant code snippets (if applicable):  Include any code that might be helpful in understanding the issue.
- Operating system and environment details:  Let us know the operating system you're using (e.g., Windows, macOS, Linux) and any relevant software versions (e.g., Python version).
- Expected behavior and actual behavior:  Describe what you expected to happen and what actually happened.
-We appreciate you taking the time to provide feedback.  We'll do our best to respond to your issues and incorporate your suggestions. 
-**Note:**  While we appreciate feedback and bug reports, we cannot guarantee that all suggestions will be implemented.  We will, however, carefully consider all input.
+While we are not actively seeking code contributions at this time, see our [contributing page](https://github.com/nrcan-cfs-fire/cffdrs-ng/blob/main/CONTRIBUTING.md) for details on how to provide us feedback and report bugs.  
 
+The next generation revisions to CFFDRS will be released in stages and will be collectively referred to as CFFDRS2025. The Fire Weather Index system (FWI2025) is the first module released.
 
+## Repository Structure
+The only branch of this repository with code intended for use is in the default *main* branch. All the code (in all three languages) is currently unorganized in the repository root directory. This will change and be **reorganized in Fall 2025**, with ample notice and warning. 
 
+cffdrs-ng/ 
+- data/ 
+    - `test_hffmc.csv` 
+    - `wx_hourly.csv` 
+    - `wx_prf.csv` (test data of hourly weather recorded from the Petawawa Research Forest in 2007) 
+- `.gitignore` 
+- `CMakeLists.txt` 
+- `CONTRIBUTING.md` (guidelines on providing feedback and reporting bugs) 
+- `LICENSE.txt` (GPL 2.0 license) 
+- `NG_FWI` [.c, .py, .r] (functions and equations for generating FWI2025 outputs) 
+- `README.md` 
+- `daily_summaries` [.py, .r] (function to generate the daily summary output) 
+- `make_daily` [.c, .py, .r] (converts hourly weather data to daily data) 
+- `make_hourly` [.c, .py, .r] (converts daily min/max weather data to hourly data) 
+- `make_inputs` [.c, .py, .r] 
+- `make_minmax` [.c, .py, .r] (converts daily weather data to daily min/max data) 
+- `old_cffdrs` [.py, .r] 
+- `test.sh` 
+- `util` [.c, .h, .py, .r] (basic, intermediate functions that are not a part of FWI2025 equations)
+
+## Revisions to FWI
+FWI2025 remains a daily, landscape-level planning tool. Changes include improving daily weather tracking, reconciling different versions of codes and indices, and introducing new codes and indices.  
+
+Detailed instructions on how to run FWI2025 scripts can be found on the Tutorials page of [the website](https://cffdrs.github.io/website_en). The first tutorial focuses on calculating hourly FWI codes and indices.
+
+### Hourly Fire Weather Data Estimation
+FWI2025 requires hourly weather data. Some weather stations, forecasts, and gridded datasets provide this directly. However, for sub-hourly sources, hourly values must be estimated before calculating hourly FWI by running the `NG_FWI` code. This repository provides methods for this conversion, including specific methods for daily 13:00 Local Daylight Time (LDT) observations as well as daily min/max forecasts:
+- to convert daily min/max values to hourly data run `make_hourly` [.c, .py, .r]
+- to convert daily 13:00 LDT (or noon standard time) values to daily min/max data run `make_minmax` [.c, .py, .r]. Follow this with the `make_hourly` method above to finally get hourly weather data
