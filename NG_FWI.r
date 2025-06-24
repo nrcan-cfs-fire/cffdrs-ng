@@ -427,8 +427,6 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
     0.054 + 0.269 * ws,
     1.4 + 0.838 * (ws - 5.0)**0.844
   )
-  print_out <- c(mc,ws)
-  print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
     ifelse(mc < 20.0 && ws < 10.0,

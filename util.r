@@ -346,9 +346,3 @@ save_csv <- function(df, file) {
   result <- result[, ..cols]
   write.csv(result, file, row.names = FALSE, quote = FALSE)
 }
-
-dmc_to_moisture_percent <- function(dmc) {
-  MC <- 20 + exp(dmc - 244.72) / 43.43
-  return(MC)
-}
-
