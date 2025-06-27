@@ -894,36 +894,29 @@ rain_since_intercept_reset <- function(temp,
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 #' @export hFWI
-hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
-  wx <- as.data.table(copy(df_wx))
-  old_names <- colnames(wx)
-  # add a bunch of dummy columns if they don't exist
+hFWI <- function(
+  df_wx,
+  timezone,
+  ffmc_old = FFMC_DEFAULT,
+  dmc_old = DMC_DEFAULT,
+  dc_old = DC_DEFAULT
+  ) {
+  # check df_wx class for data.frame or data.table
+  wasDf <- class(df_wx) == "data.frame"
+  if (wasDf) {
+    wx <- as.data.table(copy(df_wx))
+  } else if (class(df_wx) == "data.table") {
+    wx <- copy(df_wx)
+  } else {
+    stop("Input weather stream df_wx needs to be a data.frame or data.table!")
+  }
+  # check for allowed alternative names for: ws, prec, yr, hr
   colnames(wx) <- toupper(colnames(wx))
-  new_names <- colnames(wx)
-  hadStn <- "ID" %in% colnames(wx)
-  hadMinute <- "MINUTE" %in% colnames(wx)
-  hadDate <- "DATE" %in% colnames(wx)
-  hadLatitude <- "LAT" %in% colnames(wx)
-  hadLongitude <- "LONG" %in% colnames(wx)
-  hadTimestamp <- "TIMESTAMP" %in% colnames(wx)
-  wasWind <- "WIND" %in% colnames(wx)
-  wasRain <- "RAIN" %in% colnames(wx)
-  wasYear <- "YEAR" %in% colnames(wx)
-  wasHour <- "HOUR" %in% colnames(wx)
-  if (!hadStn) {
-    wx[, ID := "STN"]
-  }
-  if (!hadMinute) {
-    wx[, MINUTE := 0]
-  }
-  if (!hadLatitude) {
-    warning(paste0("Using default latitude value of ", DEFAULT_LATITUDE))
-    wx[, LAT := DEFAULT_LATITUDE]
-  }
-  if (!hadLongitude) {
-    warning(paste0("Using default longitude value of ", DEFAULT_LONGITUDE))
-    wx[, LONG := DEFAULT_LONGITUDE]
-  }
+  og_names <- names(wx)
+  wasWind <- (!"WS" %in% og_names) && "WIND" %in% og_names
+  wasRain <- (!"PREC" %in% og_names) && "RAIN" %in% og_names
+  wasYear <- (!"YR" %in% og_names) && "YEAR" %in% og_names
+  wasHour <- (!"HR" %in% og_names) && "HOUR" %in% og_names
   if (wasWind) {
     setnames(wx, c("WIND"), c("WS"))
   }
@@ -936,15 +929,50 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   if (wasHour) {
     setnames(wx, c("HOUR"), c("HR"))
   }
-  if (!("PERCENT_CURED" %in% names(wx))) {
-    wx$JULIAN <- julian(wx$MON, wx$DAY)
-    wx$PERCENT_CURED <- seasonal_curing(wx$JULIAN)
+  # check for required columns
+  stopifnot(all(c('YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC') %in% names(wx)))
+  # check for optional columns that have a default
+  if (!"LAT" %in% og_names) {
+    warning(paste0("Using default latitude value of ", DEFAULT_LATITUDE))
+    wx[, LAT := DEFAULT_LATITUDE]
   }
+  if (!"LONG" %in% og_names) {
+    warning(paste0("Using default longitude value of ", DEFAULT_LONGITUDE))
+    wx[, LONG := DEFAULT_LONGITUDE]
+  }
+  # add dummy columns if they don't exist
+  hadStn <- "ID" %in% og_names
+  hadMinute <- "MINUTE" %in% og_names
+  if (!hadStn) {
+    wx[, ID := "STN"]
+  }
+  if (!hadMinute) {
+    wx[, MINUTE := 0]
+  }
+  # check for optional columns that can be calculated
+  hadDate <- "DATE" %in% og_names
+  hadTimestamp <- "TIMESTAMP" %in% og_names
+  if (!hadDate) {
+    wx[, DATE := as.character(as.Date(sprintf("%04d-%02d-%02d", YR, MON, DAY)))]
+  }
+  if (!hadTimestamp) {
+    wx[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, MINUTE))]
+  }
+  if (!"PERCENT_CURED" %in% og_names) {
+    wx$PERCENT_CURED <- seasonal_curing(julian(wx$MON, wx$DAY))
+  }
+  if (!"SOLRAD" %in% og_names) {
+    needs_solrad <- TRUE
+  } else {
+    needs_solrad <- FALSE
+  }
+  # check for unnecessary columns
   cols_extra_solar <- intersect(names(wx), c("SUNRISE", "SUNSET", "SUNLIGHT_HOURS"))
   if (0 < length(cols_extra_solar)) {
     warning(sprintf("Ignoring and recalculating columns: [%s]", paste0(cols_extra_solar, collapse = ", ")))
     wx <- wx[, -..cols_extra_solar]
   }
+  # check for values outside valid ranges
   stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
   stopifnot(all(wx$WS >= 0))
   stopifnot(all(wx$PREC >= 0))
@@ -956,16 +984,8 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
-  # HACK: just rename for now
-  # setnames(wx, c("PREC"), c("RAIN"))
-  if (!hadDate) {
-    wx[, DATE := as.character(as.Date(sprintf("%04d-%02d-%02d", YR, MON, DAY)))]
-  }
-  if (!hadTimestamp) {
-    wx[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, MINUTE))]
-  }
-  # loop in hFWI function
-  write.csv(wx, "structured_input.csv")
+
+  # loop over every station year
   results <- NULL
   for (stn in unique(wx$ID)) {
     by_stn <- wx[ID == stn]
@@ -974,57 +994,43 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
       print(paste0("Running ", stn, " for ", yr))
       # FIX: convert this to not need to do individual stations
       by_year[, TIMEZONE := timezone]
-      needs_solrad <- FALSE
-      if(!("SOLRAD" %in% names(by_year))){
-        needs_solrad <- TRUE
-      }
-      w <- getSunlight(by_year, with_solrad = needs_solrad)
-      write.csv(w, "structured_input.csv")
+      w <- getSunlight(by_year, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
       results <- rbind(results, r)
     }
   }
 
-  #results <- results[,c('id', 'lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec', 'percent_cured', 'date', 'timestamp', 'timezone', 'solrad', 'sunrise', 'sunset', 'sunlight_hours', 'ffmc', 'dmc', 'dc', 'isi', 'bui', 'fwi', 'dsr', 'gfmc', 'gsi', 'gfwi')]
-  
-  # # this is all just to remove dummy variables that we added
-  # if (!is.null(results)) {
-  #   names(results) <- toupper(names(results))
-  #   if (!hadStn) {
-  #     results <- results[, -c("ID")]
-  #   }
-  #   if (!hadMinute) {
-  #     results <- results[, -c("MINUTE")]
-  #   }
-  #   if (!hadDate) {
-  #     results <- results[, -c("DATE")]
-  #   }
-  #   if (!hadLatitude) {
-  #     results <- results[, -c("LAT")]
-  #   }
-  #   if (!hadLongitude) {
-  #     results <- results[, -c("LONG")]
-  #   }
-  #   if (!hadTimestamp) {
-  #     results <- results[, -c("TIMESTAMP")]
-  #   }
-  #   # if (wasWind) {
-  #   #   setnames(results, c("WS"), c("WIND"))
-  #   # }
-  #   # if (wasRain) {
-  #   #   setnames(results, c("PREC"), c("RAIN"))
-  #   # }
-  #   # if (wasYear) {
-  #   #   setnames(results, c("YR"), c("YEAR"))
-  #   # }
-  #   # if (wasHour) {
-  #   #   setnames(results, c("HR"), c("HOUR"))
-  #   # }
-  #   setnames(results, new_names, old_names)
-  #   # setnames(results, c("PREC"), c("RAIN"))
-  # }
-  # names(results) <- tolower(names(results))
-  # should have gotten rid of all the fields we added to make the processing work
+  # remove optional variables that we added
+  names(results) <- toupper(names(results))
+  if (!hadStn) {
+    results <- results[, -c("ID")]
+  }
+  if (!hadMinute) {
+    results <- results[, -c("MINUTE")]
+  }
+  if (!hadDate) {
+    results <- results[, -c("DATE")]
+  }
+  if (!hadTimestamp) {
+    results <- results[, -c("TIMESTAMP")]
+  }
+  # revert to alternative name if used
+  if (wasWind) {
+    setnames(results, c("WS"), c("WIND"))
+  }
+  if (wasRain) {
+    setnames(results, c("PREC"), c("RAIN"))
+  }
+  if (wasYear) {
+    setnames(results, c("YR"), c("YEAR"))
+  }
+  if (wasHour) {
+    setnames(results, c("HR"), c("HOUR"))
+  }
+  names(results) <- tolower(names(results))
+  if (wasDf) {
+    results <- as.data.frame(results)
+  }
   return(results)
 }
 

@@ -625,7 +625,7 @@ def rain_since_intercept_reset(
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
 # @return                    hourly values FWI and weather stream
-def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
+def _stnHFWI(w, ffmc_old, dmc_old, dc_old):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
     if 1 != len(w["ID"].unique()):
@@ -784,55 +784,47 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, silent=False):
 def hFWI(
     df_wx,
     timezone,
-    ffmc_old=FFMC_DEFAULT,
-    dmc_old=DMC_DEFAULT,
-    dc_old=DC_DEFAULT,
-    silent=False,
-):
+    ffmc_old = FFMC_DEFAULT,
+    dmc_old = DMC_DEFAULT,
+    dc_old = DC_DEFAULT
+    ):
     wx = df_wx.loc[:]
-    old_names = wx.columns
+    # check for allowed alternative names for: ws, prec, yr, hr
     wx.columns = map(str.upper, wx.columns)
-    new_names = wx.columns
-    # print(old_names, new_names)
-    if not (0 <= ffmc_old <= 101):
-        raise RuntimeError("ffmc_old must be 0-101")
-    if not (0 <= dmc_old):
-        raise RuntimeError("dmc_old must be >= 0")
-    if not (0 <= dc_old):
-        raise RuntimeError("dc_old must be >= 0")
-    had_stn = "ID" in new_names
-    had_minute = "MINUTE" in new_names
-    had_date = "DATE" in new_names
-    had_latitude = "LAT" in new_names
-    had_longitude = "LONG" in new_names
-    had_timestamp = "TIMESTAMP" in new_names
-    was_wind = "WIND" in new_names
-    was_rain = "RAIN" in new_names
-    was_year = "YEAR" in new_names
-    was_hour = "HOUR" in new_names
+    og_names = wx.columns
+    was_wind = (not "WS" in og_names) and "WIND" in og_names
+    was_rain = (not "PREC" in og_names) and "RAIN" in og_names
+    was_year = (not "YR" in og_names) and "YEAR" in og_names
+    was_hour = (not "HR" in og_names) and "HOUR" in og_names
+    if was_wind:
+       wx = wx.rename(columns = {"WIND": "WS"})
+    if was_rain:
+       wx = wx.rename(columns = {"RAIN": "PREC"})
+    if was_year:
+       wx = wx.rename(columns = {"YEAR": "YR"})
+    if was_hour:
+       wx = wx.rename(columns = {"HOUR": "HR"})
+    # check for required columns
+    if not all(x in wx.columns for x in (
+       ['YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC'])):
+       raise RuntimeError("Missing a required input columns")
+    # check for optional columns that have a default
+    if not "LAT" in og_names:
+        logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
+        wx["LAT"] = DEFAULT_LATITUDE
+    if not "LONG" in og_names:
+        logger.warning(f"Using default longitude of {DEFAULT_LONGITUDE}")
+        wx["LONG"] = DEFAULT_LONGITUDE
+    # add dummy columns if they don't exist
+    had_stn = "ID" in og_names
+    had_minute = "MINUTE" in og_names
     if not had_stn:
         wx["ID"] = "STN"
     if not had_minute:
         wx["MINUTE"] = 0
-    if not had_latitude:
-        logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
-        wx["LAT"] = DEFAULT_LATITUDE
-    if not had_longitude:
-        logger.warning(f"Using default longitude of {DEFAULT_LONGITUDE}")
-        wx["LONG"] = DEFAULT_LONGITUDE
-    COLUMN_SYNONYMS = {"WIND": "WS", "YEAR": "YR", "HOUR": "HR"}
-    wx = wx.rename(columns=COLUMN_SYNONYMS)
-    if not ((0 <= wx["RH"]).all() and (100 >= wx["RH"]).all()):
-        raise RuntimeError("RH must be 0-100")
-    if not (0 <= wx["WS"]).all():
-        raise RuntimeError("WS must be >= 0")
-    if not (0 <= wx["PREC"]).all():
-        raise RuntimeError("PREC must be >= 0")
-    if not ((1 <= wx["MON"]).all() and (12 >= wx["MON"]).all()):
-        raise RuntimeError("MON must be 1-12")
-    # FIX: make this actually check proper dates
-    if not ((1 <= wx["DAY"]).all() and (31 >= wx["DAY"]).all()):
-        raise RuntimeError("DAY must be 1-31")
+    # check for optional columns that can be calculated
+    had_date = "DATE" in og_names
+    had_timestamp = "TIMESTAMP" in og_names
     if not had_date:
         wx["DATE"] = wx.apply(
             lambda row: f'{row["YR"]:04d}-{row["MON"]:02d}-{row["DAY"]:02d}', axis=1
@@ -841,82 +833,71 @@ def hFWI(
         wx["TIMESTAMP"] = wx.apply(
             lambda row: datetime.datetime(
                 row["YR"], row["MON"], row["DAY"], row["HR"], row["MINUTE"]
-            ),
-            axis=1,
-        )
-    if not ("PERCENT_CURED" in new_names):
-      wx["JULIAN"] = wx.apply(
-            lambda row: util.julian(
-                row["MON"], row["DAY"]
-            ),
-            axis=1,
-        )
-      wx["PERCENT_CURED"] = wx.apply(
-            lambda row: util.seasonal_curing(
-                row["JULIAN"]
-            ),
-            axis=1,
-        )
-    #########################################
-    # PROCESS HERE
-    #########################################
+                ), axis=1
+            )
+    if not "PERCENT_CURED" in og_names:
+        wx["PERCENT_CURED"] = wx.apply(lambda row:util.seasonal_curing(
+            util.julian(row["MON"], row["DAY"])), axis=1)
+    if not "SOLRAD" in wx.columns:
+        needs_solrad = True
+    else:
+        needs_solrad = False
+    # check for values outside valid ranges
+    if not (all(wx["RH"] >= 0) and all(wx["RH"] <= 100)):
+        raise RuntimeError("All RH must be between 0-100")
+    if not all(wx["WS"] >= 0):
+        raise RuntimeError("All WS must be >= 0")
+    if not all(wx["PREC"] >= 0):
+        raise RuntimeError("All PREC must be >= 0")
+    if not (all(wx["MON"] >= 1) and all(wx["MON"] <= 12)):
+        raise RuntimeError("All MON must be between 1-12")
+    if (not needs_solrad) and (not all(wx['SOLRAD'] >= 0)):
+       raise RuntimeError("All SOLRAD must be >= 0")
+    if ("PERCENT_CURED" in og_names) and (not (
+       all(wx["PERCENT_CURED"] >= 0) and all(wx["PERCENT_CURED"] <= 100))):
+       raise RuntimeError("All PERCENT_CURED must be between 0-100")
+    if ("GRASS_FUEL_LOAD" in og_names) and (not (all(wx["GRASS_FUEL_LOAD"] >= 0))):
+       raise RuntimeError("All GRASS_FUEL_LOAD muse be >= 0")
+    if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
+        raise RuntimeError("All DAY must be 1-31")
+    if not (0 <= ffmc_old <= 101):
+        raise RuntimeError("ffmc_old must be between 0-101")
+    if not (dmc_old >= 0):
+        raise RuntimeError("dmc_old must be >= 0")
+    if not (dc_old >= 0):
+        raise RuntimeError("dc_old must be >= 0")
+    
+    # loop over every station year
     results = None
     for idx, by_year in wx.groupby(["ID", "YR"]):
+        print("Running " + str(idx[0]) + " for " + str(idx[1]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
         w.loc[:, "TIMEZONE"] = timezone
-        needs_solrad = False
-        if not ("SOLRAD" in w.columns):
-           needs_solrad = True
-        w = util.getSunlight(w, with_solrad=needs_solrad)
-        r = _stnHFWI(
-            w,
-            ffmc_old,
-            dmc_old,
-            dc_old,
-            silent,
-        )
+        w = util.getSunlight(w, get_solrad=needs_solrad)
+        r = _stnHFWI(w, ffmc_old, dmc_old, dc_old)
         results = pd.concat([results, r])
-    # reorganize columns
-    colnames_out = [
-        "lat",
-        "long",
-        "yr",
-        "mon",
-        "day",
-        "hr",
-        "temp",
-        "rh",
-        "ws",
-        "prec",
-        "date",
-        "timestamp",
-        "timezone",
-        "solrad",
-        "sunrise",
-        "sunset",
-        "sunlight_hours",
-        "ffmc",
-        "dmc",
-        "dc",
-        "isi",
-        "bui",
-        "fwi",
-        "dsr",
-        "gfmc",
-        "gsi",
-        "gfwi",
-        "mcffmc",
-        "mcgfmc",
-        "percent_cured",
-        "grass_fuel_load",
-    ]
-    if "id" in results.columns:
-        colnames_out = ["id"] + colnames_out
-    results = results[colnames_out]
-
-    results = results[["id", "lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec", "percent_cured", "date", "timestamp", "timezone", "solrad", "sunrise", "sunset", "sunlight_hours", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi"]]
-
+    
+    # remove optional variables that we added
+    results.columns = map(str.upper, results.columns)
+    if not had_stn:
+       results = results.drop(columns = "ID")
+    if not had_minute:
+       results = results.drop(columns = "MINUTE")
+    if not had_date:
+       results = results.drop(columns = "DATE")
+    if not had_timestamp:
+       results = results.drop(columns = "TIMESTAMP")
+    # revert to alternative name if used
+    if was_wind:
+       wx = wx.rename(columns = {"WS": "WIND"})
+    if was_rain:
+       wx = wx.rename(columns = {"PREC": "RAIN"})
+    if was_year:
+       wx = wx.rename(columns = {"YR": "YEAR"})
+    if was_hour:
+       wx = wx.rename(columns = {"HR": "HOUR"})
+    results.columns = map(str.lower, results.columns)
     return results
 
 

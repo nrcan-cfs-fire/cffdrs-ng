@@ -71,7 +71,7 @@ solar_reduction <- function(DTR){
   return(reduction)
 }
 
-getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
+getSunlight <- function(df, get_solrad = FALSE, DST = FALSE) {
   dst_adjust <- 0
   if (DST){
     dst_adjust <- 1
@@ -80,7 +80,7 @@ getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
   df_copy <- copy(df)
   COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
   cols_req <- c(COLS_ID, "TIMESTAMP")
-  if (with_solrad) {
+  if (get_solrad) {
     cols_req <- c(cols_req, "TEMP")
   }
   for (n in cols_req) {
@@ -109,7 +109,7 @@ getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
   df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
   df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
   df_all <- merge(df_copy, df_dates, by = COLS_ID)
-  if (with_solrad) {
+  if (get_solrad) {
     df_all[, HR := hour(TIMESTAMP)]
     df_all[, TST := as.numeric(HR - dst_adjust) * 60.0 + TIMEOFFSET]
     df_all[, HOURANGLE := TST / 4 - 180]
@@ -165,7 +165,7 @@ getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
   #df_copy <- copy(df)
   #COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
   #cols_req <- c(COLS_ID, "TIMESTAMP")
-  #if (with_solrad) {
+  #if (get_solrad) {
   #  cols_req <- c(cols_req, "TEMP")
   #}
   #for (n in cols_req) {
@@ -194,7 +194,7 @@ getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
   #df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
   #df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
   #df_all <- merge(df_copy, df_dates, by = COLS_ID)
-  #if (with_solrad) {
+  #if (get_solrad) {
   #  df_all[, HR := hour(TIMESTAMP)]
   #  df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
   #  df_all[, HOURANGLE := TST / 4 - 180]

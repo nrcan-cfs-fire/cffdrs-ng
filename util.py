@@ -75,7 +75,7 @@ def julian(mon, day):
 # @param df                DataFrame to add columns to
 # @param with_solrad       Whether to include solar radiation
 # @return                  Solar radiation (kW/m^2), sunrise, sunset
-def getSunlight(df, with_solrad=False, DST = False):
+def getSunlight(df, get_solrad=False, DST = False):
     dst_adjust = 0
     if (DST):
       dst_adjust = 1
@@ -87,7 +87,7 @@ def getSunlight(df, with_solrad=False, DST = False):
     # just make date column so we know what type it is
     df_copy = df.loc[:]
     df_copy.loc[:, "DATE"] = df_copy["TIMESTAMP"].apply(lambda x: x.date())
-    if with_solrad:
+    if get_solrad:
         cols_req += ["TEMP"]
     for n in cols_req:
         if n not in df_copy.columns:
@@ -169,7 +169,7 @@ def getSunlight(df, with_solrad=False, DST = False):
         axis=1,
     )
     df_all = pd.merge(df_copy, df_dates, on=COLS_ID)
-    if with_solrad:
+    if get_solrad:
         df_all["TST"] = df_all.apply(
             lambda x: (x["TIMESTAMP"].hour - dst_adjust) * 60.0 + x["TIMEOFFSET"], axis=1
         )
@@ -239,7 +239,7 @@ def getSunlight(df, with_solrad=False, DST = False):
     # just make date column so we know what type it is
     df_copy = df.loc[:]
     df_copy.loc[:, "DATE"] = df_copy["TIMESTAMP"].apply(lambda x: x.date())
-    if with_solrad:
+    if get_solrad:
         cols_req += ["TEMP"]
     for n in cols_req:
         if n not in df_copy.columns:
@@ -321,7 +321,7 @@ def getSunlight(df, with_solrad=False, DST = False):
         axis=1,
     )
     df_all = pd.merge(df_copy, df_dates, on=COLS_ID)
-    if with_solrad:
+    if get_solrad:
         df_all["TST"] = df_all.apply(
             lambda x: x["TIMESTAMP"].hour * 60.0 + x["TIMEOFFSET"], axis=1
         )
