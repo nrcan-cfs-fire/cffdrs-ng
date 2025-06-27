@@ -2,7 +2,7 @@
 library(lubridate)
 library(data.table)
 source("util.r")
-source("old_cffdrs.r")
+#source("old_cffdrs.r")
 
 DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.937
@@ -18,8 +18,8 @@ DC_DAILY_CONST <- 0.36
 DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
 
 
-OFFSET_SUNRISE <- 2.5
-OFFSET_SUNSET <- 0.5
+OFFSET_SUNRISE <- 0 ##2.5
+OFFSET_SUNSET <- 0 ##0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
@@ -28,6 +28,7 @@ DEFAULT_GRASS_FUEL_LOAD <- 0.35
 FFMC_DEFAULT <- 85
 DMC_DEFAULT <- 6
 DC_DEFAULT <- 15
+GFMC_DEFAULT <- FFMC_DEFAULT 
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
@@ -43,6 +44,8 @@ MPCT_TO_MC <- 250.0 * 59.5 / 101.0
 FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
 DC_INTERCEPT <- 2.8
+
+DATE_GRASS <- 181
 
 # Fine Fuel Moisture Code (FFMC) from moisture %
 fine_fuel_moisture_code <- function(moisture_percent) {
@@ -106,7 +109,7 @@ hourly_fine_fuel_moisture <- function(temp, rh, ws, rain, lastmc) {
       (100.0 - rh) / 100.0
     )
     k0_or_k1 <- 0.424 * (1 - (a1^1.7)) + (0.0694 * sqrt(ws) * (1 - (a1^8)))
-    kd_or_kw <- drf * k0_or_k1 * exp(0.0365 * temp)
+    kd_or_kw <- (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp)
     m <- m + (mo - m) * (10^(-kd_or_kw * time))
   }
   return(m)
@@ -201,6 +204,7 @@ hourly_grass_fuel_moisture <- function(temp, rh, ws, rain, solrad, lastmc) {
   #
   #
   # bmw
+
   rf <- 0.27
   drf <- 0.389633
   # Time since last observation (hours)
@@ -217,38 +221,88 @@ hourly_grass_fuel_moisture <- function(temp, rh, ws, rain, solrad, lastmc) {
     },
     mo
   )
+
   # fuel temp from CEVW*/
   tf <- temp + 17.9 * solrad * exp(-0.034 * ws)
+  
   # fuel humidity
   rhf <- ifelse(tf > temp,
     (rh * 6.107 * (10.0^(7.5 * temp / (temp + 237.0)))
       / (6.107 * (10.0^(7.5 * tf / (tf + 237.0))))),
     rh
   )
+  
   # 18.85749879,18.85749879,7.77659602,21.24361786,19.22479551,19.22479551
   # duplicated in both formulas, so calculate once
   e1 <- rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)))
   # GRASS EMC
   ed <- 1.62 * (rhf^0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1
   ew <- 1.42 * (rhf^0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1
-  m <- ifelse(mo < ed && mo < ew,
-    ew,
-    ed
-  )
-  # use ifelse so table works
-  m <- ifelse(mo > ed || (mo < ed && mo < ew),
-    {
-      # these are the same formulas with a different value for a1
-      a1 <- ifelse(mo > ed,
-        rhf / 100.0,
-        (100.0 - rhf) / 100.0
-      )
-      k0_or_k1 <- 0.424 * (1 - (a1^1.7)) + (0.0694 * sqrt(ws) * (1 - (a1^8)))
-      kd_or_kw <- drf * k0_or_k1 * exp(0.0365 * tf)
-      m + (mo - m) * (10^(-kd_or_kw * time))
-    },
-    m
-  )
+  
+  moed <- mo - ed
+  moew <- mo - ew
+  
+  
+  e <- NULL
+  a1 <- NULL
+  m <- NULL
+  moe <- NULL
+  if (moed == 0 || (moew >= 0 && moed <0)){
+    m <- mo
+    if(moed == 0){
+      e <- ed
+    }
+    if (moew >= 0){
+      e <- ew
+    }
+  }
+  else{
+    if(moed > 0){
+      a1 <- rhf/100.0
+      e <- ed
+      moe <- moed
+    }
+    else{
+      a1 <- (100.0-rhf)/100.0
+      e <- ew
+      moe <- moew
+    }
+    if (a1 < 0){
+      #avoids complex number in a1^1.7 xkd calculation
+      a1 <- 0
+    }
+    xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(ws)*(1-a1^8)))
+    xkd <- xkd*drf*exp(0.0365*tf)
+    m <- e+moe*exp(-1.0*log(10.0)*xkd*time)
+  }
+  
+  
+#  m <- ifelse(mo < ed && mo < ew,
+#    ew,
+#    ed
+#  )
+#  print(temp)
+#  print(solrad)
+#  print(ws)
+#  print(rh)
+#  # use ifelse so table works
+#  print(m)
+  
+#  m <- ifelse(mo > ed || (mo < ed && mo < ew),
+#    {
+#      # these are the same formulas with a different value for a1
+#      a1 <- ifelse(mo > ed,
+#        rhf / 100.0,
+#        (100.0 - rhf) / 100.0
+#      )
+#      k0_or_k1 <- 0.424 * (1 - (a1^1.7)) + (0.0694 * sqrt(ws) * (1 - (a1^8)))
+#      kd_or_kw <- drf * k0_or_k1 * exp(0.0365 * tf)
+#      m + (mo - m) * (10^(-kd_or_kw * time))
+#      m
+#    },
+#    m
+#  )
+
   return(m)
 }
 
@@ -279,6 +333,9 @@ curing_factor <- function(cur) {
   return(cf)
 }
 
+
+
+
 grass_moisture_code <- function(mc, cur, wind) {
   #   THIS is the way to get the CODE value from cured grassland moisture
   #     IT takes fully cured grass moisture  (from the grass moisture model (100% cured)  (from the FMS...updated version of Wotton 2009)
@@ -300,7 +357,6 @@ grass_moisture_code <- function(mc, cur, wind) {
   # wind=  10 m open wind (km/h)
 
   #     currently (NOv 2023) the coefficients for the PsusF(grass) models are hardcoded into the GFMC function
-
   wind2m_open_factor <- 0.75
 
   Intercept <- 1.49
@@ -323,6 +379,9 @@ grass_moisture_code <- function(mc, cur, wind) {
   )
   # /*   convert to code with FF-scale */
   # return (59.5*(250.0-egmc)/(MPCT_TO_MC + egmc))
+  if (egmc > 250.0){
+    egmc <- 250.0
+  }
   return(fine_fuel_moisture_code(egmc))
 }
 
@@ -336,7 +395,7 @@ matted_grass_spread_ROS <- function(ws, mc, cur) {
   #   output should be ROS in m/min   */
   fw <- 16.67 * ifelse(ws < 5,
     0.054 + 0.209 * ws,
-    1.1 + 0.715 * (ws - 5.0) * 0.844
+    1.1 + 0.715 * (ws - 5.0)**0.844
   )
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
@@ -348,6 +407,9 @@ matted_grass_spread_ROS <- function(ws, mc, cur) {
       )
     )
   )
+  if (fm < 0){
+    fm <- 0.0
+  }
   cf <- curing_factor(cur)
   return(fw * fm * cf)
 }
@@ -363,8 +425,10 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
   #   output should be ROS in m/min   */
   fw <- 16.67 * ifelse(ws < 5,
     0.054 + 0.269 * ws,
-    1.4 + 0.838 * (ws - 5.0) * 0.844
+    1.4 + 0.838 * (ws - 5.0)**0.844
   )
+  print_out <- c(mc,ws)
+  print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
     ifelse(mc < 20.0 && ws < 10.0,
@@ -375,6 +439,9 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
       )
     )
   )
+  if (fm < 0){
+    fm <- 0.0
+  }
   cf <- curing_factor(cur)
   return(fw * fm * cf)
 }
@@ -385,11 +452,25 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
 #' @param ws              Wind Speed (km/h)
 #' @param mc              Grass moisture content (percent)
 #' @param cur             Degree of curing (percent, 0-100)
+#' @param standing        Grass standing (True/False)
 #' @return                Grass Spread Index
-grass_spread_index <- function(ws, mc, cur) {
+grass_spread_index <- function(ws, mc, cur, standing) {
   #  So we don't have to transition midseason between standing and matted grass spread rate models
   #  We will simply scale   GSI   by the average of the   matted and standing spread rates
-  ros <- (matted_grass_spread_ROS(ws, mc, cur) + standing_grass_spread_ROS(ws, mc, cur)) / 2.0
+  #ros <- (matted_grass_spread_ROS(ws, mc, cur) + standing_grass_spread_ROS(ws, mc, cur)) / 2.0
+  
+  
+  #now allowing switch between standing and matted grass
+  ros <- NULL
+  if (standing){
+    #standing
+    ros <- standing_grass_spread_ROS(ws, mc, cur)
+  }
+  else {
+    #matted
+    ros <- matted_grass_spread_ROS(ws, mc, cur)
+  }
+  
   return(1.11 * ros)
 }
 
@@ -518,6 +599,8 @@ dc_drying_hourly <- function(temp) {
   return(pmax(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP)))
 }
 
+
+
 drought_code <- function(
     last_dc,
     temp,
@@ -532,6 +615,70 @@ drought_code <- function(
     dc_before_rain,
     rain_total_prev,
     rain_total) {
+
+##########################################################################################
+  #### for now we are using Mike's method for calculating DC
+  
+  
+  if (0 == rain_total){
+    dc_before_rain <- last_dc
+  }
+  
+  offset <- 3.0
+  mult <- 0.015
+  pe <- 0
+  rw <- 0
+  mr <- 0
+  mcdc <- 0
+  
+  last_mc_dc <- 400*exp(-last_dc/400)
+  TIME_INCREMENT <- 1.0
+  if(temp > 0){
+    pe <- mult*temp + offset/16.0
+  }
+  
+  invtau <- pe/400.0
+  
+  if((rain_total_prev + rain) <= 2.8){
+    mr <- last_mc_dc
+  }
+  else {
+    if(rain_total_prev <= 2.8){
+      rw <- (rain_total_prev + rain)*0.83 - 1.27
+    }
+    else{
+      rw <- rain*0.83
+    }
+    mr <- last_mc_dc + 3.937*rw/2.0
+  }
+  
+  if(mr > 400.0){
+    mr <- 400.0
+  }
+  
+  is_daytime <- FALSE
+  if(hour >= sunrise && hour <= sunset){
+    is_daytime = TRUE
+  }
+  
+  if(is_daytime){
+    mcdc <- 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau)
+  }
+  else{
+    mcdc <- mr
+  }
+  
+  if(mcdc > 400.0){
+    mcdc <- 400.0
+  }
+  
+  dc <- 400.0*log(400.0/mcdc)
+  
+  
+  return(list(dc = dc, dc_before_rain = dc_before_rain))
+  ##########################################################################################
+
+  
   if (0 == rain_total) {
     dc_before_rain <- last_dc
   }
@@ -595,6 +742,7 @@ rain_since_intercept_reset <- function(temp,
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 .stnHFWI <- function(w, ffmc_old, dmc_old, dc_old) {
+  
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -611,6 +759,8 @@ rain_since_intercept_reset <- function(temp,
   names(r) <- tolower(names(r))
   mcffmc <- fine_fuel_moisture_from_code(ffmc_old)
   mcgfmc <- mcffmc
+  mcgfmc_standing <- mcffmc
+  mcgfmc_matted <- mcffmc
   # just use previous index values from current hour regardless of time
   # # HACK: always start from daily value at noon
   # while (12 != r[1]$hr) {
@@ -641,6 +791,7 @@ rain_since_intercept_reset <- function(temp,
   N <- nrow(r)
   for (i in 1:N)
   {
+    
     cur <- copy(r[i])
     canopy <- rain_since_intercept_reset(
       cur$temp,
@@ -703,11 +854,32 @@ rain_since_intercept_reset <- function(temp,
     cur$bui <- buildup_index(cur$dmc, cur$dc)
     cur$fwi <- fire_weather_index(cur$isi, cur$bui)
     cur$dsr <- daily_severity_rating(cur$fwi)
-    mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
+    
+    mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc_matted)
+    #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
+    #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
+    #which averages 6% or so for rains  (<5mm...between 7% and 5%,    lower for larger rains)(NO intercept)
+    #AND the solar radiation exposure is less, and the cooling from the wind is stronger.  SO we assume there is effectively no extra
+    #heating of the grass from solar
+    #working at the margin like this should make a nice bracket for moisture between the matted and standing that users can use
+    #...reality will be in between the matt and stand
+    mcgfmc_standing <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec*0.06, 0.0, mcgfmc_standing)
+    #mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
+    #print(mcgfmc)
+    mcgfmc <- mcgfmc_standing
+    standing <- TRUE
+    if (julian(cur$mon, cur$day) < DATE_GRASS){
+      standing <- FALSE
+      mcgfmc <- mcgfmc_matted
+    }
+
+    
     cur$mcgfmc <- mcgfmc
     cur$gfmc <- grass_moisture_code(mcgfmc, cur$percent_cured, cur$ws)
-    cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured)
-    cur$gfwi <- grass_fire_weather_index(cur$gsi, cur$grass_fuel_load)
+    
+    cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
+    cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
+    cur$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
     results <- rbind(results, cur)
   }
   return(results)
@@ -764,6 +936,10 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
   if (wasHour) {
     setnames(wx, c("HOUR"), c("HR"))
   }
+  if (!("PERCENT_CURED" %in% names(wx))) {
+    wx$JULIAN <- julian(wx$MON, wx$DAY)
+    wx$PERCENT_CURED <- seasonal_curing(wx$JULIAN)
+  }
   cols_extra_solar <- intersect(names(wx), c("SUNRISE", "SUNSET", "SUNLIGHT_HOURS"))
   if (0 < length(cols_extra_solar)) {
     warning(sprintf("Ignoring and recalculating columns: [%s]", paste0(cols_extra_solar, collapse = ", ")))
@@ -789,6 +965,7 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
     wx[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, MINUTE))]
   }
   # loop in hFWI function
+  write.csv(wx, "structured_input.csv")
   results <- NULL
   for (stn in unique(wx$ID)) {
     by_stn <- wx[ID == stn]
@@ -797,11 +974,19 @@ hFWI <- function(df_wx, timezone, ffmc_old = 85, dmc_old = 6, dc_old = 15) {
       print(paste0("Running ", stn, " for ", yr))
       # FIX: convert this to not need to do individual stations
       by_year[, TIMEZONE := timezone]
-      w <- getSunlight(by_year, with_solrad = FALSE)
+      needs_solrad <- FALSE
+      if(!("SOLRAD" %in% names(by_year))){
+        needs_solrad <- TRUE
+      }
+      w <- getSunlight(by_year, with_solrad = needs_solrad)
+      write.csv(w, "structured_input.csv")
       r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
       results <- rbind(results, r)
     }
   }
+
+  #results <- results[,c('id', 'lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec', 'percent_cured', 'date', 'timestamp', 'timezone', 'solrad', 'sunrise', 'sunset', 'sunlight_hours', 'ffmc', 'dmc', 'dc', 'isi', 'bui', 'fwi', 'dsr', 'gfmc', 'gsi', 'gfwi')]
+  
   # # this is all just to remove dummy variables that we added
   # if (!is.null(results)) {
   #   names(results) <- toupper(names(results))
@@ -876,7 +1061,12 @@ if ("--args" %in% commandArgs()) {
       "rh",
       "ws",
       "prec",
+      "date",
+      "timestamp",
+      "timezone",
       "solrad",
+      "sunrise",
+      "sunset",
       "ffmc",
       "dmc",
       "dc",
@@ -892,12 +1082,15 @@ if ("--args" %in% commandArgs()) {
       "percent_cured",
       "grass_fuel_load"
     )
+    print(colnames_out)
     if ("id" %in% names(df_fwi)) {
       colnames_out <- c("id", colnames_out)
     }
     df_fwi <- df_fwi[, ..colnames_out]
     save_csv(df_fwi, file_out)
   } else {
-    message("Wrong number of arguments")
+    if(args[1] != "SILENCE"){
+      message("Wrong number of arguments") 
+    }
   }
 }

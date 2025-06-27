@@ -1,6 +1,9 @@
 #' Various utility functions used by the other files
 library(data.table)
 library(lubridate)
+#source("NG_FWI.r")
+
+
 
 #' Determine if data is sequential at intervals of 1 unit
 #'
@@ -56,12 +59,24 @@ findrh <- function(q, temp) {
 #' @param day         Day of month
 #' @return            Day of year
 julian <- function(mon, day) {
-  month <- c(0, 31, 59, 90, 120, 151, 181, 212, 242, 273, 304, 334, 365)
+  month <- c(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365)
   return(month[mon] + day)
 }
 
+solar_reduction <- function(DTR){
+  #simple hardgraves model based on estimate of DTR
+  #this uses the numbers DVK found
+  #this is a reduction factor due to atmosphere  sol_surf/Sol_top_of_atm
+  reduction <- 0.108*pow(DTR,0.59)
+  return(reduction)
+}
 
-getSunlight <- function(df, with_solrad = FALSE) {
+getSunlight <- function(df, with_solrad = FALSE, DST = FALSE) {
+  dst_adjust <- 0
+  if (DST){
+    dst_adjust <- 1
+  }
+  
   df_copy <- copy(df)
   COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
   cols_req <- c(COLS_ID, "TIMESTAMP")
@@ -91,12 +106,12 @@ getSunlight <- function(df, with_solrad = FALSE) {
   # HACK: keep in range
   df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
   df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
-  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
+  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
   df_all <- merge(df_copy, df_dates, by = COLS_ID)
   if (with_solrad) {
     df_all[, HR := hour(TIMESTAMP)]
-    df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
+    df_all[, TST := as.numeric(HR - dst_adjust) * 60.0 + TIMEOFFSET]
     df_all[, HOURANGLE := TST / 4 - 180]
     df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
     ###########################################################################################
@@ -114,6 +129,7 @@ getSunlight <- function(df, with_solrad = FALSE) {
       SUM_COS_ZENITH = sum(COS_ZENITH),
       TEMP_RANGE = max(TEMP) - min(TEMP)
     ), by = COLS_ID]
+    
     # Daily surface Solar Rad in kJ/m^2/day
     df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
     df_all <- merge(df_all, df_solrad, by = COLS_ID)
@@ -131,7 +147,91 @@ getSunlight <- function(df, with_solrad = FALSE) {
   df_result <- df_all[, ..cols]
   df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
   return(df_result)
-}
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  ##################################################################################### old code
+  #df_copy <- copy(df)
+  #COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
+  #cols_req <- c(COLS_ID, "TIMESTAMP")
+  #if (with_solrad) {
+  #  cols_req <- c(cols_req, "TEMP")
+  #}
+  #for (n in cols_req) {
+  #  stopifnot(n %in% colnames(df))
+  #}
+  ## just make date column so we know what type it is
+  #df_copy[, DATE := as_date(TIMESTAMP)]
+  #df_stn_dates <- unique(df_copy[, ..COLS_ID])
+  #dechour <- 12.0
+  ## calculate common values once
+  #df_dates <- unique(df_stn_dates[, list(DATE)])
+  #df_dates[, JD := julian(month(DATE), day(DATE))]
+  #df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
+  #df_dates[, EQTIME := 229.18 * (0.000075 + 0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) - 0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
+  #df_dates[, DECL := 0.006918 - 0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) - 0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) - 0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
+  #df_dates[, ZENITH := 90.833 * pi / 180.0]
+  ## at this point we actually need the LAT/LONG/TIMEZONE
+  #df_dates <- merge(df_stn_dates, df_dates, by = c("DATE"))
+  #df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
+  ## FIX: is this some kind of approximation that can be wrong?
+  ##       breaks with (67.1520291504819, -132.37538245496188)
+  #df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) - tan(LAT * pi / 180.0) * tan(DECL)]
+  ## HACK: keep in range
+  #df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
+  #df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
+  #df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  #df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  #df_all <- merge(df_copy, df_dates, by = COLS_ID)
+  #if (with_solrad) {
+  #  df_all[, HR := hour(TIMESTAMP)]
+  #  df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
+  #  df_all[, HOURANGLE := TST / 4 - 180]
+  #  df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
+  #  ###########################################################################################
+  #  ##################################### DMC-UPDATE ##########################################
+  ### calculateing solar radiation using Hargraeves model suggested at:
+  # ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
+  # df_all[, ZENITH := pmin(pi / 2, ZENITH)]
+  # # need later so keep column
+  # df_all[, COS_ZENITH := cos(ZENITH)]
+  # # Extraterrestrial solar radiation in kW/m^2
+  # df_all[, SOLRAD_EXT := 1.367 * COS_ZENITH]
+  # # Daily total of Extra. Solar Rad in kJ/m^2/day
+  # df_solrad <- df_all[, list(
+  #   SOLRAD_EXT_SUM = sum(SOLRAD_EXT) * 3600,
+  #   SUM_COS_ZENITH = sum(COS_ZENITH),
+  #   TEMP_RANGE = max(TEMP) - min(TEMP)
+  # ), by = COLS_ID]
+  # # Daily surface Solar Rad in kJ/m^2/day
+  # df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
+  # df_all <- merge(df_all, df_solrad, by = COLS_ID)
+  # # Hargreaves hourly surface solar rad in kW/m^2
+  # df_all[, SOLRAD := COS_ZENITH / SUM_COS_ZENITH * SOLRAD_DAY_SUM / 3600]
+  # # this was a reduction so it wasn't the full amount for the grass calculation?
+  # # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
+  # df_all[, SOLRAD := pmax(0, SOLRAD)]
+  # df_all <- merge(df_all, df_solrad, by = COLS_ID)
+  #}
+  #  # colnames(df_all) <- toupper(colnames(df_all))
+  #cols_sun <- intersect(c("SOLRAD", "SUNRISE", "SUNSET"), colnames(df_all))
+  ## don't include temporary calculations
+  #cols <- c(names(df), cols_sun)
+  #df_result <- df_all[, ..cols]
+  #df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  #return(df_result)
+ }
 
 toDecimal <- function(t) {
   return(hour(t) + (minute(t) + (second(t) / 60.0)) / 60.0)
@@ -181,10 +281,12 @@ seasonal_curing <- function(julian_date) {
 }
 
 save_csv <- function(df, file) {
+  df <- data.table(df)
+  COLS_ID <- c("id","wstind")
   COLS_LOC <- c("lat", "long")
-  COLS_DATE <- c("yr", "mon", "day", "hr")
+  COLS_DATE <- c("yr", "mon", "day", "hr", "peak_time", "duration")
   COLS_RH <- c("rh")
-  COLS_WX <- c("temp", "ws")
+  COLS_WX <- c("temp", "ws", "wind_speed_smoothed")
   COLS_PREC <- c("prec")
   COLS_SOLRAD <- c("solrad")
   COLS_INDICES <- c(
@@ -197,18 +299,21 @@ save_csv <- function(df, file) {
     "dsr",
     "gfmc",
     "gsi",
-    "gfwi"
+    "gfwi",
+    "peak_isi_smoothed",
+    "peak_gsi_smoothed"
   )
+  COLS_SUN_TIMES <- c("sunrise", "sunset")
   COLS_EXTRA <- c("mcffmc", "mcgfmc")
   COLS_GFL <- c("grass_fuel_load")
   COLS_PC <- c("percent_cured")
   cols_used <- c()
   result <- copy(df)
   colnames(result) <- tolower(colnames(result))
-  apply_format <- function(cols, fmt, as_int = FALSE) {
+  apply_format <- function(cols, fmt, as_num = FALSE) {
     fix_col <- Vectorize(function(x) {
-      if (as_int) {
-        x <- as.integer(x)
+      if (as_num) {
+        x <- as.numeric(x)
       }
       # HACK: deal with negative 0
       return(gsub("^-0\\.0*$", "0.0", sprintf(fmt, x)))
@@ -223,16 +328,19 @@ save_csv <- function(df, file) {
       }
     }
   }
-  apply_format(COLS_LOC, "%.4f")
+  
+  apply_format(COLS_ID, "%s")
+  apply_format(COLS_LOC, "%.4f", TRUE)
   apply_format(COLS_DATE, "%02d", TRUE)
-  apply_format(COLS_RH, "%.0f")
-  apply_format(COLS_WX, "%.1f")
-  apply_format(COLS_PREC, "%.2f")
-  apply_format(COLS_SOLRAD, "%.4f")
-  apply_format(COLS_INDICES, "%.1f")
-  apply_format(COLS_EXTRA, "%.4f")
-  apply_format(COLS_GFL, "%.2f")
-  apply_format(COLS_PC, "%.1f")
+  apply_format(COLS_RH, "%.0f", TRUE)
+  apply_format(COLS_WX, "%.1f", TRUE)
+  apply_format(COLS_PREC, "%.2f", TRUE)
+  apply_format(COLS_SOLRAD, "%.4f", TRUE)
+  apply_format(COLS_INDICES, "%.1f", TRUE)
+  apply_format(COLS_SUN_TIMES, "%s")
+  apply_format(COLS_EXTRA, "%.4f", TRUE)
+  apply_format(COLS_GFL, "%.2f", TRUE)
+  apply_format(COLS_PC, "%.1f", TRUE)
   # order used columns based on original ordering
   cols <- intersect(names(result), cols_used)
   result <- result[, ..cols]
@@ -243,3 +351,4 @@ dmc_to_moisture_percent <- function(dmc) {
   MC <- 20 + exp(dmc - 244.72) / 43.43
   return(MC)
 }
+

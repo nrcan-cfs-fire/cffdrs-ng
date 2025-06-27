@@ -14,7 +14,7 @@ const double C_WIND[3] = {1.2, 1.7, -1.5};
 
 double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly);
 
-void main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   static const char *header = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
   static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
@@ -154,6 +154,8 @@ void main(int argc, char *argv[])
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  return 0;
 }
 
 /**
