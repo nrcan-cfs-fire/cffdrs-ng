@@ -440,24 +440,22 @@ def dc_wetting(rain_total, lastdc):
     return 400.0 * log(1.0 + 3.937 * rw / smi)
 
 
-def dmc_wetting_between(rain_total_previous, rain_total, lastdmc):
-    if rain_total_previous >= rain_total:
+def dmc_wetting_between(rain, rain_total_previous, lastdmc):
+    if rain == 0:
         return 0.0
     # wetting is calculated based on initial dmc when rain started and rain since
-    current = dmc_wetting(rain_total, lastdmc)
+    current = dmc_wetting(rain_total_previous + rain, lastdmc)
     # recalculate instead of storing so we don't need to reset this too
-    # NOTE: rain_total_previous != (rain_total - cur["prec"]) due to floating point math
     previous = dmc_wetting(rain_total_previous, lastdmc)
     return current - previous
 
 
-def dc_wetting_between(rain_total_previous, rain_total, lastdc):
-    if rain_total_previous >= rain_total:
+def dc_wetting_between(rain, rain_total_previous, lastdc):
+    if rain == 0:
         return 0.0
     # wetting is calculated based on initial dc when rain started and rain since
-    current = dc_wetting(rain_total, lastdc)
+    current = dc_wetting(rain_total_previous + rain, lastdc)
     # recalculate instead of storing so we don't need to reset this too
-    # NOTE: rain_total_previous != (rain_total - cur["prec"]) due to floating point math
     previous = dc_wetting(rain_total_previous, lastdc)
     return current - previous
 
@@ -482,16 +480,12 @@ def duff_moisture_code(
     sunrise,
     sunset,
     dmc_before_rain,
-    rain_total_prev,
-    rain_total,
+    rain_total_prev
 ):
-    if 0 == rain_total:
+    if rain_total_prev + rain == 0:  # canopy reset
         dmc_before_rain = last_dmc
     # apply wetting since last period
-    dmc_wetting_hourly = dmc_wetting_between(
-        rain_total_prev, rain_total, dmc_before_rain
-    )
-    assert 0 <= dmc_wetting_hourly
+    dmc_wetting_hourly = dmc_wetting_between(rain, rain_total_prev, dmc_before_rain)
     # at most apply same wetting as current value (don't go below 0)
     dmc = max(0.0, last_dmc - dmc_wetting_hourly)
     sunrise_start = round(sunrise + OFFSET_SUNRISE)
@@ -522,12 +516,11 @@ def drought_code(
     sunrise,
     sunset,
     dc_before_rain,
-    rain_total_prev,
-    rain_total,
+    rain_total_prev
 ):
-  ###################################################################################
+  ########################################################
   ## for now we are using Mike's method for calculating DC
-  if 0 == rain_total:
+  if rain_total_prev + rain == 0:  # canopy reset
     dc_before_rain = last_dc
   
   offset = 3.0
@@ -574,10 +567,10 @@ def drought_code(
   ###################################################################################
   
     
-   # if 0 == rain_total:
+   # if rain_total_prev + rain == 0:  # canopy reset
     #    dc_before_rain = last_dc
     # apply wetting since last period
-    #dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+    #dc_wetting_hourly = dc_wetting_between(rain, rain_total_prev, dc_before_rain)
     #assert 0 <= dc_wetting_hourly
     # at most apply same wetting as current value (don't go below 0)
     #dc = max(0.0, last_dc - dc_wetting_hourly)
@@ -593,27 +586,22 @@ def drought_code(
 
 
 # Calculate number of drying "units" this hour contributes
-def drying_units(temp, rh, ws, rain, solrad):
+def drying_units():  # temp, rh, ws, rain, solrad
     # for now, just add 1 drying "unit" per hour
     return 1.0
 
 
-def rain_since_intercept_reset(
-    temp, rh, ws, rain, mon, hour, solrad, sunrise, sunset, canopy
-):
+def rain_since_intercept_reset(rain, canopy):
     # for now, want 5 "units" of drying (which is 1 per hour to start)
     TARGET_DRYING_SINCE_INTERCEPT = 5.0
-    if 0 < rain:
-        # no drying if still raining
+    if rain > 0:  # if raining, reset drying
         canopy["drying_since_intercept"] = 0.0
     else:
-        canopy["drying_since_intercept"] += drying_units(temp, rh, ws, rain, solrad)
+        canopy["drying_since_intercept"] += drying_units()
         if canopy["drying_since_intercept"] >= TARGET_DRYING_SINCE_INTERCEPT:
             # reset rain if intercept reset criteria met
-            canopy["rain_total"] = 0.0
+            canopy["rain_total_prev"] = 0.0
             canopy["drying_since_intercept"] = 0.0
-    canopy["rain_total_prev"] = canopy["rain_total"]
-    canopy["rain_total"] += rain
     return canopy
 
 
@@ -663,36 +651,18 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old):
     dc = dc_old
     dc_before_rain = dc_old
     # FIX: just use loop for now so it matches C code
-    canopy = {
-        "rain_total": 0.0,
-        "rain_total_prev": 0.0,
-        "drying_since_intercept": 0.0,
-    }
+    canopy = {"rain_total_prev": 0.0, "drying_since_intercept": 0.0}
     results = []
     for i in range(len(r)):
         cur = r.iloc[i].to_dict()
-        canopy = rain_since_intercept_reset(
-            cur["temp"],
-            cur["rh"],
-            cur["ws"],
-            cur["prec"],
-            cur["mon"],
-            cur["hr"],
-            cur["solrad"],
-            cur["sunrise"],
-            cur["sunset"],
-            canopy,
-        )
-        # use lesser of remaining intercept and current hour's rain
-        rain_ffmc = (
-            0.0
-            if (canopy["rain_total"] <= FFMC_INTERCEPT)
-            else (
-                cur["prec"]
-                if ((canopy["rain_total"] - FFMC_INTERCEPT) > cur["prec"])
-                else canopy["rain_total"] - FFMC_INTERCEPT
-            )
-        )
+        canopy = rain_since_intercept_reset(cur["prec"], canopy)
+        # determine rain for ffmc and whether or not intercept should happen now
+        if canopy["rain_total_prev"] + cur["prec"] <= FFMC_INTERCEPT:  # not enough rain
+            rain_ffmc = 0.0
+        elif canopy["rain_total_prev"] > FFMC_INTERCEPT:  # already saturated canopy
+           rain_ffmc = cur["prec"]
+        else:
+            rain_ffmc = canopy["rain_total_prev"] + cur["prec"] - FFMC_INTERCEPT
         mcffmc = hourly_fine_fuel_moisture(
             cur["temp"], cur["rh"], cur["ws"], rain_ffmc, mcffmc
         )
@@ -712,8 +682,7 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old):
             cur["sunrise"],
             cur["sunset"],
             dmc_before_rain,
-            canopy["rain_total_prev"],
-            canopy["rain_total"],
+            canopy["rain_total_prev"]
         )
         cur["dmc"] = dmc
         dc, dc_before_rain = drought_code(
@@ -728,15 +697,16 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old):
             cur["sunrise"],
             cur["sunset"],
             dc_before_rain,
-            canopy["rain_total_prev"],
-            canopy["rain_total"],
+            canopy["rain_total_prev"]
         )
         cur["dc"] = dc
         cur["isi"] = initial_spread_index(cur["ws"], cur["ffmc"])
         cur["bui"] = buildup_index(dmc, dc)
         cur["fwi"] = fire_weather_index(cur["isi"], cur["bui"])
         cur["dsr"] = daily_severity_rating(cur["fwi"])
-        
+        # done using canopy, can update for next step
+        canopy["rain_total_prev"] += cur["prec"]
+        # grass updates
         mcgfmc_matted = hourly_grass_fuel_moisture(
             cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc_matted
         )
@@ -807,7 +777,7 @@ def hFWI(
     # check for required columns
     if not all(x in wx.columns for x in (
        ['YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC'])):
-       raise RuntimeError("Missing a required input columns")
+       raise RuntimeError("Missing required input column(s)")
     # check for optional columns that have a default
     if not "LAT" in og_names:
         logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
@@ -844,28 +814,28 @@ def hFWI(
         needs_solrad = False
     # check for values outside valid ranges
     if not (all(wx["RH"] >= 0) and all(wx["RH"] <= 100)):
-        raise RuntimeError("All RH must be between 0-100")
+        raise ValueError("All RH must be between 0-100")
     if not all(wx["WS"] >= 0):
-        raise RuntimeError("All WS must be >= 0")
+        raise ValueError("All WS must be >= 0")
     if not all(wx["PREC"] >= 0):
-        raise RuntimeError("All PREC must be >= 0")
+        raise ValueError("All PREC must be >= 0")
     if not (all(wx["MON"] >= 1) and all(wx["MON"] <= 12)):
-        raise RuntimeError("All MON must be between 1-12")
+        raise ValueError("All MON must be between 1-12")
     if (not needs_solrad) and (not all(wx['SOLRAD'] >= 0)):
-       raise RuntimeError("All SOLRAD must be >= 0")
+       raise ValueError("All SOLRAD must be >= 0")
     if ("PERCENT_CURED" in og_names) and (not (
        all(wx["PERCENT_CURED"] >= 0) and all(wx["PERCENT_CURED"] <= 100))):
-       raise RuntimeError("All PERCENT_CURED must be between 0-100")
+       raise ValueError("All PERCENT_CURED must be between 0-100")
     if ("GRASS_FUEL_LOAD" in og_names) and (not (all(wx["GRASS_FUEL_LOAD"] >= 0))):
-       raise RuntimeError("All GRASS_FUEL_LOAD muse be >= 0")
+       raise ValueError("All GRASS_FUEL_LOAD muse be >= 0")
     if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
-        raise RuntimeError("All DAY must be 1-31")
+        raise ValueError("All DAY must be 1-31")
     if not (0 <= ffmc_old <= 101):
-        raise RuntimeError("ffmc_old must be between 0-101")
+        raise ValueError("ffmc_old must be between 0-101")
     if not (dmc_old >= 0):
-        raise RuntimeError("dmc_old must be >= 0")
+        raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
-        raise RuntimeError("dc_old must be >= 0")
+        raise ValueError("dc_old must be >= 0")
     
     # loop over every station year
     results = None

@@ -531,24 +531,23 @@ dc_wetting <- function(rain_total, lastdc) {
   # return(w)
 }
 
-dmc_wetting_between <- function(rain_total_previous, rain_total, lastdmc) {
-  if (rain_total_previous >= rain_total) {
+dmc_wetting_between <- function(rain, rain_total_previous, lastdmc) {
+  if (rain == 0) {
     return(0.0)
   }
   # wetting is calculated based on initial dmc when rain started and rain since
-  current <- dmc_wetting(rain_total, lastdmc)
+  current <- dmc_wetting(rain_total_previous + rain, lastdmc)
   # recalculate instead of storing so we don't need to reset this too
-  # NOTE: rain_total_previous != (rain_total - cur$prec) due to floating point math
   previous <- dmc_wetting(rain_total_previous, lastdmc)
   return(current - previous)
 }
 
-dc_wetting_between <- function(rain_total_previous, rain_total, lastdc) {
-  if (rain_total_previous >= rain_total) {
+dc_wetting_between <- function(rain, rain_total_previous, lastdc) {
+  if (rain == 0) {
     return(0.0)
   }
   # wetting is calculated based on initial dc when rain started and rain since
-  current <- dc_wetting(rain_total, lastdc)
+  current <- dc_wetting(rain_total_previous + rain, lastdc)
   # recalculate instead of storing so we don't need to reset this too
   # NOTE: rain_total_previous != (rain_total - cur$prec) due to floating point math
   previous <- dc_wetting(rain_total_previous, lastdc)
@@ -571,17 +570,12 @@ duff_moisture_code <- function(
     sunrise,
     sunset,
     dmc_before_rain,
-    rain_total_prev,
-    rain_total) {
-  if (0 == rain_total) {
+    rain_total_prev) {
+  if (rain_total_prev + rain == 0) {  # canopy reset
     dmc_before_rain <- last_dmc
   }
   # apply wetting since last period
-  dmc_wetting_hourly <- dmc_wetting_between(
-    rain_total_prev,
-    rain_total,
-    dmc_before_rain
-  )
+  dmc_wetting_hourly <- dmc_wetting_between(rain, rain_total_prev, dmc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
   dmc <- pmax(0.0, last_dmc - dmc_wetting_hourly)
   sunrise_start <- round(sunrise + OFFSET_SUNRISE)
@@ -613,24 +607,20 @@ drought_code <- function(
     sunrise,
     sunset,
     dc_before_rain,
-    rain_total_prev,
-    rain_total) {
-
-##########################################################################################
-  #### for now we are using Mike's method for calculating DC
-  
-  
-  if (0 == rain_total){
+    rain_total_prev) {
+  ########################################################
+  ## for now we are using Mike's method for calculating DC
+  if (rain_total_prev + rain == 0) {
     dc_before_rain <- last_dc
   }
-  
+
   offset <- 3.0
   mult <- 0.015
   pe <- 0
   rw <- 0
   mr <- 0
   mcdc <- 0
-  
+
   last_mc_dc <- 400*exp(-last_dc/400)
   TIME_INCREMENT <- 1.0
   if(temp > 0){
@@ -679,11 +669,11 @@ drought_code <- function(
   ##########################################################################################
 
   
-  if (0 == rain_total) {
+  if (rain_total_prev + rain == 0) {
     dc_before_rain <- last_dc
   }
   # apply wetting since last period
-  dc_wetting_hourly <- dc_wetting_between(rain_total_prev, rain_total, dc_before_rain)
+  dc_wetting_hourly <- dc_wetting_between(rain, rain_total_prev, dc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
   dc <- pmax(0.0, last_dc - dc_wetting_hourly)
   dc_hourly <- dc_drying_hourly(temp)
@@ -699,36 +689,24 @@ drought_code <- function(
 
 
 # Calculate number of drying "units" this hour contributes
-drying_units <- function(temp, rh, ws, rain, solrad) {
+drying_units <- function() {  # temp, rh, ws, rain, solrad
   # for now, just add 1 drying "unit" per hour
   return(1.0)
 }
 
-rain_since_intercept_reset <- function(temp,
-                                       rh,
-                                       ws,
-                                       rain,
-                                       mon,
-                                       hour,
-                                       solrad,
-                                       sunrise,
-                                       sunset,
-                                       canopy) {
+rain_since_intercept_reset <- function(rain, canopy) {
   # for now, want 5 "units" of drying (which is 1 per hour to start)
   TARGET_DRYING_SINCE_INTERCEPT <- 5.0
-  if (0 < rain) {
-    # no drying if still raining
+  if (rain > 0) {  # if raining, reset drying
     canopy$drying_since_intercept <- 0.0
   } else {
-    canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units(temp, rh, ws, rain, solrad)
+    canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units()
     if (canopy$drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT) {
       # reset rain if intercept reset criteria met
-      canopy$rain_total <- 0.0
+      canopy$rain_total_prev <- 0.0
       canopy$drying_since_intercept <- 0.0
     }
   }
-  canopy$rain_total_prev <- canopy$rain_total
-  canopy$rain_total <- canopy$rain_total + rain
   return(canopy)
 }
 
@@ -742,7 +720,6 @@ rain_since_intercept_reset <- function(temp,
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 .stnHFWI <- function(w, ffmc_old, dmc_old, dc_old) {
-  
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -782,37 +759,28 @@ rain_since_intercept_reset <- function(temp,
   dmc_ <- list(dmc = dmc_old, dmc_before_rain = dmc_old)
   dc_ <- list(dc = dc_old, dc_before_rain = dc_old)
   # FIX: just use loop for now so it matches C code
-  canopy <- list(
-    rain_total = 0.0,
-    rain_total_prev = 0.0,
-    drying_since_intercept = 0.0
-  )
+  canopy <- list(rain_total_prev = 0.0, drying_since_intercept = 0.0)
   results <- NULL
   N <- nrow(r)
-  for (i in 1:N)
-  {
-    
+  for (i in 1:N) {
     cur <- copy(r[i])
-    canopy <- rain_since_intercept_reset(
-      cur$temp,
-      cur$rh,
-      cur$ws,
-      cur$prec,
-      cur$mon,
-      cur$hr,
-      cur$solrad,
-      cur$sunrise,
-      cur$sunset,
-      canopy
-    )
-    # use lesser of remaining intercept and current hour's rain
-    rain_ffmc <- ifelse(canopy$rain_total <= FFMC_INTERCEPT,
-      0.0,
-      ifelse((canopy$rain_total - FFMC_INTERCEPT) > cur$prec,
-        cur$prec,
-        canopy$rain_total - FFMC_INTERCEPT
-      )
-    )
+    canopy <- rain_since_intercept_reset(cur$prec, canopy)
+    # determine rain for ffmc and whether or not intercept should happen now
+    if (canopy$rain_total_prev + cur$prec <= FFMC_INTERCEPT) {  # not enough rain
+      rain_ffmc <- 0.0
+    } else if (canopy$rain_total_prev > FFMC_INTERCEPT) {  # already saturated canopy
+      rain_ffmc <- cur$prec
+    } else {
+      rain_ffmc <- canopy$rain_total_prev + cur$prec - FFMC_INTERCEPT
+    }
+
+    # rain_ffmc <- ifelse(canopy$rain_total <= FFMC_INTERCEPT,
+    #   0.0,
+    #   ifelse((canopy$rain_total - FFMC_INTERCEPT) > cur$prec,
+    #     cur$prec,
+    #     canopy$rain_total - FFMC_INTERCEPT
+    #   )
+    # )
     mcffmc <- hourly_fine_fuel_moisture(cur$temp, cur$rh, cur$ws, rain_ffmc, mcffmc)
     cur$mcffmc <- mcffmc
     #  convert to code for output, but keep using moisture % for precision
@@ -830,8 +798,7 @@ rain_since_intercept_reset <- function(temp,
       cur$sunrise,
       cur$sunset,
       dmc_$dmc_before_rain,
-      canopy$rain_total_prev,
-      canopy$rain_total
+      canopy$rain_total_prev
     )
     cur$dmc <- dmc_$dmc
     dc_ <- drought_code(
@@ -846,15 +813,16 @@ rain_since_intercept_reset <- function(temp,
       cur$sunrise,
       cur$sunset,
       dc_$dc_before_rain,
-      canopy$rain_total_prev,
-      canopy$rain_total
+      canopy$rain_total_prev
     )
+    # done using canopy, can update for next step
+    canopy$rain_total_prev <- canopy$rain_total_prev + cur$prec
     cur$dc <- dc_$dc
     cur$isi <- initial_spread_index(cur$ws, cur$ffmc)
     cur$bui <- buildup_index(cur$dmc, cur$dc)
     cur$fwi <- fire_weather_index(cur$isi, cur$bui)
     cur$dsr <- daily_severity_rating(cur$fwi)
-    
+
     mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc_matted)
     #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
     #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
@@ -873,10 +841,9 @@ rain_since_intercept_reset <- function(temp,
       mcgfmc <- mcgfmc_matted
     }
 
-    
     cur$mcgfmc <- mcgfmc
     cur$gfmc <- grass_moisture_code(mcgfmc, cur$percent_cured, cur$ws)
-    
+
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
     cur$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
