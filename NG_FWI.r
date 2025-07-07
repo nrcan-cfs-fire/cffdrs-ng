@@ -427,8 +427,8 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
     0.054 + 0.269 * ws,
     1.4 + 0.838 * (ws - 5.0)**0.844
   )
-  print_out <- c(mc,ws)
-  print(print_out)
+  # print_out <- c(mc,ws)
+  # print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
     ifelse(mc < 20.0 && ws < 10.0,
@@ -697,7 +697,7 @@ drying_units <- function() {  # temp, rh, ws, rain, solrad
 rain_since_intercept_reset <- function(rain, canopy) {
   # for now, want 5 "units" of drying (which is 1 per hour to start)
   TARGET_DRYING_SINCE_INTERCEPT <- 5.0
-  if (rain > 0) {  # if raining, reset drying
+  if (rain > 0 || canopy$rain_total_prev == 0) {  # if raining, reset drying
     canopy$drying_since_intercept <- 0.0
   } else {
     canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units()
@@ -719,7 +719,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param     dmc_old         previous value for Duff Moisture Code
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
-.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old) {
+.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+  dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying) {
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -735,9 +736,9 @@ rain_since_intercept_reset <- function(rain, canopy) {
   r <- as.data.table(copy(w))
   names(r) <- tolower(names(r))
   mcffmc <- fine_fuel_moisture_from_code(ffmc_old)
-  mcgfmc <- mcffmc
-  mcgfmc_standing <- mcffmc
-  mcgfmc_matted <- mcffmc
+  mcgfmc <- mcgfmc_old
+  mcgfmc_standing <- mcgfmc
+  mcgfmc_matted <- mcgfmc
   # just use previous index values from current hour regardless of time
   # # HACK: always start from daily value at noon
   # while (12 != r[1]$hr) {
@@ -756,10 +757,11 @@ rain_since_intercept_reset <- function(rain, canopy) {
   # cur <- r[1]
   # # HACK: add precip tally to current hour so it doesn't get omitted
   # cur$prec <- cur$prec + prec_accum
-  dmc_ <- list(dmc = dmc_old, dmc_before_rain = dmc_old)
-  dc_ <- list(dc = dc_old, dc_before_rain = dc_old)
+  dmc_ <- list(dmc = dmc_old, dmc_before_rain = dmc_before_rain)
+  dc_ <- list(dc = dc_old, dc_before_rain = dc_before_rain)
   # FIX: just use loop for now so it matches C code
-  canopy <- list(rain_total_prev = 0.0, drying_since_intercept = 0.0)
+  canopy <- list(rain_total_prev = prec_cumulative,
+    drying_since_intercept = canopy_drying)
   results <- NULL
   N <- nrow(r)
   for (i in 1:N) {
@@ -815,14 +817,19 @@ rain_since_intercept_reset <- function(rain, canopy) {
       dc_$dc_before_rain,
       canopy$rain_total_prev
     )
-    # done using canopy, can update for next step
-    canopy$rain_total_prev <- canopy$rain_total_prev + cur$prec
     cur$dc <- dc_$dc
     cur$isi <- initial_spread_index(cur$ws, cur$ffmc)
     cur$bui <- buildup_index(cur$dmc, cur$dc)
     cur$fwi <- fire_weather_index(cur$isi, cur$bui)
     cur$dsr <- daily_severity_rating(cur$fwi)
-
+    # done using canopy, can update for next step
+    canopy$rain_total_prev <- canopy$rain_total_prev + cur$prec
+    # save wetting variables for timestep-by-timestep runs
+    cur$dmc_before_rain <- dmc_$dmc_before_rain
+    cur$dc_before_rain <- dc_$dc_before_rain
+    cur$prec_cumulative <- canopy$rain_total_prev
+    cur$canopy_drying <- canopy$drying_since_intercept
+    # grass updates
     mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc_matted)
     #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
     #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
@@ -836,7 +843,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     #print(mcgfmc)
     mcgfmc <- mcgfmc_standing
     standing <- TRUE
-    if (julian(cur$mon, cur$day) < DATE_GRASS){
+    if (julian(cur$mon, cur$day) < DATE_GRASS) {
       standing <- FALSE
       mcgfmc <- mcgfmc_matted
     }
@@ -861,13 +868,11 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 #' @export hFWI
-hFWI <- function(
-  df_wx,
-  timezone,
-  ffmc_old = FFMC_DEFAULT,
-  dmc_old = DMC_DEFAULT,
-  dc_old = DC_DEFAULT
-  ) {
+hFWI <- function(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
+  dc_old = DC_DEFAULT, mcgfmc_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+  dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
+  prec_cumulative = 0.0, canopy_drying = 0.0, silent = FALSE
+  ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
   wasDf <- class(df_wx) == "data.frame"
   if (wasDf) {
@@ -929,6 +934,9 @@ hFWI <- function(
     wx$PERCENT_CURED <- seasonal_curing(julian(wx$MON, wx$DAY))
   }
   if (!"SOLRAD" %in% og_names) {
+    if (!silent) {
+      print("Solar Radiation not provided so will be calculated")
+    }
     needs_solrad <- TRUE
   } else {
     needs_solrad <- FALSE
@@ -958,11 +966,14 @@ hFWI <- function(
     by_stn <- wx[ID == stn]
     for (yr in unique(by_stn$YR)) {
       by_year <- by_stn[YR == yr, ]
-      print(paste0("Running ", stn, " for ", yr))
+      if (!silent) {
+        print(paste0("Running ", stn, " for ", yr))
+      }
       # FIX: convert this to not need to do individual stations
       by_year[, TIMEZONE := timezone]
       w <- getSunlight(by_year, get_solrad = needs_solrad)
-      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old)
+      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+        dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying)
       results <- rbind(results, r)
     }
   }
