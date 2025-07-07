@@ -11,7 +11,7 @@ library(lubridate)
 #' @return              whether each entry in data is 1 unit from the next entry
 isSequential <- function(data) {
   v <- na.omit(unique(data - data.table::shift(data, 1)))
-  return(1 == v[[1]] && length(v) == 1)
+  return(length(data) == 1 || (1 == v[[1]] && length(v) == 1))
 }
 
 #' Determine if data is sequential days
