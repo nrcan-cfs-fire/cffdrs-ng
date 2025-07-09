@@ -613,7 +613,8 @@ def rain_since_intercept_reset(rain, canopy):
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
 # @return                    hourly values FWI and weather stream
-def _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+    mcgfmc_matted_old, mcgfmc_standing_old,
     dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
@@ -625,10 +626,12 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
         raise RuntimeError("Expected a single LONG value for input weather")
     r = w.loc[:]
     r.columns = map(str.lower, r.columns)
-    mcffmc = fine_fuel_moisture_from_code(ffmc_old)
-    mcgfmc = mcgfmc_old
-    mcgfmc_matted = mcgfmc
-    mcgfmc_standing = mcgfmc
+    if not is_mcffmc:
+       mcffmc = fine_fuel_moisture_from_code(ffmc_or_mcffmc_old)
+    else:
+       mcffmc = ffmc_or_mcffmc_old
+    mcgfmc_matted = mcgfmc_matted_old
+    mcgfmc_standing = mcgfmc_standing_old
     # just use previous index values from current hour regardless of time
     # # HACK: always start from daily value at noon
     # while 12 != r.iloc[0]["hr"]:
@@ -708,11 +711,6 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
         cur["dsr"] = daily_severity_rating(cur["fwi"])
         # done using canopy, can update for next step
         canopy["rain_total_prev"] += cur["prec"]
-        # save wetting variables for timestep-by-timestep runs
-        cur["dmc_before_rain"] = dmc_before_rain
-        cur["dc_before_rain"] = dc_before_rain
-        cur["prec_cumulative"] = canopy["rain_total_prev"]
-        cur["canopy_drying"] = canopy["drying_since_intercept"]
         # grass updates
         mcgfmc_matted = hourly_grass_fuel_moisture(
             cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc_matted
@@ -737,12 +735,18 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
           standing = False
           mcgfmc = mcgfmc_matted
         
-        
+        cur["mcgfmc_matted"] = mcgfmc_matted
+        cur["mcgfmc_standing"] = mcgfmc_standing
         cur["mcgfmc"] = mcgfmc
         cur["gfmc"] = grass_moisture_code(mcgfmc, cur["percent_cured"], cur["ws"])
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
         cur["gfwi"] = grass_fire_weather_index(cur["gsi"], DEFAULT_GRASS_FUEL_LOAD)
-        cur["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
+        # save wetting variables for timestep-by-timestep runs
+        cur["dmc_before_rain"] = dmc_before_rain
+        cur["dc_before_rain"] = dc_before_rain
+        cur["prec_cumulative"] = canopy["rain_total_prev"]
+        cur["canopy_drying"] = canopy["drying_since_intercept"]
+        # append results for this row
         results.append(cur)
     r = pd.DataFrame(results)
     del r["index"]
@@ -758,10 +762,13 @@ def _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
 # @param     dmc_old         previous value for Duff Moisture Code
 # @param     dc_old          previous value for Drought Code
 # @return                    hourly values FWI and weather stream
-def hFWI(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
-    dc_old = DC_DEFAULT, mcgfmc_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
-    dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT, prec_cumulative = 0.0,
-    canopy_drying = 0.0, silent = False):
+def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
+    dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
+    mcgfmc_matted_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+    mcgfmc_standing_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+    dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
+    prec_cumulative = 0.0, canopy_drying = 0.0,
+    silent = False):
     wx = df_wx.loc[:]
     # check for allowed alternative names for: ws, prec, yr, hr
     wx.columns = map(str.upper, wx.columns)
@@ -809,6 +816,9 @@ def hFWI(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
                 row["YR"], row["MON"], row["DAY"], row["HR"], row["MINUTE"]
                 ), axis=1
             )
+    wx["TIMEZONE"] = timezone
+    if not "GRASS_FUEL_LOAD" in og_names:
+       wx["GRASS_FUEL_LOAD"] = DEFAULT_GRASS_FUEL_LOAD
     if not "PERCENT_CURED" in og_names:
         wx["PERCENT_CURED"] = wx.apply(lambda row:util.seasonal_curing(
             util.julian(row["MON"], row["DAY"])), axis=1)
@@ -836,8 +846,8 @@ def hFWI(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
        raise ValueError("All GRASS_FUEL_LOAD must be >= 0")
     if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
         raise ValueError("All DAY must be 1-31")
-    if not (0 <= ffmc_old <= 101):
-        raise ValueError("ffmc_old must be between 0-101")
+    if not is_mcffmc and not (0 <= ffmc_or_mcffmc_old <= 101):
+        raise ValueError("ffmc values must be between 0-101")
     if not (dmc_old >= 0):
         raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
@@ -850,9 +860,9 @@ def hFWI(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
-        w.loc[:, "TIMEZONE"] = timezone
         w = util.getSunlight(w, get_solrad=needs_solrad)
-        r = _stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+        r = _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+            mcgfmc_matted_old, mcgfmc_standing_old,
             dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
     

@@ -719,7 +719,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param     dmc_old         previous value for Duff Moisture Code
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
-.stnHFWI <- function(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+.stnHFWI <- function(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+  mcgfmc_matted_old, mcgfmc_standing_old,
   dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying) {
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
@@ -735,10 +736,13 @@ rain_since_intercept_reset <- function(rain, canopy) {
   }
   r <- as.data.table(copy(w))
   names(r) <- tolower(names(r))
-  mcffmc <- fine_fuel_moisture_from_code(ffmc_old)
-  mcgfmc <- mcgfmc_old
-  mcgfmc_standing <- mcgfmc
-  mcgfmc_matted <- mcgfmc
+  if (!is_mcffmc) {
+    mcffmc <- fine_fuel_moisture_from_code(ffmc_or_mcffmc_old)
+  } else {
+    mcffmc <- ffmc_or_mcffmc_old
+  }
+  mcgfmc_matted <- mcgfmc_matted_old
+  mcgfmc_standing <- mcgfmc_standing_old
   # just use previous index values from current hour regardless of time
   # # HACK: always start from daily value at noon
   # while (12 != r[1]$hr) {
@@ -785,7 +789,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     # )
     mcffmc <- hourly_fine_fuel_moisture(cur$temp, cur$rh, cur$ws, rain_ffmc, mcffmc)
     cur$mcffmc <- mcffmc
-    #  convert to code for output, but keep using moisture % for precision
+    # convert to code for output, but keep using moisture % for precision
     cur$ffmc <- fine_fuel_moisture_code(mcffmc)
     # not ideal, but at least encapsulates the code for each index
     dmc_ <- duff_moisture_code(
@@ -824,13 +828,9 @@ rain_since_intercept_reset <- function(rain, canopy) {
     cur$dsr <- daily_severity_rating(cur$fwi)
     # done using canopy, can update for next step
     canopy$rain_total_prev <- canopy$rain_total_prev + cur$prec
-    # save wetting variables for timestep-by-timestep runs
-    cur$dmc_before_rain <- dmc_$dmc_before_rain
-    cur$dc_before_rain <- dc_$dc_before_rain
-    cur$prec_cumulative <- canopy$rain_total_prev
-    cur$canopy_drying <- canopy$drying_since_intercept
     # grass updates
-    mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc_matted)
+    mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws,
+      cur$prec, cur$solrad, mcgfmc_matted)
     #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
     #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
     #which averages 6% or so for rains  (<5mm...between 7% and 5%,    lower for larger rains)(NO intercept)
@@ -838,7 +838,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
     #heating of the grass from solar
     #working at the margin like this should make a nice bracket for moisture between the matted and standing that users can use
     #...reality will be in between the matt and stand
-    mcgfmc_standing <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec*0.06, 0.0, mcgfmc_standing)
+    mcgfmc_standing <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws,
+      cur$prec * 0.06, 0.0, mcgfmc_standing)
     #mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
     #print(mcgfmc)
     mcgfmc <- mcgfmc_standing
@@ -848,12 +849,18 @@ rain_since_intercept_reset <- function(rain, canopy) {
       mcgfmc <- mcgfmc_matted
     }
 
+    cur$mcgfmc_matted <- mcgfmc_matted
+    cur$mcgfmc_standing <- mcgfmc_standing
     cur$mcgfmc <- mcgfmc
     cur$gfmc <- grass_moisture_code(mcgfmc, cur$percent_cured, cur$ws)
-
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
-    cur$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
+    # save wetting variables for timestep-by-timestep runs
+    cur$dmc_before_rain <- dmc_$dmc_before_rain
+    cur$dc_before_rain <- dc_$dc_before_rain
+    cur$prec_cumulative <- canopy$rain_total_prev
+    cur$canopy_drying <- canopy$drying_since_intercept
+    # bind results for this row
     results <- rbind(results, cur)
   }
   return(results)
@@ -868,10 +875,13 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param     dc_old          previous value for Drought Code
 #' @return                    hourly values FWI and weather stream
 #' @export hFWI
-hFWI <- function(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT,
-  dc_old = DC_DEFAULT, mcgfmc_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = FALSE,
+  dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
+  mcgfmc_matted_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+  mcgfmc_standing_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
   dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
-  prec_cumulative = 0.0, canopy_drying = 0.0, silent = FALSE
+  prec_cumulative = 0.0, canopy_drying = 0.0,
+  silent = FALSE
   ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
   wasDf <- class(df_wx) == "data.frame"
@@ -930,6 +940,10 @@ hFWI <- function(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT
   if (!hadTimestamp) {
     wx[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, MINUTE))]
   }
+  wx$TIMEZONE <- timezone
+  if (!"GRASS_FUEL_LOAD" %in% og_names) {
+    wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
+  }
   if (!"PERCENT_CURED" %in% og_names) {
     wx$PERCENT_CURED <- seasonal_curing(julian(wx$MON, wx$DAY))
   }
@@ -956,7 +970,9 @@ hFWI <- function(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT
   stopifnot(wx$SOLRAD >= 0)
   stopifnot(wx$GRASS_FUEL_LOAD >= 0)
   stopifnot(wx$PERCENT_CURED >= 0 & wx$PERCENT_CURED <= 100)
-  stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
+  if (!is_mcffmc) {
+    stopifnot(ffmc_or_mcffmc_old >= 0 & ffmc_or_mcffmc_old <= 101)
+  }
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
 
@@ -970,9 +986,9 @@ hFWI <- function(df_wx, timezone, ffmc_old = FFMC_DEFAULT, dmc_old = DMC_DEFAULT
         print(paste0("Running ", stn, " for ", yr))
       }
       # FIX: convert this to not need to do individual stations
-      by_year[, TIMEZONE := timezone]
       w <- getSunlight(by_year, get_solrad = needs_solrad)
-      r <- .stnHFWI(w, ffmc_old, dmc_old, dc_old, mcgfmc_old,
+      r <- .stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+        mcgfmc_matted_old, mcgfmc_standing_old,
         dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying)
       results <- rbind(results, r)
     }
