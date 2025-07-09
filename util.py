@@ -219,7 +219,9 @@ def getSunlight(df, get_solrad=False, DST = False):
             axis=1,
         )
         df_all["SOLRAD"] = df_all["SOLRAD"].apply(lambda x: max(x, 0))
-    cols_sun = [x for x in ["SOLRAD", "SUNRISE", "SUNSET"] if x in df_all.columns]
+        cols_sun = ["SOLRAD", "SUNRISE", "SUNSET"]
+    else:
+        cols_sun = ["SUNRISE", "SUNSET"]
     cols = list(df.columns) + cols_sun
     df_result = df_all.loc[:, cols]
     df_result["SUNLIGHT_HOURS"] = df_result.apply(

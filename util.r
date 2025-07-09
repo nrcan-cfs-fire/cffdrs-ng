@@ -139,9 +139,11 @@ getSunlight <- function(df, get_solrad = FALSE, DST = FALSE) {
     # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
     df_all[, SOLRAD := pmax(0, SOLRAD)]
     df_all <- merge(df_all, df_solrad, by = COLS_ID)
+    cols_sun <- c("SOLRAD", "SUNRISE", "SUNSET")
+  } else {
+    cols_sun <- c("SUNRISE", "SUNSET")
   }
   # colnames(df_all) <- toupper(colnames(df_all))
-  cols_sun <- intersect(c("SOLRAD", "SUNRISE", "SUNSET"), colnames(df_all))
   # don't include temporary calculations
   cols <- c(names(df), cols_sun)
   df_result <- df_all[, ..cols]
