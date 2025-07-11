@@ -28,7 +28,7 @@ DEFAULT_GRASS_FUEL_LOAD <- 0.35
 FFMC_DEFAULT <- 85
 DMC_DEFAULT <- 6
 DC_DEFAULT <- 15
-GFMC_DEFAULT <- FFMC_DEFAULT 
+GFMC_DEFAULT <- FFMC_DEFAULT
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE <- 55.0
@@ -851,7 +851,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
 
     cur$mcgfmc_matted <- mcgfmc_matted
     cur$mcgfmc_standing <- mcgfmc_standing
-    cur$mcgfmc <- mcgfmc
     cur$gfmc <- grass_moisture_code(mcgfmc, cur$percent_cured, cur$ws)
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
@@ -913,6 +912,14 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   }
   # check for required columns
   stopifnot(all(c('YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC') %in% names(wx)))
+  # check for one hour run and startup moisture all set to default
+  if (nrow(df_wx) == 1 &
+    ffmc_or_mcffmc_old == FFMC_DEFAULT & is_mcffmc == FALSE &
+    dmc_old == DMC_DEFAULT & dc_old == DC_DEFAULT &
+    mcgfmc_matted_old == fine_fuel_moisture_from_code(FFMC_DEFAULT) &
+    mcgfmc_standing_old == fine_fuel_moisture_from_code(FFMC_DEFAULT)) {
+    warning("All startup moisture values set to default in one hour run")
+  }
   # check for optional columns that have a default
   if (!"LAT" %in% og_names) {
     warning(paste0("Using default latitude value of ", DEFAULT_LATITUDE))
@@ -1028,69 +1035,109 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   return(results)
 }
 
-# so this can be run via Rscript
+# run hFWI by command line via Rscript, requires 3 args: input csv, output csv, timezone
+# optional args: ffmc_or_mcffmc, is_mcffmc, dmc, dc, mcgfmc_matted, mcgfmc_standing,
+#                dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying, silent
 if ("--args" %in% commandArgs()) {
-  # parser <- ArgumentParser()
-  # parser$add_argument()
   args <- commandArgs(trailingOnly = TRUE)
-  if (6 == length(args)) {
-    # args <- c("-6", "85", "6", "15", "./out/wx_diurnal_r.csv", "./out/wx_diurnal_fwi_r.csv")
-    timezone <- as.double(args[1])
-    ffmc_old <- as.double(args[2])
-    dmc_old <- as.double(args[3])
-    dc_old <- as.double(args[4])
-    file_in <- args[5]
-    file_out <- args[6]
-    df_wx <- as.data.table(read.csv(file_in))
-    df_fwi <- hFWI(
-      df_wx,
-      timezone = timezone,
-      ffmc_old = ffmc_old,
-      dmc_old = dmc_old,
-      dc_old = dc_old
-    )
-    # reorganize columns
-    colnames_out <- c(
-      "lat",
-      "long",
-      "yr",
-      "mon",
-      "day",
-      "hr",
-      "temp",
-      "rh",
-      "ws",
-      "prec",
-      "date",
-      "timestamp",
-      "timezone",
-      "solrad",
-      "sunrise",
-      "sunset",
-      "ffmc",
-      "dmc",
-      "dc",
-      "isi",
-      "bui",
-      "fwi",
-      "dsr",
-      "gfmc",
-      "gsi",
-      "gfwi",
-      "mcffmc",
-      "mcgfmc",
-      "percent_cured",
-      "grass_fuel_load"
-    )
-    print(colnames_out)
-    if ("id" %in% names(df_fwi)) {
-      colnames_out <- c("id", colnames_out)
-    }
-    df_fwi <- df_fwi[, ..colnames_out]
-    save_csv(df_fwi, file_out)
-  } else {
-    if(args[1] != "SILENCE"){
-      message("Wrong number of arguments") 
-    }
+  if (length(args) < 3) {
+    stop("at least 3 arguments required: input csv, output csv, timezone")
   }
+  input <- args[1]
+  output <- args[2]
+  timezone <- as.numeric(args[3])
+  # load optional arguments if provided, or set to default
+  if (length(args) >= 4) ffmc_or_mcffmc_old <- as.numeric(args[4])
+  else ffmc_or_mcffmc_old <- FFMC_DEFAULT
+  if (length(args) >= 5) is_mcffmc <- as.logical(args[5])
+  else is_mcffmc <- FALSE
+  if (length(args) >= 6) dmc_old <- as.numeric(args[6])
+  else dmc_old <- DMC_DEFAULT
+  if (length(args) >= 7) dc_old <- as.numeric(args[7])
+  else dc_old <- DC_DEFAULT
+  if (length(args) >= 8) mcgfmc_matted_old <- as.numeric(args[8])
+  else mcgfmc_matted_old <- fine_fuel_moisture_from_code(FFMC_DEFAULT)
+  if (length(args) >= 9) mcgfmc_standing_old <- as.numeric(args[9])
+  else mcgfmc_standing_old <- fine_fuel_moisture_from_code(FFMC_DEFAULT)
+  if (length(args) >= 10) dmc_before_rain <- as.numeric(args[10])
+  else dmc_before_rain <- DMC_DEFAULT
+  if (length(args) >= 11) dc_before_rain <- as.numeric(args[11])
+  else dc_before_rain <- DC_DEFAULT
+  if (length(args) >= 12) prec_cumulative <- as.numeric(args[12])
+  else prec_cumulative <- 0.0
+  if (length(args) >= 13) canopy_drying <- as.numeric(args[13])
+  else canopy_drying <- 0.0
+  if (length(args) >= 14) silent <- as.logical(args[14])
+  else silent <- FALSE
+  if (length(args) >= 15) warning("Too many input arguments provided, some unused")
+
+  df_in <- read.csv(input)
+  df_out <- hFWI(df_in, timezone, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+    mcgfmc_matted_old, mcgfmc_standing_old, dmc_before_rain, dc_before_rain,
+    prec_cumulative, canopy_drying, silent)
+  write.csv(df_out, output)
 }
+#   # parser <- ArgumentParser()
+#   # parser$add_argument()
+#   args <- commandArgs(trailingOnly = TRUE)
+#   if (6 == length(args)) {
+#     # args <- c("-6", "85", "6", "15", "./out/wx_diurnal_r.csv", "./out/wx_diurnal_fwi_r.csv")
+#     timezone <- as.double(args[1])
+#     ffmc_old <- as.double(args[2])
+#     dmc_old <- as.double(args[3])
+#     dc_old <- as.double(args[4])
+#     file_in <- args[5]
+#     file_out <- args[6]
+#     df_wx <- as.data.table(read.csv(file_in))
+#     df_fwi <- hFWI(
+#       df_wx,
+#       timezone = timezone,
+#       ffmc_old = ffmc_old,
+#       dmc_old = dmc_old,
+#       dc_old = dc_old
+#     )
+#     # reorganize columns
+#     colnames_out <- c(
+#       "lat",
+#       "long",
+#       "yr",
+#       "mon",
+#       "day",
+#       "hr",
+#       "temp",
+#       "rh",
+#       "ws",
+#       "prec",
+#       "date",
+#       "timestamp",
+#       "timezone",
+#       "solrad",
+#       "sunrise",
+#       "sunset",
+#       "ffmc",
+#       "dmc",
+#       "dc",
+#       "isi",
+#       "bui",
+#       "fwi",
+#       "dsr",
+#       "gfmc",
+#       "gsi",
+#       "gfwi",
+#       "mcffmc",
+#       "mcgfmc",
+#       "percent_cured",
+#       "grass_fuel_load"
+#     )
+#     print(colnames_out)
+#     if ("id" %in% names(df_fwi)) {
+#       colnames_out <- c("id", colnames_out)
+#     }
+#     df_fwi <- df_fwi[, ..colnames_out]
+#     save_csv(df_fwi, file_out)
+#   } else {
+#     if(args[1] != "SILENCE"){
+#       message("Wrong number of arguments") 
+#     }
+#   }
+# }

@@ -1,7 +1,6 @@
 import datetime
 import logging
-import os.path
-import sys
+import argparse
 from math import exp, log, pow, sqrt
 
 import pandas as pd
@@ -737,7 +736,6 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         
         cur["mcgfmc_matted"] = mcgfmc_matted
         cur["mcgfmc_standing"] = mcgfmc_standing
-        cur["mcgfmc"] = mcgfmc
         cur["gfmc"] = grass_moisture_code(mcgfmc, cur["percent_cured"], cur["ws"])
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
         cur["gfwi"] = grass_fire_weather_index(cur["gsi"], DEFAULT_GRASS_FUEL_LOAD)
@@ -789,6 +787,13 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     if not all(x in wx.columns for x in (
        ['YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC'])):
        raise RuntimeError("Missing required input column(s)")
+    # check for one hour run and startup moisture all set to default
+    if (df_wx.shape[0] == 1 and
+        ffmc_or_mcffmc_old == FFMC_DEFAULT and is_mcffmc == False and
+        dmc_old == DMC_DEFAULT and dc_old == DC_DEFAULT and
+        mcgfmc_matted_old == fine_fuel_moisture_from_code(FFMC_DEFAULT) and
+        mcgfmc_standing_old == fine_fuel_moisture_from_code(FFMC_DEFAULT)):
+        logger.warning("All startup moisture values set to default in one hour run")
     # check for optional columns that have a default
     if not "LAT" in og_names:
         logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
@@ -846,8 +851,12 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
        raise ValueError("All GRASS_FUEL_LOAD must be >= 0")
     if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
         raise ValueError("All DAY must be 1-31")
-    if not is_mcffmc and not (0 <= ffmc_or_mcffmc_old <= 101):
-        raise ValueError("ffmc values must be between 0-101")
+    if is_mcffmc:
+       if not (0 <= ffmc_or_mcffmc_old <= 250):
+          raise ValueError("mcffmc values must be between 0-250")
+    else:
+        if not (0 <= ffmc_or_mcffmc_old <= 101):
+            raise ValueError("ffmc values must be between 0-101")
     if not (dmc_old >= 0):
         raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
@@ -889,50 +898,41 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     return results
 
 
-if "__main__" == __name__:
-    args = sys.argv[1:]
-    if len(args) != 6:
-        logger.fatal(
-            "\n".join(
-                [
-                    f"Command line:   {sys.argv[0]}  <local GMToffset> <starting FFMC>  <starting DMC> starting <DC> <input file>  <output file>\n",
-                    "<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )",
-                    "INPUT FILE format must be HOURLY weather data, comma separated and take the form",
-                    "All times should be local standard time",
-                    "Latitude,Longitude,YEAR,MONTH,DAY,HOUR,Temperature(C),Relative_humiditiy(%%),Wind_speed(km/h),Rainfall(mm)\n",
-                ]
-            )
-        )
-        sys.exit(1)
-    outfile = args[5]
-    infile = args[4]
-    if not os.path.exists(infile):
-        logger.fatal(f"/n/n ***** FILE  {infile}  does not exist\n")
-        sys.exit(1)
-    timezone = int(args[0])
-    if timezone < -9 or timezone > -2:
-        logger.fatal(
-            "/n *****   Local time zone adjustment must be vaguely in CAnada so between -9 and -2"
-        )
-        sys.exit(1)
-    ffmc_old = float(args[1])
-    if ffmc_old > 101 or ffmc_old < 0:
-        logger.fatal(" /n/n *****   FFMC must be between 0 and 101")
-        sys.exit(1)
-    dmc_old = float(args[2])
-    if dmc_old < 0:
-        logger.fatal(" /n/n *****  starting DMC must be >=0")
-        sys.exit(1)
-    dc_old = float(args[3])
-    if dc_old < 0:
-        logger.fatal(" /n/n *****   starting DC must be >=0\n")
-        sys.exit(1)
-    logger.debug(f"TZ={timezone}    start ffmc={ffmc_old}  dmc={dmc_old}\n")
-    # colnames_in = ["lat", "long", "year", "mon", "day", "hour", "temp", "rh", "wind", "rain"]
-    # df = pd.read_csv(infile, header=None, names=colnames_in)
-    df_wx = pd.read_csv(infile)
-    logger.debug(df_wx)
-    # FIX: add check for sequential hours in input
-    # FIX: check for all columns being present
-    df_fwi = hFWI(df_wx, timezone, ffmc_old, dmc_old, dc_old)
-    util.save_csv(df_fwi, outfile)
+if __name__ == "__main__":
+    # run hFWI by command line. run with option -h or --help to see usage
+    parser = argparse.ArgumentParser(prog = "NG_FWI")
+    # add all inputs to hFWI
+    parser.add_argument("input", help = "Input csv data file")
+    parser.add_argument("output", help = "Output csv file name and/or location")
+    parser.add_argument("timezone", help = "UTC offset for all input data", type = float)
+    parser.add_argument("ffmc_or_mcffmc_old", nargs = "?", default = FFMC_DEFAULT,
+        type = float, help = "Starting FFMC or mcffmc value (default FFMC = 85)")
+    parser.add_argument("is_mcffmc", nargs = "?", default = False, type = bool,
+        help = "Whether ffmc_or_mcffmc_old is mcffmc (default False, meaning FFMC)")
+    parser.add_argument("dmc_old", nargs = "?", default = DMC_DEFAULT, type = float,
+        help = "Starting DMC (default 6)")
+    parser.add_argument("dc_old", nargs = "?", default = DC_DEFAULT, type = float,
+        help = "Starting DC (default 15)")
+    parser.add_argument("mcgfmc_matted_old", nargs = "?",
+        default = fine_fuel_moisture_from_code(FFMC_DEFAULT), type = float,
+        help = "Starting mcgfmc for matted fuels (default mcffmc when FFMC = 85)")
+    parser.add_argument("mcgfmc_standing_old", nargs = "?",
+        default = fine_fuel_moisture_from_code(FFMC_DEFAULT), type = float,
+        help = "Starting mcgfmc for standing fuels (default mcffmc when FFMC = 85)")
+    parser.add_argument("dmc_before_rain", nargs = "?", default = DMC_DEFAULT,
+        type = float, help = "Starting DMC before rain (default 6)")
+    parser.add_argument("dc_before_rain", nargs = "?", default = DC_DEFAULT,
+        type = float, help = "Starting DC before rain (default 15)")
+    parser.add_argument("prec_cumulative", nargs = "?", default = 0.0, type = float,
+        help = "Starting cumulative precipitation of rain event (default 0)")
+    parser.add_argument("canopy_drying", nargs = "?", default = 0.0, type = float,
+        help = "Starting canopy drying, or consecutive hours of no prec (default 0)")
+    parser.add_argument("-s", "--silent", action = "store_true")
+
+    args = parser.parse_args()
+    df_in = pd.read_csv(args.input)
+    df_out = hFWI(df_in, args.timezone, args.ffmc_or_mcffmc_old, args.is_mcffmc,
+        args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
+        args.dmc_before_rain, args.dc_before_rain, args.prec_cumulative,
+        args.canopy_drying, args.silent)
+    df_out.to_csv(args.output)
