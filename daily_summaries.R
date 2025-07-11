@@ -285,8 +285,6 @@ generate_daily_summaries <- function(hourly_data){
       if (julian(pick_month, pick_day) < DATE_GRASS){
         standing <- FALSE
       }
-      print_out <- c(pick_year, pick_month, pick_day, julian(pick_month,pick_day))
-      print(print_out)
       peak_gsi_smooth <- grass_spread_index(smooth_ws_peak,gfmc,by_date[i,percent_cured], standing)
       
       
@@ -322,7 +320,6 @@ generate_daily_summaries <- function(hourly_data){
 
 
 # so this can be run via Rscript
-print("echo test 1")
 #pulled command line args out a top of script
 if (length(args)>0){
   if (2 == length(args)) {
