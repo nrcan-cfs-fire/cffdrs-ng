@@ -47,14 +47,34 @@ DC_INTERCEPT <- 2.8
 
 DATE_GRASS <- 181
 
-# Fine Fuel Moisture Code (FFMC) from moisture %
-fine_fuel_moisture_code <- function(moisture_percent) {
-  return((59.5 * (250 - moisture_percent) / (MPCT_TO_MC + moisture_percent)))
+# Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
+ffmc_to_mcffmc <- function(ffmc) {
+  return(MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc))
 }
 
-# Fine Fuel Moisture (%) from FFMC
-fine_fuel_moisture_from_code <- function(moisture_code) {
-  return(MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code))
+# fine fuel moisture content (%) to FFMC
+fine_fuel_moisture_code <- function(mcffmc) {
+  return(59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc))
+}
+
+# Duff Moisture Code (DMC) to duff moisture content (%)
+dmc_to_mcdmc <- function(dmc) {
+   return((280 / exp(dmc / 43.43)) + 20)
+}
+
+# duff moisture content (%) to DMC
+mcdmc_to_dmc <- function(mcdmc) {
+   return(43.43 * log(280 / (mcdmc - 20)))
+}
+
+# Drought Code (DC) to DC moisture content(%)
+dc_to_mcdc <- function(dc) {
+   return(400 * exp(-dc / 400))
+}
+
+# DC moisture content (%) to DC
+mcdc_to_dc <- function(mcdc) {
+   return(400 * log(400 / mcdc))
 }
 
 #' Calculate hourly Fine Fuel Moisture Code (FFMC)
@@ -121,7 +141,7 @@ hourly_fine_fuel_moisture <- function(temp, rh, ws, rain, lastmc) {
 #' @param ffmc            Fine Fuel Moisure Code
 #' @return                Initial Spread Index
 initial_spread_index <- function(ws, ffmc) {
-  fm <- fine_fuel_moisture_from_code(ffmc)
+  fm <- ffmc_to_mcffmc(ffmc)
   fw <- ifelse(40 <= ws,
     12 * (1 - exp(-0.0818 * (ws - 28))),
     exp(0.05039 * ws)
@@ -336,7 +356,7 @@ curing_factor <- function(cur) {
 
 
 
-grass_moisture_code <- function(mc, cur, wind) {
+mcgfmc_to_gfmc <- function(mc, cur, wind) {
   #   THIS is the way to get the CODE value from cured grassland moisture
   #     IT takes fully cured grass moisture  (from the grass moisture model (100% cured)  (from the FMS...updated version of Wotton 2009)
   #        and a estimate of the fuel complex curing (as percent cured)
@@ -503,9 +523,9 @@ dmc_wetting <- function(rain_total, lastdmc) {
     )
   )
   rw <- 0.92 * rain_total - 1.27
-  wmi <- 20 + 280 / exp(0.023 * lastdmc)
+  wmi <- dmc_to_mcdmc(lastdmc)
   wmr <- wmi + 1000 * rw / (48.77 + b * rw)
-  dmc <- 43.43 * (5.6348 - log(wmr - 20))
+  dmc <- mcdmc_to_dmc(wmr)
   if (dmc <= 0.0) {
     dmc <- 0.0
   }
@@ -621,7 +641,7 @@ drought_code <- function(
   mr <- 0
   mcdc <- 0
 
-  last_mc_dc <- 400*exp(-last_dc/400)
+  last_mc_dc <- dc_to_mcdc(last_dc)
   TIME_INCREMENT <- 1.0
   if(temp > 0){
     pe <- mult*temp + offset/16.0
@@ -662,7 +682,7 @@ drought_code <- function(
     mcdc <- 400.0
   }
   
-  dc <- 400.0*log(400.0/mcdc)
+  dc <- mcdc_to_dc(mcdc)
   
   
   return(list(dc = dc, dc_before_rain = dc_before_rain))
@@ -737,7 +757,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
   r <- as.data.table(copy(w))
   names(r) <- tolower(names(r))
   if (!is_mcffmc) {
-    mcffmc <- fine_fuel_moisture_from_code(ffmc_or_mcffmc_old)
+    mcffmc <- ffmc_to_mcffmc(ffmc_or_mcffmc_old)
   } else {
     mcffmc <- ffmc_or_mcffmc_old
   }
@@ -851,7 +871,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
 
     cur$mcgfmc_matted <- mcgfmc_matted
     cur$mcgfmc_standing <- mcgfmc_standing
-    cur$gfmc <- grass_moisture_code(mcgfmc, cur$percent_cured, cur$ws)
+    cur$gfmc <- mcgfmc_to_gfmc(mcgfmc, cur$percent_cured, cur$ws)
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
     # save wetting variables for timestep-by-timestep runs
@@ -876,8 +896,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @export hFWI
 hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = FALSE,
   dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
-  mcgfmc_matted_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
-  mcgfmc_standing_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+  mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
+  mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
   prec_cumulative = 0.0, canopy_drying = 0.0,
   silent = FALSE
@@ -916,9 +936,10 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   if (nrow(df_wx) == 1 &
     ffmc_or_mcffmc_old == FFMC_DEFAULT & is_mcffmc == FALSE &
     dmc_old == DMC_DEFAULT & dc_old == DC_DEFAULT &
-    mcgfmc_matted_old == fine_fuel_moisture_from_code(FFMC_DEFAULT) &
-    mcgfmc_standing_old == fine_fuel_moisture_from_code(FFMC_DEFAULT)) {
-    warning("All startup moisture values set to default in one hour run")
+    mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &
+    mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)) {
+    warning(paste("Startup moisture values set to default (instead of previous)",
+      "in a one hour run"))
   }
   # check for optional columns that have a default
   if (!"LAT" %in% og_names) {
@@ -1056,9 +1077,9 @@ if ("--args" %in% commandArgs()) {
   if (length(args) >= 7) dc_old <- as.numeric(args[7])
   else dc_old <- DC_DEFAULT
   if (length(args) >= 8) mcgfmc_matted_old <- as.numeric(args[8])
-  else mcgfmc_matted_old <- fine_fuel_moisture_from_code(FFMC_DEFAULT)
+  else mcgfmc_matted_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
   if (length(args) >= 9) mcgfmc_standing_old <- as.numeric(args[9])
-  else mcgfmc_standing_old <- fine_fuel_moisture_from_code(FFMC_DEFAULT)
+  else mcgfmc_standing_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
   if (length(args) >= 10) dmc_before_rain <- as.numeric(args[10])
   else dmc_before_rain <- DMC_DEFAULT
   if (length(args) >= 11) dc_before_rain <- as.numeric(args[11])
@@ -1077,67 +1098,3 @@ if ("--args" %in% commandArgs()) {
     prec_cumulative, canopy_drying, silent)
   write.csv(df_out, output)
 }
-#   # parser <- ArgumentParser()
-#   # parser$add_argument()
-#   args <- commandArgs(trailingOnly = TRUE)
-#   if (6 == length(args)) {
-#     # args <- c("-6", "85", "6", "15", "./out/wx_diurnal_r.csv", "./out/wx_diurnal_fwi_r.csv")
-#     timezone <- as.double(args[1])
-#     ffmc_old <- as.double(args[2])
-#     dmc_old <- as.double(args[3])
-#     dc_old <- as.double(args[4])
-#     file_in <- args[5]
-#     file_out <- args[6]
-#     df_wx <- as.data.table(read.csv(file_in))
-#     df_fwi <- hFWI(
-#       df_wx,
-#       timezone = timezone,
-#       ffmc_old = ffmc_old,
-#       dmc_old = dmc_old,
-#       dc_old = dc_old
-#     )
-#     # reorganize columns
-#     colnames_out <- c(
-#       "lat",
-#       "long",
-#       "yr",
-#       "mon",
-#       "day",
-#       "hr",
-#       "temp",
-#       "rh",
-#       "ws",
-#       "prec",
-#       "date",
-#       "timestamp",
-#       "timezone",
-#       "solrad",
-#       "sunrise",
-#       "sunset",
-#       "ffmc",
-#       "dmc",
-#       "dc",
-#       "isi",
-#       "bui",
-#       "fwi",
-#       "dsr",
-#       "gfmc",
-#       "gsi",
-#       "gfwi",
-#       "mcffmc",
-#       "mcgfmc",
-#       "percent_cured",
-#       "grass_fuel_load"
-#     )
-#     print(colnames_out)
-#     if ("id" %in% names(df_fwi)) {
-#       colnames_out <- c("id", colnames_out)
-#     }
-#     df_fwi <- df_fwi[, ..colnames_out]
-#     save_csv(df_fwi, file_out)
-#   } else {
-#     if(args[1] != "SILENCE"){
-#       message("Wrong number of arguments") 
-#     }
-#   }
-# }

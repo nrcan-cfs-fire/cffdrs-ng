@@ -46,18 +46,31 @@ FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
-
 DATE_GRASS = 181
 
-# Fine Fuel Moisture Code (FFMC) from moisture %
-def fine_fuel_moisture_code(moisture_percent):
-    return 59.5 * (250 - moisture_percent) / (MPCT_TO_MC + moisture_percent)
+# Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
+def ffmc_to_mcffmc(ffmc):
+    return MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc)
 
+# fine fuel moisture content (%) to FFMC
+def mcffmc_to_ffmc(mcffmc):
+    return 59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc)
 
-# Fine Fuel Moisture (%) from FFMC
-def fine_fuel_moisture_from_code(moisture_code):
-    return MPCT_TO_MC * (101 - moisture_code) / (59.5 + moisture_code)
+# Duff Moisture Code (DMC) to duff moisture content (%)
+def dmc_to_mcdmc(dmc):
+   return (280 / exp(dmc / 43.43)) + 20
 
+# duff moisture content (%) to DMC
+def mcdmc_to_dmc(mcdmc):
+   return 43.43 * log(280 / (mcdmc - 20))
+
+# Drought Code (DC) to DC moisture content(%)
+def dc_to_mcdc(dc):
+   return 400 * exp(-dc / 400)
+
+# DC moisture content (%) to DC
+def mcdc_to_dc(mcdc):
+   return 400 * log(400 / mcdc)
 
 # Calculate hourly Fine Fuel Moisture Code (FFMC)
 #
@@ -105,7 +118,7 @@ def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
 # @param ffmc            Fine Fuel Moisure Code
 # @return                Initial Spread Index
 def initial_spread_index(ws, ffmc):
-    fm = fine_fuel_moisture_from_code(ffmc)
+    fm = ffmc_to_mcffmc(ffmc)
     fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= ws) else exp(0.05039 * ws)
     ff = 91.9 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
     isi = 0.208 * fw * ff
@@ -261,7 +274,7 @@ def curing_factor(cur):
     return cf
 
 
-def grass_moisture_code(mc, cur, wind):
+def mcgfmc_to_gfmc(mc, cur, wind):
     #   THIS is the way to get the CODE value from cured grassland moisture
     #     IT takes fully cured grass moisture  (from the grass moisture model (100% cured)  (from the FMS...updated version of Wotton 2009)
     #        and a estimate of the fuel complex curing (as percent cured)
@@ -308,7 +321,7 @@ def grass_moisture_code(mc, cur, wind):
     # return (59.5*(250.0-egmc)/(MPCT_TO_MC + egmc))
     if egmc > 250.0:
       egmc = 250.0
-    return fine_fuel_moisture_code(egmc)
+    return mcffmc_to_ffmc(egmc)
 
 
 def matted_grass_spread_ROS(ws, mc, cur):
@@ -418,10 +431,10 @@ def dmc_wetting(rain_total, lastdmc):
         )
     )
     rw = 0.92 * rain_total - 1.27
-    wmi = 20 + 280 / exp(0.023 * lastdmc)
+    wmi = dmc_to_mcdmc(lastdmc)
     # This is the change in MC (moisturecontent)  from FULL DAY's rain
     wmr = wmi + 1000 * rw / (48.77 + b * rw)
-    dmc = 43.43 * (5.6348 - log(wmr - 20))
+    dmc = mcdmc_to_dmc(wmr)
     if dmc <= 0.0:
         dmc = 0.0
     # total amount of wetting since lastdmc
@@ -529,7 +542,7 @@ def drought_code(
   mr = 0
   mcdc = 0
     
-  last_mc_dc = 400*exp(-last_dc/400)
+  last_mc_dc = dc_to_mcdc(last_dc)
   TIME_INCREMENT = 1.0
   if temp > 0:
     pe = mult*temp + offset/16.0
@@ -559,7 +572,7 @@ def drought_code(
   if mcdc > 400.0:
     mcdc= 400.0
       
-  dc = 400.0*log(400/mcdc)
+  dc = mcdc_to_dc(mcdc)
 
   return (dc, dc_before_rain)
   
@@ -626,7 +639,7 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     r = w.loc[:]
     r.columns = map(str.lower, r.columns)
     if not is_mcffmc:
-       mcffmc = fine_fuel_moisture_from_code(ffmc_or_mcffmc_old)
+       mcffmc = ffmc_to_mcffmc(ffmc_or_mcffmc_old)
     else:
        mcffmc = ffmc_or_mcffmc_old
     mcgfmc_matted = mcgfmc_matted_old
@@ -672,7 +685,7 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         )
         cur["mcffmc"] = mcffmc
         #  convert to code for output, but keep using moisture % for precision
-        cur["ffmc"] = fine_fuel_moisture_code(mcffmc)
+        cur["ffmc"] = mcffmc_to_ffmc(mcffmc)
         # not ideal, but at least encapsulates the code for each index
         dmc, dmc_before_rain = duff_moisture_code(
             dmc,
@@ -736,7 +749,7 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         
         cur["mcgfmc_matted"] = mcgfmc_matted
         cur["mcgfmc_standing"] = mcgfmc_standing
-        cur["gfmc"] = grass_moisture_code(mcgfmc, cur["percent_cured"], cur["ws"])
+        cur["gfmc"] = mcgfmc_to_gfmc(mcgfmc, cur["percent_cured"], cur["ws"])
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
         cur["gfwi"] = grass_fire_weather_index(cur["gsi"], DEFAULT_GRASS_FUEL_LOAD)
         # save wetting variables for timestep-by-timestep runs
@@ -762,8 +775,8 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
 # @return                    hourly values FWI and weather stream
 def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
-    mcgfmc_matted_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
-    mcgfmc_standing_old = fine_fuel_moisture_from_code(FFMC_DEFAULT),
+    mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
+    mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
     prec_cumulative = 0.0, canopy_drying = 0.0,
     silent = False):
@@ -791,9 +804,10 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     if (df_wx.shape[0] == 1 and
         ffmc_or_mcffmc_old == FFMC_DEFAULT and is_mcffmc == False and
         dmc_old == DMC_DEFAULT and dc_old == DC_DEFAULT and
-        mcgfmc_matted_old == fine_fuel_moisture_from_code(FFMC_DEFAULT) and
-        mcgfmc_standing_old == fine_fuel_moisture_from_code(FFMC_DEFAULT)):
-        logger.warning("All startup moisture values set to default in one hour run")
+        mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) and
+        mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)):
+        logger.warning("Startup moisture values set to default (instead of previous) " +
+                       "in a one hour run")
     # check for optional columns that have a default
     if not "LAT" in og_names:
         logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
@@ -914,10 +928,10 @@ if __name__ == "__main__":
     parser.add_argument("dc_old", nargs = "?", default = DC_DEFAULT, type = float,
         help = "Starting DC (default 15)")
     parser.add_argument("mcgfmc_matted_old", nargs = "?",
-        default = fine_fuel_moisture_from_code(FFMC_DEFAULT), type = float,
+        default = ffmc_to_mcffmc(FFMC_DEFAULT), type = float,
         help = "Starting mcgfmc for matted fuels (default mcffmc when FFMC = 85)")
     parser.add_argument("mcgfmc_standing_old", nargs = "?",
-        default = fine_fuel_moisture_from_code(FFMC_DEFAULT), type = float,
+        default = ffmc_to_mcffmc(FFMC_DEFAULT), type = float,
         help = "Starting mcgfmc for standing fuels (default mcffmc when FFMC = 85)")
     parser.add_argument("dmc_before_rain", nargs = "?", default = DMC_DEFAULT,
         type = float, help = "Starting DMC before rain (default 6)")
