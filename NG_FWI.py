@@ -48,27 +48,45 @@ DC_INTERCEPT = 2.8
 
 DATE_GRASS = 181
 
-# Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
+##
+# Convert to fine fuel moisture content (%)
+# @param ffmc       Fine Fuel Moisture Code (FFMC)
+# @return           fine fuel moisture content (%)
 def ffmc_to_mcffmc(ffmc):
     return MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc)
 
-# fine fuel moisture content (%) to FFMC
+##
+# Convert to FFMC
+# @param mcffmc     fine fuel moisture content (%)
+# @return           FFMC
 def mcffmc_to_ffmc(mcffmc):
     return 59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc)
 
-# Duff Moisture Code (DMC) to duff moisture content (%)
+##
+# Convert to duff moisture content (%)
+# @param dmc        Duff Moisture Code (DMC)
+# @return           duff moisture content (%)
 def dmc_to_mcdmc(dmc):
    return (280 / exp(dmc / 43.43)) + 20
 
-# duff moisture content (%) to DMC
+##
+# Convert to DMC
+# @param mcdmc      duff moisture content (%)
+# @return           DMC
 def mcdmc_to_dmc(mcdmc):
    return 43.43 * log(280 / (mcdmc - 20))
 
-# Drought Code (DC) to DC moisture content(%)
+##
+# Convert to DC moisture content(%)
+# @param dc         Drought Code (DC)
+# @return           DC moisture content (%)
 def dc_to_mcdc(dc):
    return 400 * exp(-dc / 400)
 
-# DC moisture content (%) to DC
+##
+# Convert to DC
+# @param mcdc       DC moisture content (%)
+# @return           DC
 def mcdc_to_dc(mcdc):
    return 400 * log(400 / mcdc)
 

@@ -53,7 +53,7 @@ ffmc_to_mcffmc <- function(ffmc) {
 }
 
 # fine fuel moisture content (%) to FFMC
-fine_fuel_moisture_code <- function(mcffmc) {
+mcffmc_to_ffmc <- function(mcffmc) {
   return(59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc))
 }
 
@@ -402,7 +402,7 @@ mcgfmc_to_gfmc <- function(mc, cur, wind) {
   if (egmc > 250.0){
     egmc <- 250.0
   }
-  return(fine_fuel_moisture_code(egmc))
+  return(mcffmc_to_ffmc(egmc))
 }
 
 
@@ -810,7 +810,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     mcffmc <- hourly_fine_fuel_moisture(cur$temp, cur$rh, cur$ws, rain_ffmc, mcffmc)
     cur$mcffmc <- mcffmc
     # convert to code for output, but keep using moisture % for precision
-    cur$ffmc <- fine_fuel_moisture_code(mcffmc)
+    cur$ffmc <- mcffmc_to_ffmc(mcffmc)
     # not ideal, but at least encapsulates the code for each index
     dmc_ <- duff_moisture_code(
       dmc_$dmc,
