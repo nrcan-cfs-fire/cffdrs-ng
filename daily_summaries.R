@@ -1,13 +1,6 @@
 library(data.table)
 library(lubridate)
 
-#stops NG_FWI console from reporting wrong number of parameters
-args <- c()
-if("--args" %in% commandArgs()){
-  args <- commandArgs(trailingOnly = TRUE)
-  commandArgs <- function(...) c("SILENCE")  
-}
-
 source("NG_FWI.r")
 source("util.r")
 
@@ -192,7 +185,7 @@ generate_daily_summaries <- function(hourly_data){
   
   results <- NULL
   for (stn in unique(hourly_data$id)) {
-    print(stn)
+    print(paste("Summarizing", stn, "to daily"))
     by_stn <- hourly_data[id == stn]
     by_stn[,pseudo_DATE := pseudo_date(yr,mon,day,hr)]
     
@@ -201,6 +194,7 @@ generate_daily_summaries <- function(hourly_data){
       by_date <- by_stn[pseudo_DATE == p_date, ]
       
       peak_time_traditional_spot <- which(by_date$hr == 17)
+      # if this day doesn't go up to hour 17, skip
       if(length(peak_time_traditional_spot) == 0){
         next
       }
@@ -285,7 +279,8 @@ generate_daily_summaries <- function(hourly_data){
       if (julian(pick_month, pick_day) < DATE_GRASS){
         standing <- FALSE
       }
-      peak_gsi_smooth <- grass_spread_index(smooth_ws_peak,gfmc,by_date[i,percent_cured], standing)
+      peak_gsi_smooth <- grass_spread_index(smooth_ws_peak, gfmc,
+        by_date[peak_time, percent_cured], standing)
       
       
       sunrise_val <- by_date[peak_time, sunrise]
@@ -306,10 +301,15 @@ generate_daily_summaries <- function(hourly_data){
       
     }
   }
-  
-  colnames(results) <- c("wstind","yr","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed", "peak_gsi_smoothed", "ffmc","dmc","dc","isi","bui","fwi","dsr", "gfmc", "gsi", "gfwi", "max_ffmc", "sunrise", "sunset")
+  colnames(results) <- c("wstind", "yr", "mon", "day", "peak_time", "duration",
+    "wind_speed_smoothed", "peak_isi_smoothed", "peak_gsi_smoothed",
+    "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi", "max_ffmc",
+    "sunrise", "sunset")
 
-  results <- results[,c("wstind","yr","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","peak_gsi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr", "gfmc", "gsi", "gfwi","sunrise", "sunset")]
+  results <- results[, c("wstind", "yr", "mon", "day", "peak_time", "duration",
+    "wind_speed_smoothed", "peak_isi_smoothed", "peak_gsi_smoothed",
+    "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi",
+    "sunrise", "sunset")]
   
   results <- data.frame(results)
   
@@ -320,8 +320,9 @@ generate_daily_summaries <- function(hourly_data){
 
 
 # so this can be run via Rscript
-#pulled command line args out a top of script
-if (length(args)>0){
+if ("--args" %in% commandArgs() && sys.nframe() == 0) {
+  args <- commandArgs(trailingOnly = TRUE)
+  # commandArgs <- function(...) c("SILENCE")
   if (2 == length(args)) {
     # args: --input_file --output_file
     input <- args[1]
@@ -334,10 +335,3 @@ if (length(args)>0){
     message("Wrong number of arguments: arguments are <input_file> <output_file>")
   }
 }
-
-
-
-
-
-
-

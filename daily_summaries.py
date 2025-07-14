@@ -87,7 +87,7 @@ def generate_daily_summaries(hourly_data):
   results = pd.DataFrame(columns=cols)
   
   for stn in hourly_data["id"].unique():
-    #print(stn)
+    print("Summarizing " + stn + " to daily")
     by_stn = hourly_data.loc[hourly_data["id"] == stn]
     by_stn["pseudo_DATE"] =  by_stn.apply(
             lambda row: pseudo_date(
@@ -100,7 +100,7 @@ def generate_daily_summaries(hourly_data):
     for p_date in by_stn["pseudo_DATE"].unique():
       by_date = by_stn.loc[by_stn["pseudo_DATE"] == p_date]
 
-
+      # if this day doesn't go up to hour 17, skip
       if ((by_date.reset_index()).index[by_date["hr"] == 17].tolist().__len__() == 0):
         continue
 
@@ -196,13 +196,16 @@ def generate_daily_summaries(hourly_data):
       sunset_formated = "{}:{}".format(int(sunset_val),int(60*(sunset_val-int(sunset_val))))
 
 
-      daily_report_line = [by_date["id"].unique()[0], pick_year, pick_month, pick_day, peak_time, duration, smooth_ws_peak, peak_isi_smooth, peak_gsi_smooth, ffmc, dmc,  dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi, sunrise_formated, sunset_formated]
+      daily_report_line = [by_date["id"].unique()[0], pick_year, pick_month, pick_day,
+        peak_time, duration, smooth_ws_peak, peak_isi_smooth, peak_gsi_smooth,
+        ffmc, dmc, dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi,
+        sunrise_formated, sunset_formated]
       
       daily_report = pd.DataFrame(columns=cols)
       daily_report.loc[0] = daily_report_line
 
       
-      results = pd.concat([results,daily_report])
+      results = pd.concat([results, daily_report])
 
   
   results = results[["wstind","yr","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","peak_gsi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr","gfmc","gsi","gfwi","sunrise","sunset"]]
@@ -213,13 +216,7 @@ def generate_daily_summaries(hourly_data):
 if "__main__" == __name__:
     args = sys.argv[1:]
     if len(args) != 2:
-        logger.fatal(
-            "\n".join(
-                [
-                    f"Command line:   {sys.argv[0]}  <input file>  <output file>\n"
-                ]
-            )
-        )
+        logger.fatal(f"{sys.argv[0]} arguments must be: <input file> <output file>\n")
         sys.exit(1)
     infile = args[0]
     outfile = args[1]
