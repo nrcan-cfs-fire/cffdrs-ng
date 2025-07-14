@@ -181,6 +181,13 @@ pseudo_date <- function(year, month, day, hour) {
 
 generate_daily_summaries <- function(hourly_data){
   #note: need to account for spill over inlast day after pseudo_date calc where there is not 24 hours in the data
+  wasDf <- class(hourly_data)[1] == "data.frame"
+  if (wasDf) {
+    hourly_data <- as.data.table(hourly_data)
+  } else if (class(hourly_data)[1] != "data.table") {
+    stop("Input hourly FWI needs to be a data.frame or data.table!")
+  }
+
   Spread_Threshold_ISI <- 5.0
   
   results <- NULL
@@ -310,10 +317,11 @@ generate_daily_summaries <- function(hourly_data){
     "wind_speed_smoothed", "peak_isi_smoothed", "peak_gsi_smoothed",
     "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi",
     "sunrise", "sunset")]
-  
-  results <- data.frame(results)
-  
-  return(results)
+
+  if (wasDf) {
+    results <- as.data.frame(results)
+  }
+  results
 }
 
 
@@ -329,9 +337,8 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
     output <- args[2]
     df_input <- as.data.table(read.csv(input))
     df_summaries <- generate_daily_summaries(df_input)
-    save_csv(df_summaries, output)
-  } 
-  else {
-    message("Wrong number of arguments: arguments are <input_file> <output_file>")
+    write.csv(df_summaries, output, row.names = FALSE)  # save_csv(df_summaries, output)
+  } else {
+    message("Wrong number of arguments, must be: <input_file> <output_file>")
   }
 }

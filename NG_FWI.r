@@ -903,10 +903,10 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   silent = FALSE
   ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
-  wasDf <- class(df_wx) == "data.frame"
+  wasDf <- class(df_wx)[1] == "data.frame"
   if (wasDf) {
     wx <- as.data.table(copy(df_wx))
-  } else if (class(df_wx) == "data.table") {
+  } else if (class(df_wx)[1] == "data.table") {
     wx <- copy(df_wx)
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
@@ -1059,7 +1059,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
 # run hFWI by command line via Rscript, requires 3 args: input csv, output csv, timezone
 # optional args: ffmc_or_mcffmc, is_mcffmc, dmc, dc, mcgfmc_matted, mcgfmc_standing,
 #                dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying, silent
-if ("--args" %in% commandArgs()) {
+if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 3) {
     stop("at least 3 arguments required: input csv, output csv, timezone")
@@ -1096,5 +1096,5 @@ if ("--args" %in% commandArgs()) {
   df_out <- hFWI(df_in, timezone, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, dmc_before_rain, dc_before_rain,
     prec_cumulative, canopy_drying, silent)
-  write.csv(df_out, output)
+  write.csv(df_out, output, row.names = FALSE)
 }

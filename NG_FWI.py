@@ -967,4 +967,4 @@ if __name__ == "__main__":
         args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
         args.dmc_before_rain, args.dc_before_rain, args.prec_cumulative,
         args.canopy_drying, args.silent)
-    df_out.to_csv(args.output)
+    df_out.to_csv(args.output, index = False)

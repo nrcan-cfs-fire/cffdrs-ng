@@ -222,4 +222,4 @@ if "__main__" == __name__:
     outfile = args[1]
     hourly_data = pd.read_csv(infile)
     summaries = generate_daily_summaries(hourly_data)
-    util.save_csv(summaries, outfile)
+    summaries.to_csv(outfile, index = False)  # util.save_csv(summaries, outfile)
