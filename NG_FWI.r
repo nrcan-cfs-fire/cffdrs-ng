@@ -25,9 +25,9 @@ OFFSET_SUNSET <- 0 ##0.5
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
 
 # default startup values
-FFMC_DEFAULT <- 85
-DMC_DEFAULT <- 6
-DC_DEFAULT <- 15
+FFMC_DEFAULT <- 85.0
+DMC_DEFAULT <- 6.0
+DC_DEFAULT <- 15.0
 GFMC_DEFAULT <- FFMC_DEFAULT
 
 # FIX: figure out what this should be
@@ -49,32 +49,32 @@ DATE_GRASS <- 181
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
-  return(MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc))
+  MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc)
 }
 
 # fine fuel moisture content (%) to FFMC
 mcffmc_to_ffmc <- function(mcffmc) {
-  return(59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc))
+  59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc)
 }
 
 # Duff Moisture Code (DMC) to duff moisture content (%)
 dmc_to_mcdmc <- function(dmc) {
-   return((280 / exp(dmc / 43.43)) + 20)
+   (280 / exp(dmc / 43.43)) + 20
 }
 
 # duff moisture content (%) to DMC
 mcdmc_to_dmc <- function(mcdmc) {
-   return(43.43 * log(280 / (mcdmc - 20)))
+   43.43 * log(280 / (mcdmc - 20))
 }
 
 # Drought Code (DC) to DC moisture content(%)
 dc_to_mcdc <- function(dc) {
-   return(400 * exp(-dc / 400))
+   400 * exp(-dc / 400)
 }
 
 # DC moisture content (%) to DC
 mcdc_to_dc <- function(mcdc) {
-   return(400 * log(400 / mcdc))
+   400 * log(400 / mcdc)
 }
 
 #' Calculate hourly Fine Fuel Moisture Code (FFMC)
@@ -911,32 +911,15 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
   }
-  # check for allowed alternative names for: ws, prec, yr, hr
   colnames(wx) <- toupper(colnames(wx))
   og_names <- names(wx)
-  wasWind <- (!"WS" %in% og_names) && "WIND" %in% og_names
-  wasRain <- (!"PREC" %in% og_names) && "RAIN" %in% og_names
-  wasYear <- (!"YR" %in% og_names) && "YEAR" %in% og_names
-  wasHour <- (!"HR" %in% og_names) && "HOUR" %in% og_names
-  if (wasWind) {
-    setnames(wx, c("WIND"), c("WS"))
-  }
-  if (wasRain) {
-    setnames(wx, c("RAIN"), c("PREC"))
-  }
-  if (wasYear) {
-    setnames(wx, c("YEAR"), c("YR"))
-  }
-  if (wasHour) {
-    setnames(wx, c("HOUR"), c("HR"))
-  }
   # check for required columns
   stopifnot(all(c('YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC') %in% names(wx)))
   # check for one hour run and startup moisture all set to default
-  if (nrow(df_wx) == 1 &
-    ffmc_or_mcffmc_old == FFMC_DEFAULT & is_mcffmc == FALSE &
-    dmc_old == DMC_DEFAULT & dc_old == DC_DEFAULT &
-    mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &
+  if (nrow(df_wx) == 1 &&
+    ffmc_or_mcffmc_old == FFMC_DEFAULT && is_mcffmc == FALSE &&
+    dmc_old == DMC_DEFAULT && dc_old == DC_DEFAULT &&
+    mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &&
     mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)) {
     warning(paste("Startup moisture values set to default (instead of previous)",
       "in a one hour run"))
@@ -1035,19 +1018,6 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   }
   if (!hadTimestamp) {
     results <- results[, -c("TIMESTAMP")]
-  }
-  # revert to alternative name if used
-  if (wasWind) {
-    setnames(results, c("WS"), c("WIND"))
-  }
-  if (wasRain) {
-    setnames(results, c("PREC"), c("RAIN"))
-  }
-  if (wasYear) {
-    setnames(results, c("YR"), c("YEAR"))
-  }
-  if (wasHour) {
-    setnames(results, c("HR"), c("HOUR"))
   }
   names(results) <- tolower(names(results))
   if (wasDf) {

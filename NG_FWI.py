@@ -31,9 +31,9 @@ DEFAULT_GRASS_FUEL_LOAD = 0.35
 MAX_SOLAR_PROPAGATION = 0.85
 
 # default startup values
-FFMC_DEFAULT = 85
-DMC_DEFAULT = 6
-DC_DEFAULT = 15
+FFMC_DEFAULT = 85.0
+DMC_DEFAULT = 6.0
+DC_DEFAULT = 15.0
 
 # FIX: figure out what this should be
 DEFAULT_LATITUDE = 55.0
@@ -799,21 +799,8 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     prec_cumulative = 0.0, canopy_drying = 0.0,
     silent = False):
     wx = df_wx.loc[:]
-    # check for allowed alternative names for: ws, prec, yr, hr
     wx.columns = map(str.upper, wx.columns)
     og_names = wx.columns
-    was_wind = (not "WS" in og_names) and "WIND" in og_names
-    was_rain = (not "PREC" in og_names) and "RAIN" in og_names
-    was_year = (not "YR" in og_names) and "YEAR" in og_names
-    was_hour = (not "HR" in og_names) and "HOUR" in og_names
-    if was_wind:
-       wx = wx.rename(columns = {"WIND": "WS"})
-    if was_rain:
-       wx = wx.rename(columns = {"RAIN": "PREC"})
-    if was_year:
-       wx = wx.rename(columns = {"YEAR": "YR"})
-    if was_hour:
-       wx = wx.rename(columns = {"HOUR": "HR"})
     # check for required columns
     if not all(x in wx.columns for x in (
        ['YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC'])):
@@ -917,15 +904,7 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
        results = results.drop(columns = "DATE")
     if not had_timestamp:
        results = results.drop(columns = "TIMESTAMP")
-    # revert to alternative name if used
-    if was_wind:
-       wx = wx.rename(columns = {"WS": "WIND"})
-    if was_rain:
-       wx = wx.rename(columns = {"PREC": "RAIN"})
-    if was_year:
-       wx = wx.rename(columns = {"YR": "YEAR"})
-    if was_hour:
-       wx = wx.rename(columns = {"HR": "HOUR"})
+
     results.columns = map(str.lower, results.columns)
     return results
 
@@ -952,13 +931,13 @@ if __name__ == "__main__":
         default = ffmc_to_mcffmc(FFMC_DEFAULT), type = float,
         help = "Starting mcgfmc for standing fuels (default mcffmc when FFMC = 85)")
     parser.add_argument("dmc_before_rain", nargs = "?", default = DMC_DEFAULT,
-        type = float, help = "Starting DMC before rain (default 6)")
+        type = float, help = "Last DMC before rain (default 6)")
     parser.add_argument("dc_before_rain", nargs = "?", default = DC_DEFAULT,
-        type = float, help = "Starting DC before rain (default 15)")
+        type = float, help = "Last DC before rain (default 15)")
     parser.add_argument("prec_cumulative", nargs = "?", default = 0.0, type = float,
-        help = "Starting cumulative precipitation of rain event (default 0)")
+        help = "Cumulative precipitation of rain event (default 0)")
     parser.add_argument("canopy_drying", nargs = "?", default = 0.0, type = float,
-        help = "Starting canopy drying, or consecutive hours of no prec (default 0)")
+        help = "Canopy drying, or consecutive hours of no prec (default 0)")
     parser.add_argument("-s", "--silent", action = "store_true")
 
     args = parser.parse_args()
