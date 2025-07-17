@@ -638,11 +638,18 @@ def rain_since_intercept_reset(rain, canopy):
 ##
 # Calculate hourly FWI indices from hourly weather stream for a single station.
 #
-# @param     w               hourly values weather stream
-# @param     ffmc_old        previous value for Fine Fuel Moisture Code
-# @param     dmc_old         previous value for Duff Moisture Code
-# @param     dc_old          previous value for Drought Code
-# @return                    hourly values FWI and weather stream
+# @param    w                  hourly values weather stream
+# @param    ffmc_or_mcffmc_old  previous value for FFMC or mcffmc
+# @param    is_mcffmc           is above a value of mcffmc or FFMC
+# @param    dmc_old             previous value for DMC
+# @param    dc_old              previous value for DC
+# @param    mcgfmc_matted_old   previous value for matted mcgfmc
+# @param    mcgfmc_standing_old previous value for standing mcgfmc
+# @param    dmc_before_rain     DMC before rainfall
+# @param    dc_before_rain      DC before rainfall
+# @param    prec_cumulative     cumulative precipitation this rainfall
+# @param    canopy_drying       consecutive hours of no rain
+# @return                       hourly values FWI and weather stream
 def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old,
     dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying):
@@ -785,19 +792,28 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
 ##
 # Calculate hourly FWI indices from hourly weather stream.
 #
-# @param     weatherstream   hourly values weather stream
-# @param     timezone        integer offset from GMT to use for sun calculations
-# @param     ffmc_old        previous value for Fine Fuel Moisture Code
-# @param     dmc_old         previous value for Duff Moisture Code
-# @param     dc_old          previous value for Drought Code
-# @return                    hourly values FWI and weather stream
+# @param    df_wx               hourly values weather stream
+# @param    timezone            integer offset from GMT to use for sun calculations
+# @param    ffmc_or_mcffmc_old  previous value for FFMC or mcffmc (startup 85)
+# @param    is_mcffmc           is above a value of mcffmc or FFMC (default False)
+# @param    dmc_old             previous value for DMC (startup 6)
+# @param    dc_old              previous value for DC (startup 15)
+# @param    mcgfmc_matted_old   previous value for matted mcgfmc (startup FFMC = 85)
+# @param    mcgfmc_standing_old previous value for standing mcgfmc (startup FFMC = 85)
+# @param    dmc_before_rain     DMC before rainfall (default 0)
+# @param    dc_before_rain      DC before rainfall (default 0)
+# @param    prec_cumulative     cumulative precipitation this rainfall (default 0)
+# @param    canopy_drying       consecutive hours of no rain (default 0)
+# @param    silent              suppresses informative print statements (default False)
+# @param    round_out           decimals to truncate output to, None for none (default 4)
+# @return                       hourly values FWI and weather stream
 def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
     mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
     prec_cumulative = 0.0, canopy_drying = 0.0,
-    silent = False):
+    silent = False, round_out = 4):
     wx = df_wx.loc[:]
     wx.columns = map(str.upper, wx.columns)
     og_names = wx.columns
@@ -811,8 +827,8 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
         dmc_old == DMC_DEFAULT and dc_old == DC_DEFAULT and
         mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) and
         mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)):
-        logger.warning("Startup moisture values set to default (instead of previous) " +
-                       "in a one hour run")
+        logger.warning("Warning:\nStartup moisture values set to default" +
+            " (instead of previous) in a one hour run")
     # check for optional columns that have a default
     if not "LAT" in og_names:
         logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
@@ -906,6 +922,17 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
        results = results.drop(columns = "TIMESTAMP")
 
     results.columns = map(str.lower, results.columns)
+
+    # round decimal places of output columns
+    if not (round_out == None or round_out == "None"):
+        outcols = ["sunrise", "sunset", "sunlight_hours",
+            "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
+            "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
+            "dmc_before_rain", "dc_before_rain", "prec_cumulative", "canopy_drying"]
+        if "SOLRAD" not in og_names:
+           outcols.insert(0, "solrad")
+        results[outcols] = results[outcols].map(round, ndigits = round_out)
+
     return results
 
 
@@ -939,11 +966,13 @@ if __name__ == "__main__":
     parser.add_argument("canopy_drying", nargs = "?", default = 0.0, type = float,
         help = "Canopy drying, or consecutive hours of no prec (default 0)")
     parser.add_argument("-s", "--silent", action = "store_true")
+    parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
+        help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
     df_out = hFWI(df_in, args.timezone, args.ffmc_or_mcffmc_old, args.is_mcffmc,
         args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
         args.dmc_before_rain, args.dc_before_rain, args.prec_cumulative,
-        args.canopy_drying, args.silent)
+        args.canopy_drying, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)

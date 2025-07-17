@@ -734,11 +734,18 @@ rain_since_intercept_reset <- function(rain, canopy) {
 
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
 #'
-#' @param     w               hourly values weather stream
-#' @param     ffmc_old        previous value for Fine Fuel Moisture Code
-#' @param     dmc_old         previous value for Duff Moisture Code
-#' @param     dc_old          previous value for Drought Code
-#' @return                    hourly values FWI and weather stream
+#' @param    w                    hourly values weather stream
+#' @param    ffmc_or_mcffmc_old   previous value for FFMC or mcffmc
+#' @param    is_mcffmc            is above a value of mcffmc or FFMC
+#' @param    dmc_old              previous value for DMC
+#' @param    dc_old               previous value for DC
+#' @param    mcgfmc_matted_old    previous value for matted mcgfmc
+#' @param    mcgfmc_standing_old  previous value for standing mcgfmc
+#' @param    dmc_before_rain      DMC before rainfall
+#' @param    dc_before_rain       DC before rainfall
+#' @param    prec_cumulative      cumulative precipitation this rainfall
+#' @param    canopy_drying        consecutive hours of no rain
+#' @return                        hourly values FWI and weather stream
 .stnHFWI <- function(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
   mcgfmc_matted_old, mcgfmc_standing_old,
   dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying) {
@@ -887,25 +894,33 @@ rain_since_intercept_reset <- function(rain, canopy) {
 
 #' Calculate hourly FWI indices from hourly weather stream.
 #'
-#' @param     df_wx           hourly values weather stream
-#' @param     timezone        integer offset from GMT to use for sun calculations
-#' @param     ffmc_old        previous value for Fine Fuel Moisture Code
-#' @param     dmc_old         previous value for Duff Moisture Code
-#' @param     dc_old          previous value for Drought Code
-#' @return                    hourly values FWI and weather stream
-#' @export hFWI
+#' @param    df_wx               hourly values weather stream
+#' @param    timezone            integer offset from GMT to use for sun calculations
+#' @param    ffmc_or_mcffmc_old   previous value for FFMC or mcffmc (startup 85)
+#' @param    is_mcffmc            is above a value of mcffmc or FFMC (default False)
+#' @param    dmc_old              previous value for DMC (startup 6)
+#' @param    dc_old               previous value for DC (startup 15)
+#' @param    mcgfmc_matted_old    previous value for matted mcgfmc (startup FFMC = 85)
+#' @param    mcgfmc_standing_old  previous value for standing mcgfmc (startup FFMC = 85)
+#' @param    dmc_before_rain      DMC before rainfall (default 0)
+#' @param    dc_before_rain       DC before rainfall (default 0)
+#' @param    prec_cumulative      cumulative precipitation this rainfall (default 0)
+#' @param    canopy_drying        consecutive hours of no rain (default 0)
+#' @param    silent               suppresses informative print statements (default False)
+#' @param    round_out            decimals to truncate output to, NA for none (default 4)
+#' @return                        hourly values FWI and weather stream
 hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = FALSE,
   dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
   mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
   prec_cumulative = 0.0, canopy_drying = 0.0,
-  silent = FALSE
+  silent = FALSE, round_out = 4
   ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
   wasDf <- class(df_wx)[1] == "data.frame"
   if (wasDf) {
-    wx <- as.data.table(copy(df_wx))
+    wx <- setDT(copy(df_wx))
   } else if (class(df_wx)[1] == "data.table") {
     wx <- copy(df_wx)
   } else {
@@ -1019,9 +1034,23 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   if (!hadTimestamp) {
     results <- results[, -c("TIMESTAMP")]
   }
+
   names(results) <- tolower(names(results))
+
+  # format decimal places of output columns
+  if (!is.na(round_out)) {
+    outcols <- c("sunrise", "sunset", "sunlight_hours",
+      "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
+      "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
+      "dmc_before_rain", "dc_before_rain", "prec_cumulative", "canopy_drying")
+    if (!"SOLRAD" %in% og_names) {
+      outcols <- c('solrad', outcols)
+    }
+    set(results, j = outcols, value = round(results[, ..outcols], round_out))
+  }
+
   if (wasDf) {
-    results <- as.data.frame(results)
+    results <- setDF(results)
   }
   return(results)
 }
@@ -1060,11 +1089,13 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   else canopy_drying <- 0.0
   if (length(args) >= 14) silent <- as.logical(args[14])
   else silent <- FALSE
-  if (length(args) >= 15) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 15) round_out <- args[15]
+  else round_out <- 4
+  if (length(args) >= 16) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
   df_out <- hFWI(df_in, timezone, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, dmc_before_rain, dc_before_rain,
-    prec_cumulative, canopy_drying, silent)
+    prec_cumulative, canopy_drying, silent, round_out)
   write.csv(df_out, output, row.names = FALSE)
 }
