@@ -918,11 +918,11 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   silent = FALSE, round_out = 4
   ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
-  wasDf <- class(df_wx)[1] == "data.frame"
+  wasDf <- is.data.frame(df_wx)
   if (wasDf) {
-    wx <- setDT(copy(df_wx))
-  } else if (class(df_wx)[1] == "data.table") {
-    wx <- copy(df_wx)
+    wx <- setDT(df_wx)
+  } else if (is.data.table(df_wx)) {
+    wx <- df_wx
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
   }
@@ -1050,7 +1050,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   }
 
   if (wasDf) {
-    results <- setDF(results)
+    setDF(results)
   }
   return(results)
 }

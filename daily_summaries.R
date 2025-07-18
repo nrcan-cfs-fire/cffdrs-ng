@@ -178,167 +178,135 @@ pseudo_date <- function(year, month, day, hour) {
   
 }
 
-
-generate_daily_summaries <- function(hourly_data){
-  #note: need to account for spill over inlast day after pseudo_date calc where there is not 24 hours in the data
-  wasDf <- class(hourly_data)[1] == "data.frame"
+#' Calculate hourly FWI indices from hourly weather stream.
+#'
+#' @param     hourly_data     hourly FWI dataframe (output of hFWI())
+#' @param     silent          suppresses informative print statements (default False)
+#' @param     round_out       decimals to truncate output to, None for none (default 4)
+#' @return                    daily summary of peak FWI conditions
+generate_daily_summaries <- function(hourly_data, silent = FALSE, round_out = 4) {
+  wasDf <- is.data.frame(hourly_data)
   if (wasDf) {
-    hourly_data <- as.data.table(hourly_data)
-  } else if (class(hourly_data)[1] != "data.table") {
+    setDT(hourly_data)
+  } else if (!is.data.table(hourly_data)) {
     stop("Input hourly FWI needs to be a data.frame or data.table!")
   }
 
   Spread_Threshold_ISI <- 5.0
-  
-  results <- NULL
-  for (stn in unique(hourly_data$id)) {
-    print(paste("Summarizing", stn, "to daily"))
-    by_stn <- hourly_data[id == stn]
-    by_stn[,pseudo_DATE := pseudo_date(yr,mon,day,hr)]
-    
-    for (p_date in unique(by_stn$pseudo_DATE)) {
-      
-      by_date <- by_stn[pseudo_DATE == p_date, ]
-      
-      peak_time_traditional_spot <- which(by_date$hr == 17)
-      # if this day doesn't go up to hour 17, skip
-      if(length(peak_time_traditional_spot) == 0){
-        next
-      }
-      
-      peak_time <- -1
-      duration <- 0
-      wind_smooth <- smooth_5pt(by_date$ws)
-      peak_isi_smooth <- -1
-      peak_gsi_smooth <- -1
-      max_ffmc <- 0
-      ffmc <- 0
-      gfmc <- 0
-      dmc <- 0
-      dc <- 0
-      isi <- 0
-      gsi <- 0
-      bui <- 0
-      fwi <- 0
-      gfwi<- 0
-      dsr <- 0
-      
-      for (i in 1:nrow(by_date)){
-        smooth_isi <- 0
-        if (wind_smooth[i] > -90.0 && by_date[i,ffmc] > -90.0) {
-          smooth_isi <- initial_spread_index(wind_smooth[i],by_date[i,ffmc])
-        }
-        else{
-          smooth_isi <- -98.9
-        }
-        
-        if (smooth_isi > peak_isi_smooth){
-          peak_time <- i
-          peak_isi_smooth <- smooth_isi
-        }
-        if (by_date[i,ffmc] > max_ffmc){
-          max_ffmc <- by_date[i,ffmc]
-        }
-        if (smooth_isi > Spread_Threshold_ISI){
-          duration = duration + 1
-        }
-      }
-      
-      
-      if (smooth_isi < 5 && duration == 24){
-        duration <- 0
-      } 
-      
-      if (max_ffmc < 85.0) {
-        peak_time <- peak_time_traditional_spot
-      }
-      
-      ffmc <- by_date[peak_time, ffmc]
-      dmc <- by_date[peak_time, dmc]
-      dc <- by_date[peak_time, dc]
-      isi <- by_date[peak_time, isi]
-      bui <- by_date[peak_time, bui]
-      fwi <- by_date[peak_time, fwi]
-      dsr <- by_date[peak_time, dsr]
-      smooth_ws_peak <- wind_smooth[peak_time]
-      
-      gfmc <- by_date[peak_time, gfmc]
-      gsi <- by_date[peak_time, gsi]
-      gfwi <- by_date[peak_time, gfwi]
-      
-      
-      
-      pick_year <- unique(by_date$yr)
-      if(length(pick_year) > 1){
-        pick_year <- pick_year[1]
-      }
-      pick_month <- unique(by_date$mon)
-      if(length(pick_month) > 1){
-        pick_month <- pick_month[1]
-      }
-      pick_day <- unique(by_date$day)
-      if(length(pick_day) > 1){
-        pick_day <- pick_day[1]
-      }
-      
-      
-      standing <- TRUE
-      if (julian(pick_month, pick_day) < DATE_GRASS){
-        standing <- FALSE
-      }
-      peak_gsi_smooth <- grass_spread_index(smooth_ws_peak, gfmc,
-        by_date[peak_time, percent_cured], standing)
-      
-      
-      sunrise_val <- by_date[peak_time, sunrise]
-      sunset_val <- by_date[peak_time, sunset]
-      
-      peak_time <- by_date[peak_time,hr]
-      
-      sunrise <- sprintf("%d:%d", as.integer(sunrise_val), as.integer(60*(sunrise_val - as.integer(sunrise_val))))
-      sunset <- sprintf("%d:%d", as.integer(sunset_val), as.integer(60*(sunset_val - as.integer(sunset_val))))
-      
-      daily_report <- c(unique(by_date$id), pick_year, pick_month, pick_day, peak_time, duration, smooth_ws_peak, peak_isi_smooth, peak_gsi_smooth, ffmc, dmc, dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi, max_ffmc, sunrise, sunset)
-      
-      
-      
-      results <- rbind(results, daily_report)
-      
-      
-      
+
+  # check for "id" column
+  if ("id" %in% names(hourly_data)) {
+    had_stn <- TRUE
+  } else {
+    if (uniqueN(hourly_data, by = c("yr", "lat", "long")) == 1) {
+      hourly_data[, id := "stn"]
+      had_stn <- FALSE
+    } else {
+      stop("Missing 'id' column with multiple years and locations in data")
     }
   }
-  colnames(results) <- c("wstind", "yr", "mon", "day", "peak_time", "duration",
-    "wind_speed_smoothed", "peak_isi_smoothed", "peak_gsi_smoothed",
-    "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi", "max_ffmc",
-    "sunrise", "sunset")
 
-  results <- results[, c("wstind", "yr", "mon", "day", "peak_time", "duration",
-    "wind_speed_smoothed", "peak_isi_smoothed", "peak_gsi_smoothed",
-    "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi",
-    "sunrise", "sunset")]
+  results <- NULL
+
+  for (stn in unique(hourly_data[, id])) {
+    if (!silent) {
+      print(paste("Summarizing", stn, "to daily"))
+    }
+    by_stn <- hourly_data[id == stn]
+    by_stn[, pseudo_DATE := pseudo_date(yr, mon, day, hr)]
+
+    for (p_date in unique(by_stn[, pseudo_DATE])) {
+      by_date <- by_stn[pseudo_DATE == p_date]
+
+      # if this day doesn't go up to hour 17, skip
+      if (sum(by_date[, hr] == 17, na.rm = TRUE) == 0) {
+        next
+      }
+
+      # find daily peak burn times
+      by_date <- by_date[, ws_smooth := smooth_5pt(ws)]
+      by_date <- by_date[, isi_smooth := initial_spread_index(ws_smooth, ffmc)]
+
+      max_ffmc <- by_date[, max(ffmc)]
+      if (max_ffmc < 85.0) {
+        peak_time <- by_date[, which(hr == 17)][1]
+      } else {
+        peak_time <- by_date[, which.max(isi_smooth)]
+      }
+
+      # calculate some extra variables before creating datatable all at once
+      if (by_date[1, julian(mon, day)] < DATE_GRASS) {
+        standing <- FALSE
+      } else {
+        standing <- TRUE
+      }
+      # load to format sunrise and sunset as hh:mm from decimal hours later
+      sr <- by_date[peak_time, sunrise]
+      ss <- by_date[peak_time, sunset]
+
+      # find the rest of the values at peak
+      daily_report <- data.table(id = by_date[1, id],
+        yr = by_date[1, yr],
+        mon = by_date[1, mon],
+        day = by_date[1, day],
+        sunrise = sprintf("%02d:%02d", trunc(sr), trunc(60 * (sr - trunc(sr)))),
+        sunset = sprintf("%02d:%02d", trunc(ss), trunc(60 * (ss - trunc(ss)))),
+        peak_hr = by_date[peak_time, hr],
+        duration = by_date[, sum(isi_smooth > Spread_Threshold_ISI)],
+        ffmc = by_date[peak_time, ffmc],
+        dmc = by_date[peak_time, dmc],
+        dc = by_date[peak_time, dc],
+        isi = by_date[peak_time, isi],
+        bui = by_date[peak_time, bui],
+        fwi = by_date[peak_time, fwi],
+        dsr = by_date[peak_time, dsr],
+        gfmc = by_date[peak_time, gfmc],
+        gsi = by_date[peak_time, gsi],
+        gfwi = by_date[peak_time, gfwi],
+        ws_smooth = by_date[peak_time, ws_smooth],
+        isi_smooth = by_date[peak_time, isi_smooth],
+        gsi_smooth = by_date[peak_time,
+          grass_spread_index(ws_smooth, gfmc, percent_cured, standing)])
+
+      results <- rbind(results, daily_report)
+    }
+  }
+
+  if (!had_stn) {
+    results <- results[, -"id"]
+  }
+
+  # format decimal places of output columns
+  if (!is.na(round_out)) {
+    outcols <- c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
+      "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth")
+    set(results, j = outcols, value = round(results[, ..outcols], round_out))
+  }
 
   if (wasDf) {
-    results <- as.data.frame(results)
+    setDF(results)
   }
+
   results
 }
 
-
-
-
-# so this can be run via Rscript
+# run generate_daily_summaries by command line via Rscript, requires input and output csv
+# optional args: silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
-  # commandArgs <- function(...) c("SILENCE")
-  if (2 == length(args)) {
-    # args: --input_file --output_file
-    input <- args[1]
-    output <- args[2]
-    df_input <- as.data.table(read.csv(input))
-    df_summaries <- generate_daily_summaries(df_input)
-    write.csv(df_summaries, output, row.names = FALSE)  # save_csv(df_summaries, output)
-  } else {
-    message("Wrong number of arguments, must be: <input_file> <output_file>")
+  if (length(args) < 2) {
+    stop("at least 2 arguments required: input csv, output csv")
   }
+  input <- args[1]
+  output <- args[2]
+  # load optional arguments if provided, or set to default
+  if (length(args) >= 3) silent <- as.logical(args[3])
+  else silent <- FALSE
+  if (length(args) >= 4) round_out <- args[4]
+  else round_out <- 4
+  if (length(args) >= 5) warning("Too many input arguments provided, some unused")
+
+  df_in <- read.csv(input)
+  df_out <- generate_daily_summaries(df_in, silent, round_out)
+  write.csv(df_out, output, row.names = FALSE)
 }
