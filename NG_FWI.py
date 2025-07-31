@@ -636,9 +636,9 @@ def rain_since_intercept_reset(rain, canopy):
 
 
 ##
-# Calculate hourly FWI indices from hourly weather stream for a single station.
+# Calculate hourly FWI indices from hourly weather stream for a single station
 #
-# @param    w                  hourly values weather stream
+# @param    w                   hourly values weather stream
 # @param    ffmc_or_mcffmc_old  previous value for FFMC or mcffmc
 # @param    is_mcffmc           is above a value of mcffmc or FFMC
 # @param    dmc_old             previous value for DMC
@@ -800,8 +800,8 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
 # @param    dc_old              previous value for DC (startup 15)
 # @param    mcgfmc_matted_old   previous value for matted mcgfmc (startup FFMC = 85)
 # @param    mcgfmc_standing_old previous value for standing mcgfmc (startup FFMC = 85)
-# @param    dmc_before_rain     DMC before rainfall (default 0)
-# @param    dc_before_rain      DC before rainfall (default 0)
+# @param    dmc_before_rain     DMC before rainfall (default 6)
+# @param    dc_before_rain      DC before rainfall (default 15)
 # @param    prec_cumulative     cumulative precipitation this rainfall (default 0)
 # @param    canopy_drying       consecutive hours of no rain (default 0)
 # @param    silent              suppresses informative print statements (default False)
@@ -814,7 +814,7 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
     prec_cumulative = 0.0, canopy_drying = 0.0,
     silent = False, round_out = 4):
-    wx = df_wx.loc[:]
+    wx = df_wx.copy()
     wx.columns = map(str.upper, wx.columns)
     og_names = wx.columns
     # check for required columns

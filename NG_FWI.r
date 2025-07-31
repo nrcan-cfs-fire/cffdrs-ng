@@ -49,32 +49,32 @@ DATE_GRASS <- 181
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
-  MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc)
+  return(MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc))
 }
 
 # fine fuel moisture content (%) to FFMC
 mcffmc_to_ffmc <- function(mcffmc) {
-  59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc)
+  return(59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc))
 }
 
 # Duff Moisture Code (DMC) to duff moisture content (%)
 dmc_to_mcdmc <- function(dmc) {
-   (280 / exp(dmc / 43.43)) + 20
+   return((280 / exp(dmc / 43.43)) + 20)
 }
 
 # duff moisture content (%) to DMC
 mcdmc_to_dmc <- function(mcdmc) {
-   43.43 * log(280 / (mcdmc - 20))
+   return(43.43 * log(280 / (mcdmc - 20)))
 }
 
 # Drought Code (DC) to DC moisture content(%)
 dc_to_mcdc <- function(dc) {
-   400 * exp(-dc / 400)
+   return(400 * exp(-dc / 400))
 }
 
 # DC moisture content (%) to DC
 mcdc_to_dc <- function(mcdc) {
-   400 * log(400 / mcdc)
+   return(400 * log(400 / mcdc))
 }
 
 #' Calculate hourly Fine Fuel Moisture Code (FFMC)
@@ -920,9 +920,10 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   # check df_wx class for data.frame or data.table
   wasDf <- is.data.frame(df_wx)
   if (wasDf) {
-    wx <- setDT(df_wx)
+    wx <- copy(df_wx)
+    setDT(wx)
   } else if (is.data.table(df_wx)) {
-    wx <- df_wx
+    wx <- copy(df_wx)
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
   }
@@ -931,7 +932,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   # check for required columns
   stopifnot(all(c('YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC') %in% names(wx)))
   # check for one hour run and startup moisture all set to default
-  if (nrow(df_wx) == 1 &&
+  if (nrow(wx) == 1 &&
     ffmc_or_mcffmc_old == FFMC_DEFAULT && is_mcffmc == FALSE &&
     dmc_old == DMC_DEFAULT && dc_old == DC_DEFAULT &&
     mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &&

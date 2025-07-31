@@ -155,37 +155,42 @@ smooth_5pt <- function(source) {
 #  return(dest)
 #}
 
-#this function calculates a fake date based on 5am-5am instead of midnight to midnight
-#used for generating daily summaries to make data look at 5am-5am instead
-#output form is "year-julian_day", with the julian day rounded back if the time is before 5am
-#for Jan 1st where the julian day rollback would make it zero it gets bumped to the last day of the previous year
-pseudo_date <- function(year, month, day, hour) {
-  
-  
-  
-  adjusted_jd <- ifelse(hour >= 5, 
-                        julian(month,day),
-                        julian(month,day) - 1)
-  adjusted_year <- ifelse(adjusted_jd == 0, 
-                          year - 1,
-                          year)
-  adjusted_jd <- ifelse(adjusted_jd == 0,
-                        julian(12,31),
-                        adjusted_jd)
-  
-  out <- sprintf("%d-%d",adjusted_year,adjusted_jd)
-  return(out)
-  
+#' Calculate a pseudo-date that changes not at midnight but forward at another hour
+#'
+#' @param   yr        year
+#' @param   mon       month number
+#' @param   day       day of month
+#' @param   hr        hour of day
+#' @param   reset_hr  the new boundary hour instead of midnight (default 5)
+#' @return            pseudo-date including year and ordinal day of the form "YYYY-D"
+pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
+  if (hr < reset_hr) {
+    adjusted_jd <- julian(mon, day) - 1
+  } else {
+    adjusted_jd <- julian(mon, day)
+  }
+
+  if (adjusted_jd == 0) {  # where Jan 1 shifts to 0, bump it to end of previous year
+    adjusted_jd <- julian(12, 31)
+    adjusted_yr <- yr - 1
+  } else {
+    adjusted_yr <- yr
+  }
+
+  return(sprintf("%d-%d", adjusted_yr, adjusted_jd))
 }
 
 #' Calculate hourly FWI indices from hourly weather stream.
 #'
-#' @param     hourly_data     hourly FWI dataframe (output of hFWI())
-#' @param     silent          suppresses informative print statements (default False)
-#' @param     round_out       decimals to truncate output to, None for none (default 4)
-#' @return                    daily summary of peak FWI conditions
-generate_daily_summaries <- function(hourly_data, silent = FALSE, round_out = 4) {
-  wasDf <- is.data.frame(hourly_data)
+#' @param     hourly_FWI    hourly FWI dataframe (output of hFWI())
+#' @param     reset_hr      new boundary to define day to summarize (default 5)
+#' @param     silent        suppresses informative print statements (default False)
+#' @param     round_out     decimals to truncate output to, None for none (default 4)
+#' @return                  daily summary of peak FWI conditions
+generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
+  silent = FALSE, round_out = 4) {
+  wasDf <- is.data.frame(hourly_FWI)
+  hourly_data <- copy(hourly_FWI)
   if (wasDf) {
     setDT(hourly_data)
   } else if (!is.data.table(hourly_data)) {
@@ -213,13 +218,13 @@ generate_daily_summaries <- function(hourly_data, silent = FALSE, round_out = 4)
       print(paste("Summarizing", stn, "to daily"))
     }
     by_stn <- hourly_data[id == stn]
-    by_stn[, pseudo_DATE := pseudo_date(yr, mon, day, hr)]
+    by_stn[, pseudo_DATE := Vectorize(pseudo_date)(yr, mon, day, hr, reset_hr)]
 
     for (p_date in unique(by_stn[, pseudo_DATE])) {
       by_date <- by_stn[pseudo_DATE == p_date]
 
-      # if this day doesn't go up to hour 17, skip
-      if (sum(by_date[, hr] == 17, na.rm = TRUE) == 0) {
+      # if this pseudo-date doesn't have more than 12 hours, skip
+      if (nrow(by_date) <= 12) {
         next
       }
 
@@ -229,7 +234,7 @@ generate_daily_summaries <- function(hourly_data, silent = FALSE, round_out = 4)
 
       max_ffmc <- by_date[, max(ffmc)]
       if (max_ffmc < 85.0) {
-        peak_time <- by_date[, which(hr == 17)][1]
+        peak_time <- 13  # 12 hours into pseudo-date
       } else {
         peak_time <- by_date[, which.max(isi_smooth)]
       }
@@ -287,7 +292,7 @@ generate_daily_summaries <- function(hourly_data, silent = FALSE, round_out = 4)
     setDF(results)
   }
 
-  results
+  return(results)
 }
 
 # run generate_daily_summaries by command line via Rscript, requires input and output csv

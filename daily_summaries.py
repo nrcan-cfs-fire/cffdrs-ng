@@ -1,6 +1,5 @@
 import logging
 import argparse
-import sys
 import pandas as pd
 import NG_FWI
 import util
@@ -52,37 +51,39 @@ def smooth_5pt(source):
   else:
     dest[cap-2] = source.iloc[cap-2]
   return dest
-  
 
-#this function calculates a fake date based on 5am-5am instead of midnight to midnight
-#used for generating daily summaries to make data look at 5am-5am instead
-#output form is "year-julian_day", with the julian day rounded back if the time is before 5am
-#for Jan 1st where the julian day rollback would make it zero it gets bumped to the last day of the previous year
-def pseudo_date(year, month, day, hour):
-  
-  adjusted_jd = None
-  adjusted_year = None
-  if (hour >= 5):
-    adjusted_jd = util.julian(month, day)
+## 
+# Calculate a pseudo-date that changes not at midnight but forward at another hour
+# @param    yr        year
+# @param    mon       month number
+# @param    day       day of month
+# @param    hr        hour of day
+# @param    reset_hr  the new boundary hour instead of midnight (default 5)
+# @return             pseudo-date including year and ordinal day of the form "YYYY-D"
+def pseudo_date(yr, mon, day, hr, reset_hr = 5):
+  if hr < reset_hr:
+    adjusted_jd = util.julian(mon, day) - 1
   else:
-    adjusted_jd = util.julian(month, day) - 1
+    adjusted_jd = util.julian(mon, day)
   
-  if adjusted_jd == 0:
-    adjusted_year = year - 1
-    adjusted_jd = util.julian(12,31)
+  if adjusted_jd == 0:  # where Jan 1 shifts to 0, bump it to end of previous year
+    adjusted_jd = util.julian(12, 31)
+    adjusted_yr = yr - 1
   else:
-    adjusted_year = year
-    
-  out = "{}-{}".format(adjusted_year, adjusted_jd)
-  return out
+    adjusted_yr = yr
+  
+  return "{}-{}".format(adjusted_yr, adjusted_jd)
 
 ##
 # Calculate Daily Summaries from hourly FWI indices
-# @param    hourly_data    hourly FWI dataframe (output of hFWI())
-# @param    silent         suppresses informative print statements (default False)
-# @param    round_out      decimals to truncate output to, None for none (default 4)
-# @return                  daily summary of peak FWI conditions
-def generate_daily_summaries(hourly_data, silent = False, round_out = 4):
+# @param    hourly_FWI      hourly FWI dataframe (output of hFWI())
+# @param    reset_hr        new boundary to define day to summarize (default 5)
+# @param    silent          suppresses informative print statements (default False)
+# @param    round_out       decimals to truncate output to, None for none (default 4)
+# @return                   daily summary of peak FWI conditions
+def generate_daily_summaries(hourly_FWI, reset_hr = 5,
+  silent = False, round_out = 4):
+  hourly_data = hourly_FWI.copy()
   Spread_Threshold_ISI = 5.0
 
   # check for "id" column
@@ -100,20 +101,20 @@ def generate_daily_summaries(hourly_data, silent = False, round_out = 4):
   # initialize dictionary of lists
   outcols = ["id", "yr", "mon", "day", "sunrise", "sunset", "peak_hr", "duration",
     "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi",
-    "ws_smooth","isi_smooth","gsi_smooth"]
+    "ws_smooth", "isi_smooth", "gsi_smooth"]
   results = {k: [] for k in outcols}
   
   for stn, by_stn in hourly_data.groupby("id", sort = False):
     if not silent:
       print("Summarizing " + stn + " to daily")
     by_stn["pseudo_DATE"] = by_stn.apply(lambda row:
-      pseudo_date(row["yr"], row["mon"], row["day"], row["hr"]), axis=1)
+      pseudo_date(row["yr"], row["mon"], row["day"], row["hr"], reset_hr), axis = 1)
     
     for _, by_date in by_stn.groupby("pseudo_DATE", sort = False):
       by_date = by_date.reset_index()
 
-      # if this day doesn't go up to hour 17, skip
-      if sum(by_date["hr"] == 17) == 0:
+      # if this pseudo-date doesn't have more than 12 hours, skip
+      if by_date.shape[0] <= 12:
         continue
       
       # find daily peak burn times
@@ -123,7 +124,7 @@ def generate_daily_summaries(hourly_data, silent = False, round_out = 4):
       
       max_ffmc = by_date["ffmc"].max()
       if max_ffmc < 85.0:
-        peak_time = by_date.index[by_date["hr"] == 17].tolist()[0]
+        peak_time = 12  # 12 hours into pseudo-date
       else:
         peak_time = by_date["isi_smooth"].idxmax()
       
