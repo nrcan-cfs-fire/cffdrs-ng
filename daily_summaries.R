@@ -296,7 +296,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
 }
 
 # run generate_daily_summaries by command line via Rscript, requires input and output csv
-# optional args: silent, round_out
+# optional args: reset_hr, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
@@ -305,13 +305,15 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   input <- args[1]
   output <- args[2]
   # load optional arguments if provided, or set to default
-  if (length(args) >= 3) silent <- as.logical(args[3])
+  if (length(args) >= 3) reset_hr <- args[3]
+  else reset_hr <- 5
+  if (length(args) >= 4) silent <- as.logical(args[4])
   else silent <- FALSE
-  if (length(args) >= 4) round_out <- args[4]
+  if (length(args) >= 5) round_out <- args[5]
   else round_out <- 4
-  if (length(args) >= 5) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 6) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
-  df_out <- generate_daily_summaries(df_in, silent, round_out)
+  df_out <- generate_daily_summaries(df_in, reset_hr, silent, round_out)
   write.csv(df_out, output, row.names = FALSE)
 }

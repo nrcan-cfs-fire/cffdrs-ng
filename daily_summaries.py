@@ -186,11 +186,13 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(prog = "daily_summaries")
   parser.add_argument("input", help = "Input csv data file")
   parser.add_argument("output", help = "Output csv file name and/or location")
+  parser.add_argument("reset_hr", nargs = "?", default = 5, type = int,
+    help = "New boundary to define day to summarize instead of midnight (default 5)")
   parser.add_argument("-s", "--silent", action = "store_true")
   parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
     help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
   
   args = parser.parse_args()
   df_in = pd.read_csv(args.input)
-  df_out = generate_daily_summaries(df_in, args.silent, args.round_out)
+  df_out = generate_daily_summaries(df_in, args.reset_hr, args.silent, args.round_out)
   df_out.to_csv(args.output, index = False)
