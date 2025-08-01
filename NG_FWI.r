@@ -598,9 +598,9 @@ duff_moisture_code <- function(
   dmc_wetting_hourly <- dmc_wetting_between(rain, rain_total_prev, dmc_before_rain)
   # at most apply same wetting as current value (don't go below 0)
   dmc <- pmax(0.0, last_dmc - dmc_wetting_hourly)
-  sunrise_start <- round(sunrise + OFFSET_SUNRISE)
-  sunset_start <- round(sunset + OFFSET_SUNSET)
-  dmc_hourly <- ifelse(hour >= sunrise_start & hour < sunset_start,
+  sunrise_start <- sunrise + OFFSET_SUNRISE
+  sunset_start <- sunset + OFFSET_SUNSET
+  dmc_hourly <- ifelse(hour >= sunrise_start & hour <= sunset_start,
     dmc_drying_ratio(temp, rh),
     0.0
   )
