@@ -429,24 +429,24 @@ def dmc_wetting(rain_total, dmc_before_rain):
     return w
 
 
-def dc_wetting(rain_total, lastdc):
+def dc_wetting(rain_total, dc_before_rain):
     # compare floats by using tolerance
     if rain_total <= DC_INTERCEPT:
         return 0.0
     rw = 0.83 * rain_total - 1.27
-    smi = 800 * exp(-lastdc / 400)
+    smi = 800 * exp(-dc_before_rain / 400)
     # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
     return 400.0 * log(1.0 + 3.937 * rw / smi)
 
 
-def dmc_wetting_change(rain_total_previous, rain_total, lastdmc):
+def dmc_wetting_change(rain_total_previous, rain_total, dmc_before_rain):
     if rain_total_previous >= rain_total:
         return 0.0
     # wetting is calculated based on initial dmc when rain started and rain since
-    current = dmc_wetting(rain_total, lastdmc)
+    current = dmc_wetting(rain_total, dmc_before_rain)
     # recalculate instead of storing so we don't need to reset this too
     # NOTE: rain_total_previous != (rain_total - cur["prec"]) due to floating point math
-    previous = dmc_wetting(rain_total_previous, lastdmc)
+    previous = dmc_wetting(rain_total_previous, dmc_before_rain)
     return current - previous
 
 
