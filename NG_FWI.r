@@ -79,13 +79,13 @@ mcdc_to_dc <- function(mcdc) {
 
 #' Calculate hourly Fine Fuel Moisture Code (FFMC)
 #'
+#' @param lastmc          Previous Fine Fuel Moisture (%)
 #' @param temp            Temperature (Celcius)
 #' @param rh              Relative Humidity (percent, 0-100)
 #' @param ws              Wind Speed (km/h)
 #' @param rain            Rainfall (mm)
-#' @param lastmc          Previous Fine Fuel Moisture (%)
 #' @return                Hourly Fine Fuel Moisture (%)
-hourly_fine_fuel_moisture <- function(temp, rh, ws, rain, lastmc) {
+hourly_fine_fuel_moisture <- function(lastmc, temp, rh, ws, rain) {
   # cur <- r[i + 1]
   # temp <- cur$temp
   # rh <- cur$rh
@@ -199,14 +199,15 @@ daily_severity_rating <- function(fwi) {
 
 #' Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
 #'
+#' @param lastmc          Previous grass fuel moisture (percent)
 #' @param temp            Temperature (Celcius)
 #' @param rh              Relative Humidity (percent, 0-100)
 #' @param ws              Wind Speed (km/h)
 #' @param rain            Rainfall (mm)
-#' @param lastmc          Previous grass fuel moisture (percent)
 #' @param solrad          Solar radiation (kW/m^2)
+#' @param load            Grassland Fuel Load (kg/m^2)
 #' @return                Grass Fuel Moisture (percent)
-hourly_grass_fuel_moisture <- function(temp, rh, ws, rain, solrad, lastmc) {
+hourly_grass_fuel_moisture <- function(lastmc, temp, rh, ws, rain, solrad, load) {
   # MARK II of the model (2016) wth new solar rad model specific to grass
   #
   # Temp is temperature in C
@@ -235,7 +236,7 @@ hourly_grass_fuel_moisture <- function(temp, rh, ws, rain, solrad, lastmc) {
       #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
       # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
       # *100 to convert to %...  *1/.3 because of 0.3mm=100%
-      mo <- mo + (rain / 0.3 * 100.0)
+      mo <- mo + (rain / load * 100.0)
       mo <- ifelse(mo > 250.0, 250.0, mo)
       mo
     },
@@ -497,9 +498,9 @@ grass_spread_index <- function(ws, mc, cur, standing) {
 
 #' Calculate Grass Fire Weather Index
 #'
-#' @param gsi               Grass Spread Index
-#' @param load              Fuel Load (kg/m^2)
-#' @return                  Grass Fire Weather Index
+#' @param gsi               Grassland Spread Index
+#' @param load              Grassland Fuel Load (kg/m^2)
+#' @return                  Grassland Fire Weather Index
 grass_fire_weather_index <- Vectorize(function(gsi, load) {
   #  this just converts back to ROS in m/min
   ros <- gsi / 1.11
@@ -642,7 +643,7 @@ drought_code <- function(
   mcdc <- 0
 
   last_mc_dc <- dc_to_mcdc(last_dc)
-  TIME_INCREMENT <- 1.0
+  TIME_INCREMENT <- 1.0  # duration of timestep, in hours
   if(temp > 0){
     pe <- mult*temp + offset/16.0
   }
@@ -761,6 +762,9 @@ rain_since_intercept_reset <- function(rain, canopy) {
   if (length(na.omit(unique(w$LONG))) != 1) {
     stop("Expected a single LONG value for input weather")
   }
+  if (length(na.omit(unique(w$GRASS_FUEL_LOAD))) != 1) {
+    stop("Expected a single GRASS_FUEL_LOAD value")
+  }
   r <- as.data.table(copy(w))
   names(r) <- tolower(names(r))
   if (!is_mcffmc) {
@@ -814,7 +818,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     #     canopy$rain_total - FFMC_INTERCEPT
     #   )
     # )
-    mcffmc <- hourly_fine_fuel_moisture(cur$temp, cur$rh, cur$ws, rain_ffmc, mcffmc)
+    mcffmc <- hourly_fine_fuel_moisture(mcffmc, cur$temp, cur$rh, cur$ws, rain_ffmc)
     cur$mcffmc <- mcffmc
     # convert to code for output, but keep using moisture % for precision
     cur$ffmc <- mcffmc_to_ffmc(mcffmc)
@@ -856,8 +860,15 @@ rain_since_intercept_reset <- function(rain, canopy) {
     # done using canopy, can update for next step
     canopy$rain_total_prev <- canopy$rain_total_prev + cur$prec
     # grass updates
-    mcgfmc_matted <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws,
-      cur$prec, cur$solrad, mcgfmc_matted)
+    mcgfmc_matted <- hourly_grass_fuel_moisture(
+      mcgfmc_matted,
+      cur$temp,
+      cur$rh,
+      cur$ws,
+      cur$prec,
+      cur$solrad,
+      cur$grass_fuel_load
+    )
     #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
     #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
     #which averages 6% or so for rains  (<5mm...between 7% and 5%,    lower for larger rains)(NO intercept)
@@ -865,8 +876,15 @@ rain_since_intercept_reset <- function(rain, canopy) {
     #heating of the grass from solar
     #working at the margin like this should make a nice bracket for moisture between the matted and standing that users can use
     #...reality will be in between the matt and stand
-    mcgfmc_standing <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws,
-      cur$prec * 0.06, 0.0, mcgfmc_standing)
+    mcgfmc_standing <- hourly_grass_fuel_moisture(
+      mcgfmc_standing,
+      cur$temp,
+      cur$rh,
+      cur$ws,
+      cur$prec * 0.06,
+      0.0,
+      cur$grass_fuel_load
+    )
     #mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
     #print(mcgfmc)
     mcgfmc <- mcgfmc_standing
@@ -880,7 +898,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     cur$mcgfmc_standing <- mcgfmc_standing
     cur$gfmc <- mcgfmc_to_gfmc(mcgfmc, cur$percent_cured, cur$ws)
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
-    cur$gfwi <- grass_fire_weather_index(cur$gsi, DEFAULT_GRASS_FUEL_LOAD)
+    cur$gfwi <- grass_fire_weather_index(cur$gsi, cur$grass_fuel_load)
     # save wetting variables for timestep-by-timestep runs
     cur$dmc_before_rain <- dmc_$dmc_before_rain
     cur$dc_before_rain <- dc_$dc_before_rain
@@ -894,8 +912,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
 
 #' Calculate hourly FWI indices from hourly weather stream.
 #'
-#' @param    df_wx               hourly values weather stream
-#' @param    timezone            integer offset from GMT to use for sun calculations
+#' @param    df_wx                hourly values weather stream
+#' @param    timezone             integer offset from GMT to use for sun calculations
 #' @param    ffmc_or_mcffmc_old   previous value for FFMC or mcffmc (startup 85)
 #' @param    is_mcffmc            is above a value of mcffmc or FFMC (default False)
 #' @param    dmc_old              previous value for DMC (startup 6)
@@ -995,7 +1013,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
   stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
   stopifnot(wx$SOLRAD >= 0)
-  stopifnot(wx$GRASS_FUEL_LOAD >= 0)
+  stopifnot(wx$GRASS_FUEL_LOAD > 0)
   stopifnot(wx$PERCENT_CURED >= 0 & wx$PERCENT_CURED <= 100)
   if (!is_mcffmc) {
     stopifnot(ffmc_or_mcffmc_old >= 0 & ffmc_or_mcffmc_old <= 101)
@@ -1035,6 +1053,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
   if (!hadTimestamp) {
     results <- results[, -c("TIMESTAMP")]
   }
+  results <- results[, -c("TIMEZONE")]
 
   names(results) <- tolower(names(results))
 

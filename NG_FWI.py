@@ -92,13 +92,13 @@ def mcdc_to_dc(mcdc):
 
 # Calculate hourly Fine Fuel Moisture Code (FFMC)
 #
+# @param lastmc          Previous Fine Fuel Moisture (%)
 # @param temp            Temperature (Celcius)
 # @param rh              Relative Humidity (percent, 0-100)
 # @param ws              Wind Speed (km/h)
 # @param rain            Rainfall (mm)
-# @param lastmc          Previous Fine Fuel Moisture (%)
 # @return                Hourly Fine Fuel Moisture (%)
-def hourly_fine_fuel_moisture(temp, rh, ws, rain, lastmc):
+def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain):
     rf = 42.5
     drf = 0.0579
     # Time since last observation (hours)
@@ -186,14 +186,15 @@ def daily_severity_rating(fwi):
 
 # Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
 #
+# @param lastmc          Previous grass fuel moisture (percent)
 # @param temp            Temperature (Celcius)
 # @param rh              Relative Humidity (percent, 0-100)
 # @param ws              Wind Speed (km/h)
 # @param rain            Rainfall (mm)
-# @param lastmc          Previous grass fuel moisture (percent)
 # @param solrad          Solar radiation (kW/m^2)
+# @param load            Grassland Fuel Load (kg/m^2)
 # @return                Grass Fuel Moisture (percent)
-def hourly_grass_fuel_moisture(temp, rh, ws, rain, solrad, lastmc):
+def hourly_grass_fuel_moisture(lastmc, temp, rh, ws, rain, solrad, load):
     rf = 0.27
     drf = 0.389633
     # Time since last observation (hours)
@@ -205,7 +206,7 @@ def hourly_grass_fuel_moisture(temp, rh, ws, rain, solrad, lastmc):
         #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
         # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
         # *100 to convert to %...  *1/.3 because of 0.3mm=100%
-        mo += rain / 0.3 * 100.0
+        mo += rain / load * 100.0
         if mo > 250:
             mo = 250
     # fuel temp from CEVW*/
@@ -425,9 +426,9 @@ def grass_spread_index(ws, mc, cur, standing):
 ##
 # Calculate Grass Fire Weather Index
 #
-# @param gsi               Grass Spread Index
-# @param load              Fuel Load (kg/m^2)
-# @return                  Grass Fire Weather Index
+# @param gsi               Grassland Spread Index
+# @param load              Grassland Fuel Load (kg/m^2)
+# @return                  Grassland Fire Weather Index
 def grass_fire_weather_index(gsi, load):
     # this just converts back to ROS in m/min
     ros = gsi / 1.11
@@ -561,7 +562,7 @@ def drought_code(
   mcdc = 0
     
   last_mc_dc = dc_to_mcdc(last_dc)
-  TIME_INCREMENT = 1.0
+  TIME_INCREMENT = 1.0  # duration of timestep, in hours
   if temp > 0:
     pe = mult*temp + offset/16.0
       
@@ -655,12 +656,14 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
-    if 1 != len(w["ID"].unique()):
+    if len(w["ID"].unique()) != 1:
         raise RuntimeError("Expected a single ID value for input weather")
-    if 1 != len(w["LAT"].unique()):
+    if len(w["LAT"].unique()) != 1:
         raise RuntimeError("Expected a single LAT value for input weather")
-    if 1 != len(w["LONG"].unique()):
+    if len(w["LONG"].unique()) != 1:
         raise RuntimeError("Expected a single LONG value for input weather")
+    if len(w["GRASS_FUEL_LOAD"].unique()) != 1:
+        raise RuntimeError("Expected a single GRASS_FUEL_LOAD value")
     r = w.loc[:]
     r.columns = map(str.lower, r.columns)
     if not is_mcffmc:
@@ -706,7 +709,11 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         else:
             rain_ffmc = canopy["rain_total_prev"] + cur["prec"] - FFMC_INTERCEPT
         mcffmc = hourly_fine_fuel_moisture(
-            cur["temp"], cur["rh"], cur["ws"], rain_ffmc, mcffmc
+           mcffmc,
+           cur["temp"],
+           cur["rh"],
+           cur["ws"],
+           rain_ffmc
         )
         cur["mcffmc"] = mcffmc
         #  convert to code for output, but keep using moisture % for precision
@@ -750,7 +757,13 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         canopy["rain_total_prev"] += cur["prec"]
         # grass updates
         mcgfmc_matted = hourly_grass_fuel_moisture(
-            cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc_matted
+            mcgfmc_matted,
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            cur["prec"],
+            cur["solrad"],
+            cur["grass_fuel_load"]
         )
         #for standing grass we make a come very simplifying assumptions based on obs from the field (echo bay study):
         #standing not really affected by rain -- to introduce some effect we introduce just a simplification of the FFMC Rain absorption function
@@ -760,7 +773,13 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         #working at the margin like this should make a nice bracket for moisture between the matted and standing that users can use
         #...reality will be in between the matt and stand
         mcgfmc_standing = hourly_grass_fuel_moisture(
-            cur["temp"], cur["rh"], cur["ws"], cur["prec"]*0.06, 0.0, mcgfmc_standing
+            mcgfmc_standing,
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            cur["prec"]*0.06,
+            0.0,
+            cur["grass_fuel_load"]
         )
         #mcgfmc = hourly_grass_fuel_moisture(
         #    cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc
@@ -776,7 +795,7 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         cur["mcgfmc_standing"] = mcgfmc_standing
         cur["gfmc"] = mcgfmc_to_gfmc(mcgfmc, cur["percent_cured"], cur["ws"])
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
-        cur["gfwi"] = grass_fire_weather_index(cur["gsi"], DEFAULT_GRASS_FUEL_LOAD)
+        cur["gfwi"] = grass_fire_weather_index(cur["gsi"], cur["grass_fuel_load"])
         # save wetting variables for timestep-by-timestep runs
         cur["dmc_before_rain"] = dmc_before_rain
         cur["dc_before_rain"] = dc_before_rain
@@ -882,8 +901,8 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
     if ("PERCENT_CURED" in og_names) and (not (
        all(wx["PERCENT_CURED"] >= 0) and all(wx["PERCENT_CURED"] <= 100))):
        raise ValueError("All PERCENT_CURED must be between 0-100")
-    if ("GRASS_FUEL_LOAD" in og_names) and (not (all(wx["GRASS_FUEL_LOAD"] >= 0))):
-       raise ValueError("All GRASS_FUEL_LOAD must be >= 0")
+    if ("GRASS_FUEL_LOAD" in og_names) and (not (all(wx["GRASS_FUEL_LOAD"] > 0))):
+       raise ValueError("All GRASS_FUEL_LOAD must be > 0")
     if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
         raise ValueError("All DAY must be 1-31")
     if is_mcffmc:
@@ -920,6 +939,7 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
        results = results.drop(columns = "DATE")
     if not had_timestamp:
        results = results.drop(columns = "TIMESTAMP")
+    results = results.drop(columns = "TIMEZONE")
 
     results.columns = map(str.lower, results.columns)
 
