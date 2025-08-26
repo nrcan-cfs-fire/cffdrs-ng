@@ -77,28 +77,18 @@ mcdc_to_dc <- function(mcdc) {
    return(400 * log(400 / mcdc))
 }
 
-#' Calculate hourly Fine Fuel Moisture Code (FFMC)
+#' Calculate hourly fine fuel moisture content. Needs to be converted to get FFMC
 #'
-#' @param lastmc          Previous Fine Fuel Moisture (%)
+#' @param lastmc          Previous fine fuel moisture content (%)
 #' @param temp            Temperature (Celcius)
 #' @param rh              Relative Humidity (percent, 0-100)
 #' @param ws              Wind Speed (km/h)
 #' @param rain            Rainfall (mm)
-#' @return                Hourly Fine Fuel Moisture (%)
-hourly_fine_fuel_moisture <- function(lastmc, temp, rh, ws, rain) {
-  # cur <- r[i + 1]
-  # temp <- cur$temp
-  # rh <- cur$rh
-  # ws <- cur$ws
-  # rain <- cur$prec
-  # lastmc <- mcffmc
-  # # 3.3,94.0,3.0,0.0,16.4
-  # # 16.43770866,16.43770866,3.20393529,29.83789869,27.60476102,27.60476102
-  # # 0.06000000,0.54065437,0.03531092,17.30973068
+#' @param time_increment  Duration of timestep (hr, default 1.0)
+#' @return                Hourly fine fuel moisture content (%)
+hourly_fine_fuel_moisture <- function(lastmc, temp, rh, ws, rain, time_increment = 1.0) {
   rf <- 42.5
   drf <- 0.0579
-  # Time since last observation (hours)
-  time <- 1.0
   # use moisture directly instead of converting to/from ffmc
   # expects any rain intercept to already be applied
   mo <- lastmc
@@ -117,20 +107,13 @@ hourly_fine_fuel_moisture <- function(lastmc, temp, rh, ws, rain) {
   e1 <- 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)))
   ed <- 0.942 * (rh^0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1
   ew <- 0.618 * (rh^0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
-  # m = ed if mo >= ed else ew
-  m <- ifelse(mo < ed,
-    ew,
-    ed
-  )
+  m <- ifelse(mo < ed, ew, ed)
   if (mo != ed) {
     # these are the same formulas with a different value for a1
-    a1 <- ifelse(mo > ed,
-      rh / 100.0,
-      (100.0 - rh) / 100.0
-    )
+    a1 <- ifelse(mo > ed, rh / 100.0, (100.0 - rh) / 100.0)
     k0_or_k1 <- 0.424 * (1 - (a1^1.7)) + (0.0694 * sqrt(ws) * (1 - (a1^8)))
-    kd_or_kw <- (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp)
-    m <- m + (mo - m) * (10^(-kd_or_kw * time))
+    kd_or_kw <- (1.0 / 0.50) * drf * k0_or_k1 * exp(0.0365 * temp)
+    m <- m + (mo - m) * (10^(-kd_or_kw * time_increment))
   }
   return(m)
 }
@@ -207,123 +190,83 @@ daily_severity_rating <- function(fwi) {
 #' @param solrad          Solar radiation (kW/m^2)
 #' @param load            Grassland Fuel Load (kg/m^2)
 #' @return                Grass Fuel Moisture (percent)
-hourly_grass_fuel_moisture <- function(lastmc, temp, rh, ws, rain, solrad, load) {
+hourly_grass_fuel_moisture <- function(
+  lastmc,
+  temp,
+  rh,
+  ws,
+  rain,
+  solrad,
+  load,
+  time_increment = 1.0) {
   # MARK II of the model (2016) wth new solar rad model specific to grass
-  #
-  # Temp is temperature in C
-  # RH is realtive humidty in %
-  # ws is average wind speed in km/h
-  # rain is rainfall in mm
-  # solrad is kW/m2  (radiaiton reaching fuel)
-  # mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-  # time - time between obs in HOURS
-  #
   #
   # DRF of 1/16.1 comes from reducting the standard response time curve
   # at 26.7C, 20%RH, 2 km/h to 0.85hr.
-  #
-  #
   #
   # bmw
 
   rf <- 0.27
   drf <- 0.389633
-  # Time since last observation (hours)
-  time <- 1.0
+  # use moisture directly instead of converting to/from ffmc
+  # expects any rain intercept to already be applied
   mo <- lastmc
-  mo <- ifelse(rain != 0,
-    {
-      #     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain))*/ # old routine*/
-      # this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-      # *100 to convert to %...  *1/.3 because of 0.3mm=100%
-      mo <- mo + (rain / load * 100.0)
-      mo <- ifelse(mo > 250.0, 250.0, mo)
-      mo
-    },
-    mo
-  )
-
+  if (rain != 0) {
+    mo <- mo + (rain / load * 100.0)
+    if (mo > 250.0) {
+      mo <- 250.0
+    }
+  }
   # fuel temp from CEVW*/
   tf <- temp + 17.9 * solrad * exp(-0.034 * ws)
-  
   # fuel humidity
-  rhf <- ifelse(tf > temp,
-    (rh * 6.107 * (10.0^(7.5 * temp / (temp + 237.0)))
-      / (6.107 * (10.0^(7.5 * tf / (tf + 237.0))))),
-    rh
-  )
-  
+  if (tf > temp) {
+    rhf <- (rh * 6.107 * (10.0^(7.5 * temp / (temp + 237.0))) /
+      (6.107 * (10.0^(7.5 * tf / (tf + 237.0)))))
+  } else {
+    rhf <- rh
+  }
   # 18.85749879,18.85749879,7.77659602,21.24361786,19.22479551,19.22479551
   # duplicated in both formulas, so calculate once
   e1 <- rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)))
   # GRASS EMC
   ed <- 1.62 * (rhf^0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1
   ew <- 1.42 * (rhf^0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1
-  
+
   moed <- mo - ed
   moew <- mo - ew
-  
-  
+
   e <- NULL
   a1 <- NULL
   m <- NULL
   moe <- NULL
-  if (moed == 0 || (moew >= 0 && moed <0)){
+
+  if (moed == 0 || (moew >= 0 && moed < 0)) {
     m <- mo
-    if(moed == 0){
+    if (moed == 0) {
       e <- ed
     }
-    if (moew >= 0){
+    if (moew >= 0) {
       e <- ew
     }
-  }
-  else{
-    if(moed > 0){
-      a1 <- rhf/100.0
+  } else {
+    if (moed > 0) {
+      a1 <- rhf / 100.0
       e <- ed
       moe <- moed
-    }
-    else{
-      a1 <- (100.0-rhf)/100.0
+    } else {
+      a1 <- (100.0 - rhf) / 100.0
       e <- ew
       moe <- moew
     }
-    if (a1 < 0){
+    if (a1 < 0) {
       #avoids complex number in a1^1.7 xkd calculation
       a1 <- 0
     }
-    xkd <- (0.424*(1-a1^1.7)+(0.0694*sqrt(ws)*(1-a1^8)))
-    xkd <- xkd*drf*exp(0.0365*tf)
-    m <- e+moe*exp(-1.0*log(10.0)*xkd*time)
+    xkd <- 0.424 * (1 - a1^1.7) + (0.0694 * sqrt(ws) * (1 - a1^8))
+    xkd <- xkd * drf * exp(0.0365 * tf)
+    m <- e + moe * exp(-1.0 * log(10.0) * xkd * time_increment)
   }
-  
-  
-#  m <- ifelse(mo < ed && mo < ew,
-#    ew,
-#    ed
-#  )
-#  print(temp)
-#  print(solrad)
-#  print(ws)
-#  print(rh)
-#  # use ifelse so table works
-#  print(m)
-  
-#  m <- ifelse(mo > ed || (mo < ed && mo < ew),
-#    {
-#      # these are the same formulas with a different value for a1
-#      a1 <- ifelse(mo > ed,
-#        rhf / 100.0,
-#        (100.0 - rhf) / 100.0
-#      )
-#      k0_or_k1 <- 0.424 * (1 - (a1^1.7)) + (0.0694 * sqrt(ws) * (1 - (a1^8)))
-#      kd_or_kw <- drf * k0_or_k1 * exp(0.0365 * tf)
-#      m + (mo - m) * (10^(-kd_or_kw * time))
-#      m
-#    },
-#    m
-#  )
-
   return(m)
 }
 
@@ -468,13 +411,13 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
 }
 
 
-#' Calculate Grass Spread Index (GSI)
+#' Calculate Grassland Spread Index (GSI)
 #'
 #' @param ws              Wind Speed (km/h)
 #' @param mc              Grass moisture content (percent)
 #' @param cur             Degree of curing (percent, 0-100)
 #' @param standing        Grass standing (True/False)
-#' @return                Grass Spread Index
+#' @return                Grassland Spread Index
 grass_spread_index <- function(ws, mc, cur, standing) {
   #  So we don't have to transition midseason between standing and matted grass spread rate models
   #  We will simply scale   GSI   by the average of the   matted and standing spread rates
@@ -496,19 +439,20 @@ grass_spread_index <- function(ws, mc, cur, standing) {
 }
 
 
-#' Calculate Grass Fire Weather Index
+#' Calculate Grassland Fire Weather Index
 #'
 #' @param gsi               Grassland Spread Index
 #' @param load              Grassland Fuel Load (kg/m^2)
 #' @return                  Grassland Fire Weather Index
 grass_fire_weather_index <- Vectorize(function(gsi, load) {
-  #  this just converts back to ROS in m/min
+  # this just converts back to ROS in m/min
   ros <- gsi / 1.11
   Fint <- 300.0 * load * ros
-  return(ifelse(Fint > 100,
-    log(Fint / 60.0) / 0.14,
-    Fint / 25.0
-  ))
+  if (Fint > 100) {
+    return(log(Fint / 60.0) / 0.14)
+  } else {
+    return(Fint / 25.0)
+  }
 })
 
 dmc_wetting <- function(rain_total, lastdmc) {
