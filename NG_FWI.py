@@ -491,120 +491,100 @@ def dmc_drying_ratio(temp, rh):
 
 
 def duff_moisture_code(
-    last_dmc,
+    last_mcdmc,
+    hr,
     temp,
     rh,
-    ws,
-    rain,
-    mon,
-    hour,
-    solrad,
+    prec,
     sunrise,
     sunset,
-    dmc_before_rain,
-    rain_total_prev
+    prec_cumulative_prev,
+    time_increment = 1.0  # duration of timestep, in hours
 ):
-    if rain_total_prev + rain == 0:  # canopy reset
-        dmc_before_rain = last_dmc
-    # apply wetting since last period
-    dmc_wetting_hourly = dmc_wetting_between(rain, rain_total_prev, dmc_before_rain)
-    # at most apply same wetting as current value (don't go below 0)
-    dmc = max(0.0, last_dmc - dmc_wetting_hourly)
+    # wetting
+    if prec_cumulative_prev + prec > DMC_INTERCEPT:  # prec_cumulative above threshold
+        if prec_cumulative_prev < DMC_INTERCEPT:  # just passed threshold
+            rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
+        else:  # previously passed threshold
+            rw = prec * 0.92
+        
+        last_dmc = mcdmc_to_dmc(last_mcdmc)
+        if last_dmc <= 33:
+            b = 100.0 / (0.3 * last_dmc + 0.5)
+        elif last_dmc <= 65:
+            b = -1.3 * log(last_dmc) + 14.0
+        else:
+            b = 6.2 * log(last_dmc) - 17.2
+        
+        mr = last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
+    else:  # prec_cumulative below threshold
+        mr = last_mcdmc
+    
+    if mr > 300.0:
+        mr = 300.0
+    
+    # drying
     sunrise_start = sunrise + OFFSET_SUNRISE
     sunset_start = sunset + OFFSET_SUNSET
-    dmc_hourly = (
-        dmc_drying_ratio(temp, rh)
-        if (sunrise_start <= hour <= sunset_start)
-        else 0.0
-    )
-    dmc = dmc + dmc_hourly
-    # HACK: return two values since C uses a pointer to assign a value
-    return (dmc, dmc_before_rain)
-
+    if (sunrise_start <= hr <= sunset_start):  # daytime
+        if temp < 0:
+            temp = 0.0
+        rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
+        invtau = rk / 43.43
+        mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0
+    else:  # nighttime
+        mcdmc = mr
+    
+    if mcdmc > 300.0:
+        mcdmc = 300.0
+    
+    return(mcdmc)
 
 def dc_drying_hourly(temp):
     return max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP))
 
 
 def drought_code(
-    last_dc,
+    last_mcdc,
+    hr,
     temp,
-    rh,
-    ws,
-    rain,
-    mon,
-    hour,
-    solrad,
+    prec,
     sunrise,
     sunset,
-    dc_before_rain,
-    rain_total_prev
-):
-  ########################################################
-  ## for now we are using Mike's method for calculating DC
-  if rain_total_prev + rain == 0:  # canopy reset
-    dc_before_rain = last_dc
-  
-  offset = 3.0
-  mult = 0.015
-  pe = 0
-  rw = 0
-  mr = 0
-  mcdc = 0
-    
-  last_mc_dc = dc_to_mcdc(last_dc)
-  TIME_INCREMENT = 1.0  # duration of timestep, in hours
-  if temp > 0:
-    pe = mult*temp + offset/16.0
-      
-  invtau = pe/400.0
-  if (rain_total_prev + rain) <= 2.8:
-    mr = last_mc_dc
-  else:
-    if rain_total_prev <= 2.8:
-      rw = (rain_total_prev + rain)*0.83 - 1.27
+    prec_cumulative_prev,
+    time_increment = 1.0):
+    # wetting
+    if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
+        if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
+            rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
+        else:  # previously passed threshold
+            rw = prec * 0.83
+        mr = last_mcdc + 3.937 * rw / 2.0
     else:
-      rw = rain*0.83
-    mr = last_mc_dc + 3.937*rw/2.0
+        mr = last_mcdc
     
-  if mr > 400.0:
-    mr = 400.0
+    if mr > 400.0:
+        mr = 400.0
     
-  is_daytime = False
-  if (hour >= sunrise) and (hour <= sunset):
-    is_daytime = True
-      
-  if is_daytime:
-    mcdc = 0.0 + (mr + 0.0)*exp(-1.0*TIME_INCREMENT*invtau)
-  else:
-    mcdc = mr
-      
-  if mcdc > 400.0:
-    mcdc= 400.0
-      
-  dc = mcdc_to_dc(mcdc)
+    # drying
+    sunrise_start = sunrise + OFFSET_SUNRISE
+    sunset_start = sunset + OFFSET_SUNSET
+    if (sunrise_start <= hr <= sunset_start):  # daytime
+        offset = 3.0
+        mult = 0.015
+        if temp > 0:
+            pe = mult * temp + offset / 16.0
+        else:
+            pe = 0
+        invtau = pe / 400.0
+        mcdc = mr * exp(-time_increment * invtau)
+    else:  # nighttime
+        mcdc = mr
 
-  return (dc, dc_before_rain)
-  
-  ###################################################################################
-  
+    if mcdc > 400.0:
+        mcdc = 400.0
     
-   # if rain_total_prev + rain == 0:  # canopy reset
-    #    dc_before_rain = last_dc
-    # apply wetting since last period
-    #dc_wetting_hourly = dc_wetting_between(rain, rain_total_prev, dc_before_rain)
-    #assert 0 <= dc_wetting_hourly
-    # at most apply same wetting as current value (don't go below 0)
-    #dc = max(0.0, last_dc - dc_wetting_hourly)
-    #dc_hourly = dc_drying_hourly(temp)
-    # print(
-    #     "last_dc={:0.2f}, dc_wetting_hourly={:0.2f}, dc={:0.2f}, dc_hourly={:0.2f}".format(
-    #         last_dc, dc_wetting_hourly, dc, dc_hourly
-    #     )
-    # )
-    #dc = dc + dc_hourly
-    # HACK: return two values since C uses a pointer to assign a value
-    #return (dc, dc_before_rain)
+    return(mcdc)
 
 
 # Calculate number of drying "units" this hour contributes
@@ -642,9 +622,16 @@ def rain_since_intercept_reset(rain, canopy):
 # @param    prec_cumulative     cumulative precipitation this rainfall
 # @param    canopy_drying       consecutive hours of no rain
 # @return                       hourly values FWI and weather stream
-def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
-    mcgfmc_matted_old, mcgfmc_standing_old,
-    dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying):
+def _stnHFWI(
+    w,
+    ffmc_or_mcffmc_old,
+    is_mcffmc,
+    dmc_old,
+    dc_old,
+    mcgfmc_matted_old,
+    mcgfmc_standing_old,
+    prec_cumulative,
+    canopy_drying):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
     if len(w["ID"].unique()) != 1:
@@ -681,10 +668,8 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
     #     prec_accum = prec_accum + r.iloc[0]["prec"]
     #     r = r.iloc[1:]
     # r.iloc[0, list(r.columns).index("prec")] += prec_accum
-    dmc = dmc_old
-    dmc_before_rain = dmc_before_rain
-    dc = dc_old
-    dc_before_rain = dc_before_rain
+    mcdmc = dmc_to_mcdmc(dmc_old)
+    mcdc = dc_to_mcdc(dc_old)
     # FIX: just use loop for now so it matches C code
     canopy = {"rain_total_prev": prec_cumulative,
               "drying_since_intercept": canopy_drying}
@@ -710,38 +695,29 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         #  convert to code for output, but keep using moisture % for precision
         cur["ffmc"] = mcffmc_to_ffmc(mcffmc)
         # not ideal, but at least encapsulates the code for each index
-        dmc, dmc_before_rain = duff_moisture_code(
-            dmc,
+        mcdmc = duff_moisture_code(
+            mcdmc,
+            cur["hr"],
             cur["temp"],
             cur["rh"],
-            cur["ws"],
             cur["prec"],
-            cur["mon"],
-            cur["hr"],
-            cur["solrad"],
             cur["sunrise"],
             cur["sunset"],
-            dmc_before_rain,
             canopy["rain_total_prev"]
         )
-        cur["dmc"] = dmc
-        dc, dc_before_rain = drought_code(
-            dc,
+        cur["dmc"] = mcdmc_to_dmc(mcdmc)
+        mcdc = drought_code(
+            mcdc,
+            cur["hr"],
             cur["temp"],
-            cur["rh"],
-            cur["ws"],
             cur["prec"],
-            cur["mon"],
-            cur["hr"],
-            cur["solrad"],
             cur["sunrise"],
             cur["sunset"],
-            dc_before_rain,
             canopy["rain_total_prev"]
         )
-        cur["dc"] = dc
+        cur["dc"] = mcdc_to_dc(mcdc)
         cur["isi"] = initial_spread_index(cur["ws"], cur["ffmc"])
-        cur["bui"] = buildup_index(dmc, dc)
+        cur["bui"] = buildup_index(cur["dmc"], cur["dc"])
         cur["fwi"] = fire_weather_index(cur["isi"], cur["bui"])
         cur["dsr"] = daily_severity_rating(cur["fwi"])
         # done using canopy, can update for next step
@@ -771,16 +747,14 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
             cur["prec"]*0.06,
             0.0,
             cur["grass_fuel_load"]
-        )
-        #mcgfmc = hourly_grass_fuel_moisture(
-        #    cur["temp"], cur["rh"], cur["ws"], cur["prec"], cur["solrad"], mcgfmc
-        #)
+        )        
         
-        mcgfmc = mcgfmc_standing
-        standing = True
         if (util.julian(cur["mon"], cur["day"]) < DATE_GRASS):
-          standing = False
-          mcgfmc = mcgfmc_matted
+            standing = False
+            mcgfmc = mcgfmc_matted
+        else:
+            standing = True
+            mcgfmc = mcgfmc_standing
         
         cur["mcgfmc_matted"] = mcgfmc_matted
         cur["mcgfmc_standing"] = mcgfmc_standing
@@ -788,8 +762,6 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
         cur["gfwi"] = grass_fire_weather_index(cur["gsi"], cur["grass_fuel_load"])
         # save wetting variables for timestep-by-timestep runs
-        cur["dmc_before_rain"] = dmc_before_rain
-        cur["dc_before_rain"] = dc_before_rain
         cur["prec_cumulative"] = canopy["rain_total_prev"]
         cur["canopy_drying"] = canopy["drying_since_intercept"]
         # append results for this row
@@ -817,13 +789,19 @@ def _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
 # @param    silent              suppresses informative print statements (default False)
 # @param    round_out           decimals to truncate output to, None for none (default 4)
 # @return                       hourly values FWI and weather stream
-def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
-    dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
+def hFWI(
+    df_wx,
+    timezone,
+    ffmc_or_mcffmc_old = FFMC_DEFAULT,
+    is_mcffmc = False,
+    dmc_old = DMC_DEFAULT,
+    dc_old = DC_DEFAULT,
     mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
-    dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
-    prec_cumulative = 0.0, canopy_drying = 0.0,
-    silent = False, round_out = 4):
+    prec_cumulative = 0.0,
+    canopy_drying = 0.0,
+    silent = False,
+    round_out = 4):
     wx = df_wx.copy()
     wx.columns = map(str.upper, wx.columns)
     og_names = wx.columns
@@ -914,10 +892,10 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
-        w = util.getSunlight(w, get_solrad=needs_solrad)
+        w = util.getSunlight(w, get_solrad = needs_solrad)
         r = _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
             mcgfmc_matted_old, mcgfmc_standing_old,
-            dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying)
+            prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
     
     # remove optional variables that we added
@@ -939,7 +917,7 @@ def hFWI(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = False,
         outcols = ["sunrise", "sunset", "sunlight_hours",
             "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
             "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
-            "dmc_before_rain", "dc_before_rain", "prec_cumulative", "canopy_drying"]
+            "prec_cumulative", "canopy_drying"]
         if "SOLRAD" not in og_names:
            outcols.insert(0, "solrad")
         results[outcols] = results[outcols].map(round, ndigits = round_out)
@@ -968,10 +946,6 @@ if __name__ == "__main__":
     parser.add_argument("mcgfmc_standing_old", nargs = "?",
         default = ffmc_to_mcffmc(FFMC_DEFAULT), type = float,
         help = "Starting mcgfmc for standing fuels (default mcffmc when FFMC = 85)")
-    parser.add_argument("dmc_before_rain", nargs = "?", default = DMC_DEFAULT,
-        type = float, help = "Last DMC before rain (default 6)")
-    parser.add_argument("dc_before_rain", nargs = "?", default = DC_DEFAULT,
-        type = float, help = "Last DC before rain (default 15)")
     parser.add_argument("prec_cumulative", nargs = "?", default = 0.0, type = float,
         help = "Cumulative precipitation of rain event (default 0)")
     parser.add_argument("canopy_drying", nargs = "?", default = 0.0, type = float,
@@ -984,6 +958,5 @@ if __name__ == "__main__":
     df_in = pd.read_csv(args.input)
     df_out = hFWI(df_in, args.timezone, args.ffmc_or_mcffmc_old, args.is_mcffmc,
         args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
-        args.dmc_before_rain, args.dc_before_rain, args.prec_cumulative,
-        args.canopy_drying, args.silent, args.round_out)
+        args.prec_cumulative, args.canopy_drying, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)

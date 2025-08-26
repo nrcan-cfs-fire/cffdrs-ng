@@ -524,132 +524,113 @@ dmc_drying_ratio <- function(temp, rh) {
 }
 
 duff_moisture_code <- function(
-    last_dmc,
-    temp,
-    rh,
-    ws,
-    rain,
-    mon,
-    hour,
-    solrad,
-    sunrise,
-    sunset,
-    dmc_before_rain,
-    rain_total_prev) {
-  if (rain_total_prev + rain == 0) {  # canopy reset
-    dmc_before_rain <- last_dmc
+  last_mcdmc,
+  hr,
+  temp,
+  rh,
+  prec,
+  sunrise,
+  sunset,
+  prec_cumulative_prev,
+  time_increment = 1.0) {
+  # wetting
+  if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  # prec_cumulative above threshold
+    if (prec_cumulative_prev < DMC_INTERCEPT) {  # just passed threshold
+      rw <- (prec_cumulative_prev + prec) * 0.92 - 1.27
+    } else {
+      rw <- prec * 0.92
+    }
+
+    last_dmc <- mcdmc_to_dmc(last_mcdmc)
+    if (last_dmc <= 33) {
+      b <- 100.0 / (0.3 * last_dmc + 0.5)
+    } else if (last_dmc <= 65) {
+      b <- -1.3 * log(last_dmc) + 14.0
+    } else {
+      b <- 6.2 * log(last_dmc) - 17.2
+    }
+
+    mr <- last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
+  } else {
+    mr <- last_mcdmc
   }
-  # apply wetting since last period
-  dmc_wetting_hourly <- dmc_wetting_between(rain, rain_total_prev, dmc_before_rain)
-  # at most apply same wetting as current value (don't go below 0)
-  dmc <- pmax(0.0, last_dmc - dmc_wetting_hourly)
+
+  if (mr > 300.0) {
+    mr <- 300.0
+  }
+
+  # drying
   sunrise_start <- sunrise + OFFSET_SUNRISE
   sunset_start <- sunset + OFFSET_SUNSET
-  dmc_hourly <- ifelse(hour >= sunrise_start & hour <= sunset_start,
-    dmc_drying_ratio(temp, rh),
-    0.0
-  )
-  dmc <- dmc + dmc_hourly
-  # HACK: return two values since C uses a pointer to assign a value
-  return(list(dmc = dmc, dmc_before_rain = dmc_before_rain))
+  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+    if (temp < 0) {
+      temp <- 0.0
+    }
+    rk <- HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
+    invtau <- rk / 43.43
+    mcdmc <- (mr - 20.0) * exp(-time_increment * invtau) + 20.0
+  } else {  # nighttime
+    mcdmc <- mr
+  }
+
+  if (mcdmc > 300.0) {
+    mcdmc <- 300.0
+  }
+
+  return(mcdmc)
 }
 
 dc_drying_hourly <- function(temp) {
   return(pmax(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP)))
 }
 
-
-
 drought_code <- function(
-    last_dc,
-    temp,
-    rh,
-    ws,
-    rain,
-    mon,
-    hour,
-    solrad,
-    sunrise,
-    sunset,
-    dc_before_rain,
-    rain_total_prev) {
-  ########################################################
-  ## for now we are using Mike's method for calculating DC
-  if (rain_total_prev + rain == 0) {
-    dc_before_rain <- last_dc
+  last_mcdc,
+  hr,
+  temp,
+  prec,
+  sunrise,
+  sunset,
+  prec_cumulative_prev,
+  time_increment = 1.0) {
+  # wetting
+  if (prec_cumulative_prev + prec > DC_INTERCEPT) {  # prec_cumulative above threshold
+    if (prec_cumulative_prev <= DC_INTERCEPT) {  # just passed threshold
+      rw <- (prec_cumulative_prev + prec) * 0.83 - 1.27
+    } else {  # previously passed threshold
+      rw <- prec * 0.83
+    }
+    mr <- last_mcdc + 3.937 * rw / 2.0
+  } else {
+    mr <- last_mcdc
   }
 
-  offset <- 3.0
-  mult <- 0.015
-  pe <- 0
-  rw <- 0
-  mr <- 0
-  mcdc <- 0
-
-  last_mc_dc <- dc_to_mcdc(last_dc)
-  TIME_INCREMENT <- 1.0  # duration of timestep, in hours
-  if(temp > 0){
-    pe <- mult*temp + offset/16.0
-  }
-  
-  invtau <- pe/400.0
-  
-  if((rain_total_prev + rain) <= 2.8){
-    mr <- last_mc_dc
-  }
-  else {
-    if(rain_total_prev <= 2.8){
-      rw <- (rain_total_prev + rain)*0.83 - 1.27
-    }
-    else{
-      rw <- rain*0.83
-    }
-    mr <- last_mc_dc + 3.937*rw/2.0
-  }
-  
-  if(mr > 400.0){
+  if (mr > 400.0) {
     mr <- 400.0
   }
-  
-  is_daytime <- FALSE
-  if(hour >= sunrise && hour <= sunset){
-    is_daytime = TRUE
-  }
-  
-  if(is_daytime){
-    mcdc <- 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau)
-  }
-  else{
+
+  # drying
+  sunrise_start <- sunrise + OFFSET_SUNRISE
+  sunset_start <- sunset + OFFSET_SUNSET
+  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+    offset <- 3.0
+    mult <- 0.015
+    if (temp > 0) {
+      pe <- mult * temp + offset / 16.0
+    } else {
+      pe <- 0
+    }
+    invtau <- pe / 400.0
+    mcdc <- mr * exp(-time_increment * invtau)
+  } else {  # nighttime
     mcdc <- mr
   }
-  
-  if(mcdc > 400.0){
+
+  if (mcdc > 400.0) {
     mcdc <- 400.0
   }
-  
-  dc <- mcdc_to_dc(mcdc)
-  
-  
-  return(list(dc = dc, dc_before_rain = dc_before_rain))
-  ##########################################################################################
 
-  
-  if (rain_total_prev + rain == 0) {
-    dc_before_rain <- last_dc
-  }
-  # apply wetting since last period
-  dc_wetting_hourly <- dc_wetting_between(rain, rain_total_prev, dc_before_rain)
-  # at most apply same wetting as current value (don't go below 0)
-  dc <- pmax(0.0, last_dc - dc_wetting_hourly)
-  dc_hourly <- dc_drying_hourly(temp)
-  # print(sprintf("last_dc=%0.2f, dc_wetting_hourly=%0.2f, dc=%0.2f, dc_hourly=%0.2f\n",
-  #        last_dc,
-  #        dc_wetting_hourly,
-  #        dc,
-  #        dc_hourly))
-  dc <- dc + dc_hourly
-  # HACK: return two values since C uses a pointer to assign a value
-  return(list(dc = dc, dc_before_rain = dc_before_rain))
+  return(mcdc)
 }
 
 
@@ -691,9 +672,16 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param    prec_cumulative      cumulative precipitation this rainfall
 #' @param    canopy_drying        consecutive hours of no rain
 #' @return                        hourly values FWI and weather stream
-.stnHFWI <- function(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
-  mcgfmc_matted_old, mcgfmc_standing_old,
-  dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying) {
+.stnHFWI <- function(
+  w,
+  ffmc_or_mcffmc_old,
+  is_mcffmc,
+  dmc_old,
+  dc_old,
+  mcgfmc_matted_old,
+  mcgfmc_standing_old,
+  prec_cumulative,
+  canopy_drying) {
   if (!isSequentialHours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
@@ -736,8 +724,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
   # cur <- r[1]
   # # HACK: add precip tally to current hour so it doesn't get omitted
   # cur$prec <- cur$prec + prec_accum
-  dmc_ <- list(dmc = dmc_old, dmc_before_rain = dmc_before_rain)
-  dc_ <- list(dc = dc_old, dc_before_rain = dc_before_rain)
+  mcdmc <- dmc_to_mcdmc(dmc_old)
+  mcdc <- dc_to_mcdc(dc_old)
   # FIX: just use loop for now so it matches C code
   canopy <- list(rain_total_prev = prec_cumulative,
     drying_since_intercept = canopy_drying)
@@ -767,36 +755,27 @@ rain_since_intercept_reset <- function(rain, canopy) {
     # convert to code for output, but keep using moisture % for precision
     cur$ffmc <- mcffmc_to_ffmc(mcffmc)
     # not ideal, but at least encapsulates the code for each index
-    dmc_ <- duff_moisture_code(
-      dmc_$dmc,
+    mcdmc <- duff_moisture_code(
+      mcdmc,
+      cur$hr,
       cur$temp,
       cur$rh,
-      cur$ws,
       cur$prec,
-      cur$mon,
-      cur$hr,
-      cur$solrad,
       cur$sunrise,
       cur$sunset,
-      dmc_$dmc_before_rain,
       canopy$rain_total_prev
     )
-    cur$dmc <- dmc_$dmc
-    dc_ <- drought_code(
-      dc_$dc,
+    cur$dmc <- mcdmc_to_dmc(mcdmc)
+    mcdc <- drought_code(
+      mcdc,
+      cur$hr,
       cur$temp,
-      cur$rh,
-      cur$ws,
       cur$prec,
-      cur$mon,
-      cur$hr,
-      cur$solrad,
       cur$sunrise,
       cur$sunset,
-      dc_$dc_before_rain,
       canopy$rain_total_prev
     )
-    cur$dc <- dc_$dc
+    cur$dc <- mcdc_to_dc(mcdc)
     cur$isi <- initial_spread_index(cur$ws, cur$ffmc)
     cur$bui <- buildup_index(cur$dmc, cur$dc)
     cur$fwi <- fire_weather_index(cur$isi, cur$bui)
@@ -829,13 +808,13 @@ rain_since_intercept_reset <- function(rain, canopy) {
       0.0,
       cur$grass_fuel_load
     )
-    #mcgfmc <- hourly_grass_fuel_moisture(cur$temp, cur$rh, cur$ws, cur$prec, cur$solrad, mcgfmc)
-    #print(mcgfmc)
-    mcgfmc <- mcgfmc_standing
-    standing <- TRUE
+
     if (julian(cur$mon, cur$day) < DATE_GRASS) {
       standing <- FALSE
       mcgfmc <- mcgfmc_matted
+    } else {
+      standing <- TRUE
+      mcgfmc <- mcgfmc_standing
     }
 
     cur$mcgfmc_matted <- mcgfmc_matted
@@ -844,8 +823,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
     cur$gsi <- grass_spread_index(cur$ws, mcgfmc, cur$percent_cured, standing)
     cur$gfwi <- grass_fire_weather_index(cur$gsi, cur$grass_fuel_load)
     # save wetting variables for timestep-by-timestep runs
-    cur$dmc_before_rain <- dmc_$dmc_before_rain
-    cur$dc_before_rain <- dc_$dc_before_rain
     cur$prec_cumulative <- canopy$rain_total_prev
     cur$canopy_drying <- canopy$drying_since_intercept
     # bind results for this row
@@ -871,13 +848,19 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @param    silent               suppresses informative print statements (default False)
 #' @param    round_out            decimals to truncate output to, NA for none (default 4)
 #' @return                        hourly values FWI and weather stream
-hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc = FALSE,
-  dmc_old = DMC_DEFAULT, dc_old = DC_DEFAULT,
+hFWI <- function(
+  df_wx,
+  timezone,
+  ffmc_or_mcffmc_old = FFMC_DEFAULT,
+  is_mcffmc = FALSE,
+  dmc_old = DMC_DEFAULT,
+  dc_old = DC_DEFAULT,
   mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
-  dmc_before_rain = DMC_DEFAULT, dc_before_rain = DC_DEFAULT,
-  prec_cumulative = 0.0, canopy_drying = 0.0,
-  silent = FALSE, round_out = 4
+  prec_cumulative = 0.0,
+  canopy_drying = 0.0,
+  silent = FALSE,
+  round_out = 4
   ) {  # not using dmc_old or dc_old reference to match Python
   # check df_wx class for data.frame or data.table
   wasDf <- is.data.frame(df_wx)
@@ -978,7 +961,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
       w <- getSunlight(by_year, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
-        dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying)
+        prec_cumulative, canopy_drying)
       results <- rbind(results, r)
     }
   }
@@ -1021,7 +1004,7 @@ hFWI <- function(df_wx, timezone, ffmc_or_mcffmc_old = FFMC_DEFAULT, is_mcffmc =
 
 # run hFWI by command line via Rscript, requires 3 args: input csv, output csv, timezone
 # optional args: ffmc_or_mcffmc, is_mcffmc, dmc, dc, mcgfmc_matted, mcgfmc_standing,
-#                dmc_before_rain, dc_before_rain, prec_cumulative, canopy_drying, silent
+#                prec_cumulative, canopy_drying, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 3) {
@@ -1043,23 +1026,19 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   else mcgfmc_matted_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
   if (length(args) >= 9) mcgfmc_standing_old <- as.numeric(args[9])
   else mcgfmc_standing_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
-  if (length(args) >= 10) dmc_before_rain <- as.numeric(args[10])
-  else dmc_before_rain <- DMC_DEFAULT
-  if (length(args) >= 11) dc_before_rain <- as.numeric(args[11])
-  else dc_before_rain <- DC_DEFAULT
-  if (length(args) >= 12) prec_cumulative <- as.numeric(args[12])
+  if (length(args) >= 10) prec_cumulative <- as.numeric(args[12])
   else prec_cumulative <- 0.0
-  if (length(args) >= 13) canopy_drying <- as.numeric(args[13])
+  if (length(args) >= 11) canopy_drying <- as.numeric(args[13])
   else canopy_drying <- 0.0
-  if (length(args) >= 14) silent <- as.logical(args[14])
+  if (length(args) >= 12) silent <- as.logical(args[14])
   else silent <- FALSE
-  if (length(args) >= 15) round_out <- args[15]
+  if (length(args) >= 13) round_out <- args[15]
   else round_out <- 4
-  if (length(args) >= 16) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 14) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
   df_out <- hFWI(df_in, timezone, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
-    mcgfmc_matted_old, mcgfmc_standing_old, dmc_before_rain, dc_before_rain,
-    prec_cumulative, canopy_drying, silent, round_out)
+    mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying,
+    silent, round_out)
   write.csv(df_out, output, row.names = FALSE)
 }
