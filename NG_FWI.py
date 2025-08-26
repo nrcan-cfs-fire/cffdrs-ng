@@ -97,7 +97,7 @@ def mcdc_to_dc(mcdc):
 # @param temp            Temperature (Celcius)
 # @param rh              Relative Humidity (percent, 0-100)
 # @param ws              Wind Speed (km/h)
-# @param rain            Rainfall (mm)
+# @param rain            Rainfall AFTER intercept (mm)
 # @param time_increment  Duration of timestep (hr, default 1.0)
 # @return                Hourly fine fuel moisture content (%)
 def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment = 1.0):
@@ -127,6 +127,122 @@ def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment = 1.0):
         m += (mo - m) * pow(10, (-kd_or_kw * time_increment))
     return m
 
+##
+# Calculate duff moisture content
+#
+# @param last_mcdmc             Previous duff moisture content (%)
+# @param hr                     Time of day (hr)
+# @param temp                   Temperature (Celcius)
+# @param rh                     Relative Humidity (%)
+# @param prec                   Hourly precipitation (mm)
+# @param sunrise                Sunrise (hr)
+# @param sunset                 Sunset (hr)
+# @param prec_cumulative_prev   Cumulative precipitation since start of rain (mm)
+# @param time_increment         Duration of timestep (hr, default 1.0)
+# @return                       Hourly duff moisture content (%)
+def duff_moisture_code(
+    last_mcdmc,
+    hr,
+    temp,
+    rh,
+    prec,
+    sunrise,
+    sunset,
+    prec_cumulative_prev,
+    time_increment = 1.0  # duration of timestep, in hours
+):
+    # wetting
+    if prec_cumulative_prev + prec > DMC_INTERCEPT:  # prec_cumulative above threshold
+        if prec_cumulative_prev < DMC_INTERCEPT:  # just passed threshold
+            rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
+        else:  # previously passed threshold
+            rw = prec * 0.92
+        
+        last_dmc = mcdmc_to_dmc(last_mcdmc)
+        if last_dmc <= 33:
+            b = 100.0 / (0.3 * last_dmc + 0.5)
+        elif last_dmc <= 65:
+            b = -1.3 * log(last_dmc) + 14.0
+        else:
+            b = 6.2 * log(last_dmc) - 17.2
+        
+        mr = last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
+    else:  # prec_cumulative below threshold
+        mr = last_mcdmc
+    
+    if mr > 300.0:
+        mr = 300.0
+    
+    # drying
+    sunrise_start = sunrise + OFFSET_SUNRISE
+    sunset_start = sunset + OFFSET_SUNSET
+    if (sunrise_start <= hr <= sunset_start):  # daytime
+        if temp < 0:
+            temp = 0.0
+        rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
+        invtau = rk / 43.43
+        mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0
+    else:  # nighttime
+        mcdmc = mr
+    
+    if mcdmc > 300.0:
+        mcdmc = 300.0
+    
+    return(mcdmc)
+
+##
+# Calculate drought code moisture content
+#
+# @param last_mcdc              Previous drought code moisture content (%)
+# @param hr                     Time of day (hr)
+# @param temp                   Temperature (Celcius)
+# @param prec                   Hourly precipitation (mm)
+# @param sunrise                Sunrise (hr)
+# @param sunset                 Sunset (hr)
+# @param prec_cumulative_prev   Cumulative precipitation since start of rain (mm)
+# @param time_increment         Duration of timestep (hr, default 1.0)
+# @return                       Hourly drought code moisture content (%)
+def drought_code(
+    last_mcdc,
+    hr,
+    temp,
+    prec,
+    sunrise,
+    sunset,
+    prec_cumulative_prev,
+    time_increment = 1.0):
+    # wetting
+    if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
+        if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
+            rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
+        else:  # previously passed threshold
+            rw = prec * 0.83
+        mr = last_mcdc + 3.937 * rw / 2.0
+    else:
+        mr = last_mcdc
+    
+    if mr > 400.0:
+        mr = 400.0
+    
+    # drying
+    sunrise_start = sunrise + OFFSET_SUNRISE
+    sunset_start = sunset + OFFSET_SUNSET
+    if (sunrise_start <= hr <= sunset_start):  # daytime
+        offset = 3.0
+        mult = 0.015
+        if temp > 0:
+            pe = mult * temp + offset / 16.0
+        else:
+            pe = 0
+        invtau = pe / 400.0
+        mcdc = mr * exp(-time_increment * invtau)
+    else:  # nighttime
+        mcdc = mr
+
+    if mcdc > 400.0:
+        mcdc = 400.0
+    
+    return(mcdc)
 
 ##
 # Calculate Initial Spread Index (ISI)
@@ -426,166 +542,6 @@ def grass_fire_weather_index(gsi, load):
         return(log(Fint / 60.0) / 0.14)
     else:
         return(Fint / 25.0)
-
-def dmc_wetting(rain_total, lastdmc):
-    # compare floats by using tolerance
-    if rain_total <= DMC_INTERCEPT:
-        return 0.0
-    b = (
-        100.0 / (0.5 + 0.3 * lastdmc)
-        if (lastdmc <= 33)
-        else (
-            14.0 - 1.3 * log(lastdmc)
-            if (lastdmc <= 65)
-            else (6.2 * log(lastdmc) - 17.2)
-        )
-    )
-    rw = 0.92 * rain_total - 1.27
-    wmi = dmc_to_mcdmc(lastdmc)
-    # This is the change in MC (moisturecontent)  from FULL DAY's rain
-    wmr = wmi + 1000 * rw / (48.77 + b * rw)
-    dmc = mcdmc_to_dmc(wmr)
-    if dmc <= 0.0:
-        dmc = 0.0
-    # total amount of wetting since lastdmc
-    w = lastdmc - dmc
-    return w
-
-
-def dc_wetting(rain_total, lastdc):
-    # compare floats by using tolerance
-    if rain_total <= DC_INTERCEPT:
-        return 0.0
-    rw = 0.83 * rain_total - 1.27
-    smi = 800 * exp(-lastdc / 400)
-    # TOTAL change for the TOTAL 24 hour rain from FWI1970 model
-    return 400.0 * log(1.0 + 3.937 * rw / smi)
-
-
-def dmc_wetting_between(rain, rain_total_previous, lastdmc):
-    if rain == 0:
-        return 0.0
-    # wetting is calculated based on initial dmc when rain started and rain since
-    current = dmc_wetting(rain_total_previous + rain, lastdmc)
-    # recalculate instead of storing so we don't need to reset this too
-    previous = dmc_wetting(rain_total_previous, lastdmc)
-    return current - previous
-
-
-def dc_wetting_between(rain, rain_total_previous, lastdc):
-    if rain == 0:
-        return 0.0
-    # wetting is calculated based on initial dc when rain started and rain since
-    current = dc_wetting(rain_total_previous + rain, lastdc)
-    # recalculate instead of storing so we don't need to reset this too
-    previous = dc_wetting(rain_total_previous, lastdc)
-    return current - previous
-
-
-def dmc_drying_ratio(temp, rh):
-    # return max(0.0, (temp + 1.1) * (100.0 - rh) * 0.0001)
-    return(
-        max(0.0,
-            HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001)
-            )
-
-
-def duff_moisture_code(
-    last_mcdmc,
-    hr,
-    temp,
-    rh,
-    prec,
-    sunrise,
-    sunset,
-    prec_cumulative_prev,
-    time_increment = 1.0  # duration of timestep, in hours
-):
-    # wetting
-    if prec_cumulative_prev + prec > DMC_INTERCEPT:  # prec_cumulative above threshold
-        if prec_cumulative_prev < DMC_INTERCEPT:  # just passed threshold
-            rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
-        else:  # previously passed threshold
-            rw = prec * 0.92
-        
-        last_dmc = mcdmc_to_dmc(last_mcdmc)
-        if last_dmc <= 33:
-            b = 100.0 / (0.3 * last_dmc + 0.5)
-        elif last_dmc <= 65:
-            b = -1.3 * log(last_dmc) + 14.0
-        else:
-            b = 6.2 * log(last_dmc) - 17.2
-        
-        mr = last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
-    else:  # prec_cumulative below threshold
-        mr = last_mcdmc
-    
-    if mr > 300.0:
-        mr = 300.0
-    
-    # drying
-    sunrise_start = sunrise + OFFSET_SUNRISE
-    sunset_start = sunset + OFFSET_SUNSET
-    if (sunrise_start <= hr <= sunset_start):  # daytime
-        if temp < 0:
-            temp = 0.0
-        rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
-        invtau = rk / 43.43
-        mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0
-    else:  # nighttime
-        mcdmc = mr
-    
-    if mcdmc > 300.0:
-        mcdmc = 300.0
-    
-    return(mcdmc)
-
-def dc_drying_hourly(temp):
-    return max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP))
-
-
-def drought_code(
-    last_mcdc,
-    hr,
-    temp,
-    prec,
-    sunrise,
-    sunset,
-    prec_cumulative_prev,
-    time_increment = 1.0):
-    # wetting
-    if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
-        if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
-            rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
-        else:  # previously passed threshold
-            rw = prec * 0.83
-        mr = last_mcdc + 3.937 * rw / 2.0
-    else:
-        mr = last_mcdc
-    
-    if mr > 400.0:
-        mr = 400.0
-    
-    # drying
-    sunrise_start = sunrise + OFFSET_SUNRISE
-    sunset_start = sunset + OFFSET_SUNSET
-    if (sunrise_start <= hr <= sunset_start):  # daytime
-        offset = 3.0
-        mult = 0.015
-        if temp > 0:
-            pe = mult * temp + offset / 16.0
-        else:
-            pe = 0
-        invtau = pe / 400.0
-        mcdc = mr * exp(-time_increment * invtau)
-    else:  # nighttime
-        mcdc = mr
-
-    if mcdc > 400.0:
-        mcdc = 400.0
-    
-    return(mcdc)
-
 
 # Calculate number of drying "units" this hour contributes
 def drying_units():  # temp, rh, ws, rain, solrad

@@ -118,6 +118,135 @@ hourly_fine_fuel_moisture <- function(lastmc, temp, rh, ws, rain, time_increment
   return(m)
 }
 
+#' Calculate duff moisture content
+#'
+#' @param last_mcdmc             Previous duff moisture content (%)
+#' @param hr                     Time of day (hr)
+#' @param temp                   Temperature (Celcius)
+#' @param rh                     Relative Humidity (%)
+#' @param prec                   Hourly precipitation (mm)
+#' @param sunrise                Sunrise (hr)
+#' @param sunset                 Sunset (hr)
+#' @param prec_cumulative_prev   Cumulative precipitation since start of rain (mm)
+#' @param time_increment         Duration of timestep (hr, default 1.0)
+#' @return                       Hourly duff moisture content (%)
+duff_moisture_code <- function(
+  last_mcdmc,
+  hr,
+  temp,
+  rh,
+  prec,
+  sunrise,
+  sunset,
+  prec_cumulative_prev,
+  time_increment = 1.0) {
+  # wetting
+  if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  # prec_cumulative above threshold
+    if (prec_cumulative_prev < DMC_INTERCEPT) {  # just passed threshold
+      rw <- (prec_cumulative_prev + prec) * 0.92 - 1.27
+    } else {
+      rw <- prec * 0.92
+    }
+
+    last_dmc <- mcdmc_to_dmc(last_mcdmc)
+    if (last_dmc <= 33) {
+      b <- 100.0 / (0.3 * last_dmc + 0.5)
+    } else if (last_dmc <= 65) {
+      b <- -1.3 * log(last_dmc) + 14.0
+    } else {
+      b <- 6.2 * log(last_dmc) - 17.2
+    }
+
+    mr <- last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
+  } else {
+    mr <- last_mcdmc
+  }
+
+  if (mr > 300.0) {
+    mr <- 300.0
+  }
+
+  # drying
+  sunrise_start <- sunrise + OFFSET_SUNRISE
+  sunset_start <- sunset + OFFSET_SUNSET
+  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+    if (temp < 0) {
+      temp <- 0.0
+    }
+    rk <- HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
+    invtau <- rk / 43.43
+    mcdmc <- (mr - 20.0) * exp(-time_increment * invtau) + 20.0
+  } else {  # nighttime
+    mcdmc <- mr
+  }
+
+  if (mcdmc > 300.0) {
+    mcdmc <- 300.0
+  }
+
+  return(mcdmc)
+}
+
+#' Calculate drought code moisture content
+#'
+#' @param last_mcdc              Previous drought code moisture content (%)
+#' @param hr                     Time of day (hr)
+#' @param temp                   Temperature (Celcius)
+#' @param prec                   Hourly precipitation (mm)
+#' @param sunrise                Sunrise (hr)
+#' @param sunset                 Sunset (hr)
+#' @param prec_cumulative_prev   Cumulative precipitation since start of rain (mm)
+#' @param time_increment         Duration of timestep (hr, default 1.0)
+#' @return                       Hourly drought code moisture content (%)
+drought_code <- function(
+  last_mcdc,
+  hr,
+  temp,
+  prec,
+  sunrise,
+  sunset,
+  prec_cumulative_prev,
+  time_increment = 1.0) {
+  # wetting
+  if (prec_cumulative_prev + prec > DC_INTERCEPT) {  # prec_cumulative above threshold
+    if (prec_cumulative_prev <= DC_INTERCEPT) {  # just passed threshold
+      rw <- (prec_cumulative_prev + prec) * 0.83 - 1.27
+    } else {  # previously passed threshold
+      rw <- prec * 0.83
+    }
+    mr <- last_mcdc + 3.937 * rw / 2.0
+  } else {
+    mr <- last_mcdc
+  }
+
+  if (mr > 400.0) {
+    mr <- 400.0
+  }
+
+  # drying
+  sunrise_start <- sunrise + OFFSET_SUNRISE
+  sunset_start <- sunset + OFFSET_SUNSET
+  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+    offset <- 3.0
+    mult <- 0.015
+    if (temp > 0) {
+      pe <- mult * temp + offset / 16.0
+    } else {
+      pe <- 0
+    }
+    invtau <- pe / 400.0
+    mcdc <- mr * exp(-time_increment * invtau)
+  } else {  # nighttime
+    mcdc <- mr
+  }
+
+  if (mcdc > 400.0) {
+    mcdc <- 400.0
+  }
+
+  return(mcdc)
+}
+
 #' Calculate Initial Spread Index (ISI)
 #'
 #' @param ws              Wind Speed (km/h)
@@ -454,185 +583,6 @@ grass_fire_weather_index <- Vectorize(function(gsi, load) {
     return(Fint / 25.0)
   }
 })
-
-dmc_wetting <- function(rain_total, lastdmc) {
-  if (rain_total <= DMC_INTERCEPT) {
-    # no wetting if below intercept threshold
-    return(0.0)
-  }
-  b <- ifelse(lastdmc <= 33,
-    100.0 / (0.5 + 0.3 * lastdmc),
-    ifelse(lastdmc <= 65,
-      14.0 - 1.3 * log(lastdmc),
-      6.2 * log(lastdmc) - 17.2
-    )
-  )
-  rw <- 0.92 * rain_total - 1.27
-  wmi <- dmc_to_mcdmc(lastdmc)
-  wmr <- wmi + 1000 * rw / (48.77 + b * rw)
-  dmc <- mcdmc_to_dmc(wmr)
-  if (dmc <= 0.0) {
-    dmc <- 0.0
-  }
-  # total amount of wetting since lastdmc
-  w <- lastdmc - dmc
-  return(w)
-}
-
-dc_wetting <- function(rain_total, lastdc) {
-  if (rain_total <= DC_INTERCEPT) {
-    # no wetting if below intercept threshold
-    return(0.0)
-  }
-  rw <- 0.83 * rain_total - 1.27
-  smi <- 800 * exp(-lastdc / 400)
-  return(400.0 * log(1.0 + 3.937 * rw / smi))
-  # # total amount of wetting since lastdc
-  # w <- 400.0 * log(1.0 + 3.937 * rw / smi)
-  # # don't wet more than lastdc regardless of drying since then
-  # if (w > lastdc) {
-  #   w <- lastdc
-  # }
-  # return(w)
-}
-
-dmc_wetting_between <- function(rain, rain_total_previous, lastdmc) {
-  if (rain == 0) {
-    return(0.0)
-  }
-  # wetting is calculated based on initial dmc when rain started and rain since
-  current <- dmc_wetting(rain_total_previous + rain, lastdmc)
-  # recalculate instead of storing so we don't need to reset this too
-  previous <- dmc_wetting(rain_total_previous, lastdmc)
-  return(current - previous)
-}
-
-dc_wetting_between <- function(rain, rain_total_previous, lastdc) {
-  if (rain == 0) {
-    return(0.0)
-  }
-  # wetting is calculated based on initial dc when rain started and rain since
-  current <- dc_wetting(rain_total_previous + rain, lastdc)
-  # recalculate instead of storing so we don't need to reset this too
-  # NOTE: rain_total_previous != (rain_total - cur$prec) due to floating point math
-  previous <- dc_wetting(rain_total_previous, lastdc)
-  return(current - previous)
-}
-
-dmc_drying_ratio <- function(temp, rh) {
-  return(pmax(0.0, HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001))
-}
-
-duff_moisture_code <- function(
-  last_mcdmc,
-  hr,
-  temp,
-  rh,
-  prec,
-  sunrise,
-  sunset,
-  prec_cumulative_prev,
-  time_increment = 1.0) {
-  # wetting
-  if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  # prec_cumulative above threshold
-    if (prec_cumulative_prev < DMC_INTERCEPT) {  # just passed threshold
-      rw <- (prec_cumulative_prev + prec) * 0.92 - 1.27
-    } else {
-      rw <- prec * 0.92
-    }
-
-    last_dmc <- mcdmc_to_dmc(last_mcdmc)
-    if (last_dmc <= 33) {
-      b <- 100.0 / (0.3 * last_dmc + 0.5)
-    } else if (last_dmc <= 65) {
-      b <- -1.3 * log(last_dmc) + 14.0
-    } else {
-      b <- 6.2 * log(last_dmc) - 17.2
-    }
-
-    mr <- last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
-  } else {
-    mr <- last_mcdmc
-  }
-
-  if (mr > 300.0) {
-    mr <- 300.0
-  }
-
-  # drying
-  sunrise_start <- sunrise + OFFSET_SUNRISE
-  sunset_start <- sunset + OFFSET_SUNSET
-  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
-    if (temp < 0) {
-      temp <- 0.0
-    }
-    rk <- HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
-    invtau <- rk / 43.43
-    mcdmc <- (mr - 20.0) * exp(-time_increment * invtau) + 20.0
-  } else {  # nighttime
-    mcdmc <- mr
-  }
-
-  if (mcdmc > 300.0) {
-    mcdmc <- 300.0
-  }
-
-  return(mcdmc)
-}
-
-dc_drying_hourly <- function(temp) {
-  return(pmax(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP)))
-}
-
-drought_code <- function(
-  last_mcdc,
-  hr,
-  temp,
-  prec,
-  sunrise,
-  sunset,
-  prec_cumulative_prev,
-  time_increment = 1.0) {
-  # wetting
-  if (prec_cumulative_prev + prec > DC_INTERCEPT) {  # prec_cumulative above threshold
-    if (prec_cumulative_prev <= DC_INTERCEPT) {  # just passed threshold
-      rw <- (prec_cumulative_prev + prec) * 0.83 - 1.27
-    } else {  # previously passed threshold
-      rw <- prec * 0.83
-    }
-    mr <- last_mcdc + 3.937 * rw / 2.0
-  } else {
-    mr <- last_mcdc
-  }
-
-  if (mr > 400.0) {
-    mr <- 400.0
-  }
-
-  # drying
-  sunrise_start <- sunrise + OFFSET_SUNRISE
-  sunset_start <- sunset + OFFSET_SUNSET
-  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
-    offset <- 3.0
-    mult <- 0.015
-    if (temp > 0) {
-      pe <- mult * temp + offset / 16.0
-    } else {
-      pe <- 0
-    }
-    invtau <- pe / 400.0
-    mcdc <- mr * exp(-time_increment * invtau)
-  } else {  # nighttime
-    mcdc <- mr
-  }
-
-  if (mcdc > 400.0) {
-    mcdc <- 400.0
-  }
-
-  return(mcdc)
-}
-
 
 # Calculate number of drying "units" this hour contributes
 drying_units <- function() {  # temp, rh, ws, rain, solrad
