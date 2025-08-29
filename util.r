@@ -71,168 +71,78 @@ solar_reduction <- function(DTR){
   return(reduction)
 }
 
-getSunlight <- function(df, get_solrad = FALSE, DST = FALSE) {
-  dst_adjust <- 0
-  if (DST){
-    dst_adjust <- 1
-  }
-  
-  df_copy <- copy(df)
-  COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
-  cols_req <- c(COLS_ID, "TIMESTAMP")
+#' Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
+#' (does not take leap years into account)
+#'
+#' @param dt                data.table to add columns to
+#' @param get_solrad        Whether to calculate solar radiation
+#' @return                  Sunrise, sunset, sunlight hours, and solar radiation (kW/m^2)
+getSunlight <- function(dt, get_solrad = FALSE) {
+  # columns to split along unique days
+  cols_day <- c("LAT", "LONG", "DATE", "TIMEZONE")
+  # required columns
+  cols_req <- c("LAT", "LONG", "TIMEZONE", "TIMESTAMP")
   if (get_solrad) {
     cols_req <- c(cols_req, "TEMP")
   }
   for (n in cols_req) {
-    stopifnot(n %in% colnames(df))
+    stopifnot(n %in% colnames(dt))
   }
-  # just make date column so we know what type it is
+  df_copy <- copy(dt)
+  # (re)make date column
   df_copy[, DATE := as_date(TIMESTAMP)]
-  df_stn_dates <- unique(df_copy[, ..COLS_ID])
-  dechour <- 12.0
-  # calculate common values once
+
+  # calculate sunrise and sunset
+  # drop duplicate days
+  df_stn_dates <- unique(df_copy[, ..cols_day])
   df_dates <- unique(df_stn_dates[, list(DATE)])
   df_dates[, JD := julian(month(DATE), day(DATE))]
+  dechour <- 12.0
   df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
-  df_dates[, EQTIME := 229.18 * (0.000075 + 0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) - 0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
-  df_dates[, DECL := 0.006918 - 0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) - 0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) - 0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
+  df_dates[, EQTIME := 229.18 * (0.000075 +
+    0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) -
+    0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
+  df_dates[, DECL := 0.006918 -
+    0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) -
+    0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) -
+    0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
   df_dates[, ZENITH := 90.833 * pi / 180.0]
   # at this point we actually need the LAT/LONG/TIMEZONE
   df_dates <- merge(df_stn_dates, df_dates, by = c("DATE"))
   df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
-  # FIX: is this some kind of approximation that can be wrong?
-  #       breaks with (67.1520291504819, -132.37538245496188)
-  df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) - tan(LAT * pi / 180.0) * tan(DECL)]
-  # HACK: keep in range
+  df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) -
+    tan(LAT * pi / 180.0) * tan(DECL)]
+  # keep in range
   df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
   df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
-  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
-  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE + dst_adjust]
-  df_all <- merge(df_copy, df_dates, by = COLS_ID)
+  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_all <- merge(df_copy, df_dates, by = cols_day)
+
+  # calculate solar radiation
   if (get_solrad) {
     df_all[, HR := hour(TIMESTAMP)]
-    df_all[, TST := as.numeric(HR - dst_adjust) * 60.0 + TIMEOFFSET]
+    df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
     df_all[, HOURANGLE := TST / 4 - 180]
-    df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
-    ###########################################################################################
-    ##################################### DMC-UPDATE ##########################################
-    ## calculateing solar radiation using Hargraeves model suggested at:
-    ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
+    df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) +
+      cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
     df_all[, ZENITH := pmin(pi / 2, ZENITH)]
-    # need later so keep column
     df_all[, COS_ZENITH := cos(ZENITH)]
-    # Extraterrestrial solar radiation in kW/m^2
-    df_all[, SOLRAD_EXT := 1.367 * COS_ZENITH]
-    # Daily total of Extra. Solar Rad in kJ/m^2/day
-    df_solrad <- df_all[, list(
-      SOLRAD_EXT_SUM = sum(SOLRAD_EXT) * 3600,
-      SUM_COS_ZENITH = sum(COS_ZENITH),
-      TEMP_RANGE = max(TEMP) - min(TEMP)
-    ), by = COLS_ID]
-    
-    # Daily surface Solar Rad in kJ/m^2/day
-    df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
-    df_all <- merge(df_all, df_solrad, by = COLS_ID)
-    # Hargreaves hourly surface solar rad in kW/m^2
-    df_all[, SOLRAD := COS_ZENITH / SUM_COS_ZENITH * SOLRAD_DAY_SUM / 3600]
-    # this was a reduction so it wasn't the full amount for the grass calculation?
-    # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
-    df_all[, SOLRAD := pmax(0, SOLRAD)]
-    df_all <- merge(df_all, df_solrad, by = COLS_ID)
+    df_all[, VPD := 6.11 * (1.0 - RH / 100.0) * exp(17.29 * TEMP / (TEMP + 237.3))]
+    df_all[, SOLRAD := 0.0]
+    df_all[(hour(TIMESTAMP) >= SUNRISE) & (hour(TIMESTAMP) <= SUNSET),
+      SOLRAD := COS_ZENITH * 0.92 * (1.0 - exp(-0.22 * VPD))]
+
     cols_sun <- c("SOLRAD", "SUNRISE", "SUNSET")
   } else {
     cols_sun <- c("SUNRISE", "SUNSET")
   }
-  # colnames(df_all) <- toupper(colnames(df_all))
-  # don't include temporary calculations
-  cols <- c(names(df), cols_sun)
+
+  # don't output intermediate calculations/variables
+  cols <- c(names(dt), cols_sun)
   df_result <- df_all[, ..cols]
   df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
   return(df_result)
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  ##################################################################################### old code
-  #df_copy <- copy(df)
-  #COLS_ID <- c("LAT", "LONG", "DATE", "TIMEZONE")
-  #cols_req <- c(COLS_ID, "TIMESTAMP")
-  #if (get_solrad) {
-  #  cols_req <- c(cols_req, "TEMP")
-  #}
-  #for (n in cols_req) {
-  #  stopifnot(n %in% colnames(df))
-  #}
-  ## just make date column so we know what type it is
-  #df_copy[, DATE := as_date(TIMESTAMP)]
-  #df_stn_dates <- unique(df_copy[, ..COLS_ID])
-  #dechour <- 12.0
-  ## calculate common values once
-  #df_dates <- unique(df_stn_dates[, list(DATE)])
-  #df_dates[, JD := julian(month(DATE), day(DATE))]
-  #df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
-  #df_dates[, EQTIME := 229.18 * (0.000075 + 0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) - 0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
-  #df_dates[, DECL := 0.006918 - 0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) - 0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) - 0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
-  #df_dates[, ZENITH := 90.833 * pi / 180.0]
-  ## at this point we actually need the LAT/LONG/TIMEZONE
-  #df_dates <- merge(df_stn_dates, df_dates, by = c("DATE"))
-  #df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
-  ## FIX: is this some kind of approximation that can be wrong?
-  ##       breaks with (67.1520291504819, -132.37538245496188)
-  #df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) - tan(LAT * pi / 180.0) * tan(DECL)]
-  ## HACK: keep in range
-  #df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
-  #df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
-  #df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  #df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  #df_all <- merge(df_copy, df_dates, by = COLS_ID)
-  #if (get_solrad) {
-  #  df_all[, HR := hour(TIMESTAMP)]
-  #  df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
-  #  df_all[, HOURANGLE := TST / 4 - 180]
-  #  df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) + cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
-  #  ###########################################################################################
-  #  ##################################### DMC-UPDATE ##########################################
-  ### calculateing solar radiation using Hargraeves model suggested at:
-  # ## (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
-  # df_all[, ZENITH := pmin(pi / 2, ZENITH)]
-  # # need later so keep column
-  # df_all[, COS_ZENITH := cos(ZENITH)]
-  # # Extraterrestrial solar radiation in kW/m^2
-  # df_all[, SOLRAD_EXT := 1.367 * COS_ZENITH]
-  # # Daily total of Extra. Solar Rad in kJ/m^2/day
-  # df_solrad <- df_all[, list(
-  #   SOLRAD_EXT_SUM = sum(SOLRAD_EXT) * 3600,
-  #   SUM_COS_ZENITH = sum(COS_ZENITH),
-  #   TEMP_RANGE = max(TEMP) - min(TEMP)
-  # ), by = COLS_ID]
-  # # Daily surface Solar Rad in kJ/m^2/day
-  # df_solrad[, SOLRAD_DAY_SUM := 0.11 * SOLRAD_EXT_SUM * (TEMP_RANGE^0.59)]
-  # df_all <- merge(df_all, df_solrad, by = COLS_ID)
-  # # Hargreaves hourly surface solar rad in kW/m^2
-  # df_all[, SOLRAD := COS_ZENITH / SUM_COS_ZENITH * SOLRAD_DAY_SUM / 3600]
-  # # this was a reduction so it wasn't the full amount for the grass calculation?
-  # # df_all[, SOLRAD := 0.95 * cos(ZENITH)]
-  # df_all[, SOLRAD := pmax(0, SOLRAD)]
-  # df_all <- merge(df_all, df_solrad, by = COLS_ID)
-  #}
-  #  # colnames(df_all) <- toupper(colnames(df_all))
-  #cols_sun <- intersect(c("SOLRAD", "SUNRISE", "SUNSET"), colnames(df_all))
-  ## don't include temporary calculations
-  #cols <- c(names(df), cols_sun)
-  #df_result <- df_all[, ..cols]
-  #df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
-  #return(df_result)
  }
 
 toDecimal <- function(t) {
