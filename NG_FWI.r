@@ -632,23 +632,22 @@ rain_since_intercept_reset <- function(rain, canopy) {
   mcgfmc_standing_old,
   prec_cumulative,
   canopy_drying) {
-  if (!isSequentialHours(w)) {
+  if (!is_sequential_hours(w)) {
     stop("Expected input to be sequential hourly weather")
   }
-  if (length(na.omit(unique(w$ID))) != 1) {
+  if (length(na.omit(unique(w$id))) != 1) {
     stop("Expected a single ID value for input weather")
   }
-  if (length(na.omit(unique(w$LAT))) != 1) {
-    stop("Expected a single LAT value for input weather")
+  if (length(na.omit(unique(w$lat))) != 1) {
+    stop("Expected a single latitude (lat) value for input weather")
   }
-  if (length(na.omit(unique(w$LONG))) != 1) {
-    stop("Expected a single LONG value for input weather")
+  if (length(na.omit(unique(w$long))) != 1) {
+    stop("Expected a single longitude (long) value for input weather")
   }
-  if (length(na.omit(unique(w$GRASS_FUEL_LOAD))) != 1) {
-    stop("Expected a single GRASS_FUEL_LOAD value")
+  if (length(na.omit(unique(w$grass_fuel_load))) != 1) {
+    stop("Expected a single grass_fuel_load value")
   }
   r <- as.data.table(copy(w))
-  names(r) <- tolower(names(r))
   if (!is_mcffmc) {
     mcffmc <- ffmc_to_mcffmc(ffmc_or_mcffmc_old)
   } else {
@@ -656,24 +655,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
   }
   mcgfmc_matted <- mcgfmc_matted_old
   mcgfmc_standing <- mcgfmc_standing_old
-  # just use previous index values from current hour regardless of time
-  # # HACK: always start from daily value at noon
-  # while (12 != r[1]$hr) {
-  #   r <- r[2:nrow(r)]
-  # }
-  # cur <- r[1]
-  # dmc_old <- daily_duff_moisture_code(dmc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
-  # dc_old <- daily_drought_code(dc_old, cur$temp, cur$rh, cur$prec, cur$lat, cur$mon)
-  # # HACK: start from when daily value should be "accurate"
-  # prec_accum <- 0.0
-  # while (HOUR_TO_START_FROM != r[1]$hr) {
-  #   # tally up precip between noon and whenever we're applying the indices
-  #   prec_accum <- prec_accum + r[1]$prec
-  #   r <- r[2:nrow(r)]
-  # }
-  # cur <- r[1]
-  # # HACK: add precip tally to current hour so it doesn't get omitted
-  # cur$prec <- cur$prec + prec_accum
   mcdmc <- dmc_to_mcdmc(dmc_old)
   mcdc <- dc_to_mcdc(dc_old)
   # FIX: just use loop for now so it matches C code
@@ -822,10 +803,12 @@ hFWI <- function(
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
   }
-  colnames(wx) <- toupper(colnames(wx))
+  # make all column names lower case
+  colnames(wx) <- tolower(colnames(wx))
   og_names <- names(wx)
   # check for required columns
-  stopifnot(all(c('YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC') %in% names(wx)))
+  stopifnot(all(c('lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec')
+    %in% names(wx)))
   # check for one hour run and startup moisture all set to default
   if (nrow(wx) == 1 &&
     ffmc_or_mcffmc_old == FFMC_DEFAULT && is_mcffmc == FALSE &&
@@ -836,40 +819,32 @@ hFWI <- function(
       "in a one hour run"))
   }
   # check for optional columns that have a default
-  if (!"LAT" %in% og_names) {
-    warning(paste0("Using default latitude value of ", DEFAULT_LATITUDE))
-    wx[, LAT := DEFAULT_LATITUDE]
-  }
-  if (!"LONG" %in% og_names) {
-    warning(paste0("Using default longitude value of ", DEFAULT_LONGITUDE))
-    wx[, LONG := DEFAULT_LONGITUDE]
-  }
-  # add dummy columns if they don't exist
-  hadStn <- "ID" %in% og_names
-  hadMinute <- "MINUTE" %in% og_names
+  hadStn <- "id" %in% og_names
+  hadMinute <- "minute" %in% og_names
   if (!hadStn) {
-    wx[, ID := "STN"]
+    wx[, id := "STN"]
   }
   if (!hadMinute) {
-    wx[, MINUTE := 0]
+    wx[, minute := 0]
   }
   # check for optional columns that can be calculated
-  hadDate <- "DATE" %in% og_names
-  hadTimestamp <- "TIMESTAMP" %in% og_names
+  hadDate <- "date" %in% og_names
+  hadTimestamp <- "timestamp" %in% og_names
   if (!hadDate) {
-    wx[, DATE := as.character(as.Date(sprintf("%04d-%02d-%02d", YR, MON, DAY)))]
+    wx[, date := as.character(as.Date(sprintf("%04d-%02d-%02d", yr, mon, day)))]
   }
   if (!hadTimestamp) {
-    wx[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, MINUTE))]
+    wx[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00",
+      yr, mon, day, hr, minute))]
   }
-  wx$TIMEZONE <- timezone
-  if (!"GRASS_FUEL_LOAD" %in% og_names) {
-    wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
+  wx$timezone <- timezone
+  if (!"grass_fuel_load" %in% og_names) {
+    wx$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
   }
-  if (!"PERCENT_CURED" %in% og_names) {
-    wx$PERCENT_CURED <- seasonal_curing(julian(wx$MON, wx$DAY))
+  if (!"percent_cured" %in% og_names) {
+    wx$percent_cured <- seasonal_curing(julian(wx$mon, wx$day))
   }
-  if (!"SOLRAD" %in% og_names) {
+  if (!"solrad" %in% og_names) {
     if (!silent) {
       print("Solar Radiation not provided so will be calculated")
     }
@@ -878,20 +853,20 @@ hFWI <- function(
     needs_solrad <- FALSE
   }
   # check for unnecessary columns
-  cols_extra_solar <- intersect(names(wx), c("SUNRISE", "SUNSET", "SUNLIGHT_HOURS"))
+  cols_extra_solar <- intersect(names(wx), c("sunrise", "sunset", "sunlight_hours"))
   if (0 < length(cols_extra_solar)) {
     warning(sprintf("Ignoring and recalculating columns: [%s]", paste0(cols_extra_solar, collapse = ", ")))
     wx <- wx[, -..cols_extra_solar]
   }
   # check for values outside valid ranges
-  stopifnot(all(wx$RH >= 0 & wx$RH <= 100))
-  stopifnot(all(wx$WS >= 0))
-  stopifnot(all(wx$PREC >= 0))
-  stopifnot(all(wx$MON >= 1 & wx$MON <= 12))
-  stopifnot(all(wx$DAY >= 1 & wx$DAY <= 31))
-  stopifnot(wx$SOLRAD >= 0)
-  stopifnot(wx$GRASS_FUEL_LOAD > 0)
-  stopifnot(wx$PERCENT_CURED >= 0 & wx$PERCENT_CURED <= 100)
+  stopifnot(all(wx$rh >= 0 & wx$rh <= 100))
+  stopifnot(all(wx$ws >= 0))
+  stopifnot(all(wx$prec >= 0))
+  stopifnot(all(wx$mon >= 1 & wx$mon <= 12))
+  stopifnot(all(wx$day >= 1 & wx$day <= 31))
+  stopifnot(wx$solrad >= 0)
+  stopifnot(wx$grass_fuel_load > 0)
+  stopifnot(wx$percent_cured >= 0 & wx$percent_cured <= 100)
   if (!is_mcffmc) {
     stopifnot(ffmc_or_mcffmc_old >= 0 & ffmc_or_mcffmc_old <= 101)
   }
@@ -900,15 +875,15 @@ hFWI <- function(
 
   # loop over every station year
   results <- NULL
-  for (stn in unique(wx$ID)) {
-    by_stn <- wx[ID == stn]
-    for (yr in unique(by_stn$YR)) {
-      by_year <- by_stn[YR == yr, ]
+  for (stn in unique(wx$id)) {
+    by_stn <- wx[id == stn]
+    for (yr in unique(by_stn$yr)) {
+      by_year <- by_stn[yr == yr, ]
       if (!silent) {
         print(paste0("Running ", stn, " for ", yr))
       }
       # FIX: convert this to not need to do individual stations
-      w <- getSunlight(by_year, get_solrad = needs_solrad)
+      w <- get_sunlight(by_year, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
         prec_cumulative, canopy_drying)
@@ -917,22 +892,19 @@ hFWI <- function(
   }
 
   # remove optional variables that we added
-  names(results) <- toupper(names(results))
   if (!hadStn) {
-    results <- results[, -c("ID")]
+    results <- results[, -c("id")]
   }
   if (!hadMinute) {
-    results <- results[, -c("MINUTE")]
+    results <- results[, -c("minute")]
   }
   if (!hadDate) {
-    results <- results[, -c("DATE")]
+    results <- results[, -c("date")]
   }
   if (!hadTimestamp) {
-    results <- results[, -c("TIMESTAMP")]
+    results <- results[, -c("timestamp")]
   }
-  results <- results[, -c("TIMEZONE")]
-
-  names(results) <- tolower(names(results))
+  results <- results[, -c("timezone")]
 
   # format decimal places of output columns
   if (!is.na(round_out)) {
@@ -940,7 +912,7 @@ hFWI <- function(
       "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
       "dmc_before_rain", "dc_before_rain", "prec_cumulative", "canopy_drying")
-    if (!"SOLRAD" %in% og_names) {
+    if (!"solrad" %in% og_names) {
       outcols <- c('solrad', outcols)
     }
     set(results, j = outcols, value = round(results[, ..outcols], round_out))

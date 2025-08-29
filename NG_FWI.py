@@ -590,40 +590,21 @@ def _stnHFWI(
     canopy_drying):
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected input to sequential hourly weather")
-    if len(w["ID"].unique()) != 1:
+    if len(w["id"].unique()) != 1:
         raise RuntimeError("Expected a single ID value for input weather")
-    if len(w["LAT"].unique()) != 1:
-        raise RuntimeError("Expected a single LAT value for input weather")
-    if len(w["LONG"].unique()) != 1:
-        raise RuntimeError("Expected a single LONG value for input weather")
-    if len(w["GRASS_FUEL_LOAD"].unique()) != 1:
-        raise RuntimeError("Expected a single GRASS_FUEL_LOAD value")
+    if len(w["lat"].unique()) != 1:
+        raise RuntimeError("Expected a single latitude (lat) value for input weather")
+    if len(w["long"].unique()) != 1:
+        raise RuntimeError("Expected a single longitude (long) value for input weather")
+    if len(w["grass_fuel_load"].unique()) != 1:
+        raise RuntimeError("Expected a single grass_fuel_load value")
     r = w.loc[:]
-    r.columns = map(str.lower, r.columns)
     if not is_mcffmc:
        mcffmc = ffmc_to_mcffmc(ffmc_or_mcffmc_old)
     else:
        mcffmc = ffmc_or_mcffmc_old
     mcgfmc_matted = mcgfmc_matted_old
     mcgfmc_standing = mcgfmc_standing_old
-    # just use previous index values from current hour regardless of time
-    # # HACK: always start from daily value at noon
-    # while 12 != r.iloc[0]["hr"]:
-    #     r = r.iloc[1:]
-    # cur = r.iloc[0]
-    # dmc_old = daily_duff_moisture_code(
-    #     dmc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
-    # )
-    # dc_old = daily_drought_code(
-    #     dc_old, cur["temp"], cur["rh"], cur["prec"], cur["lat"], int(cur["mon"])
-    # )
-    # # HACK: start from when daily value should be "accurate"
-    # prec_accum = 0.0
-    # while HOUR_TO_START_FROM != r.iloc[0]["hr"]:
-    #     # tally up precip between noon and whenever we're applying the indices
-    #     prec_accum = prec_accum + r.iloc[0]["prec"]
-    #     r = r.iloc[1:]
-    # r.iloc[0, list(r.columns).index("prec")] += prec_accum
     mcdmc = dmc_to_mcdmc(dmc_old)
     mcdc = dc_to_mcdc(dc_old)
     # FIX: just use loop for now so it matches C code
@@ -759,11 +740,12 @@ def hFWI(
     silent = False,
     round_out = 4):
     wx = df_wx.copy()
-    wx.columns = map(str.upper, wx.columns)
+    # make all column names lower case
+    wx.columns = map(str.lower, wx.columns)
     og_names = wx.columns
     # check for required columns
     if not all(x in wx.columns for x in (
-       ['YR', 'MON', 'DAY', 'HR', 'TEMP', 'RH', 'WS', 'PREC'])):
+       ['lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec'])):
        raise RuntimeError("Missing required input column(s)")
     # check for one hour run and startup moisture all set to default
     if (df_wx.shape[0] == 1 and
@@ -774,62 +756,55 @@ def hFWI(
         logger.warning("Warning:\nStartup moisture values set to default" +
             " (instead of previous) in a one hour run")
     # check for optional columns that have a default
-    if not "LAT" in og_names:
-        logger.warning(f"Using default latitude of {DEFAULT_LATITUDE}")
-        wx["LAT"] = DEFAULT_LATITUDE
-    if not "LONG" in og_names:
-        logger.warning(f"Using default longitude of {DEFAULT_LONGITUDE}")
-        wx["LONG"] = DEFAULT_LONGITUDE
-    # add dummy columns if they don't exist
-    had_stn = "ID" in og_names
-    had_minute = "MINUTE" in og_names
+    had_stn = "id" in og_names
+    had_minute = "minute" in og_names
     if not had_stn:
-        wx["ID"] = "STN"
+        wx["id"] = "STN"
     if not had_minute:
-        wx["MINUTE"] = 0
+        wx["minute"] = 0
     # check for optional columns that can be calculated
-    had_date = "DATE" in og_names
-    had_timestamp = "TIMESTAMP" in og_names
+    had_date = "date" in og_names
+    had_timestamp = "timestamp" in og_names
     if not had_date:
-        wx["DATE"] = wx.apply(
-            lambda row: f'{row["YR"]:04d}-{row["MON"]:02d}-{row["DAY"]:02d}', axis=1
+        wx["date"] = wx.apply(
+            lambda row: f'{row["yr"]:04d}-{row["mon"]:02d}-{row["day"]:02d}', axis=1
         )
     if not had_timestamp:
-        wx["TIMESTAMP"] = wx.apply(
+        wx["timestamp"] = wx.apply(
             lambda row: datetime.datetime(
-                row["YR"], row["MON"], row["DAY"], row["HR"], row["MINUTE"]
+                row["yr"], row["mon"], row["day"], row["hr"], row["minute"]
                 ), axis=1
             )
-    wx["TIMEZONE"] = timezone
-    if not "GRASS_FUEL_LOAD" in og_names:
-       wx["GRASS_FUEL_LOAD"] = DEFAULT_GRASS_FUEL_LOAD
-    if not "PERCENT_CURED" in og_names:
-        wx["PERCENT_CURED"] = wx.apply(lambda row:util.seasonal_curing(
-            util.julian(row["MON"], row["DAY"])), axis=1)
-    if not "SOLRAD" in wx.columns:
+    wx["timezone"] = timezone
+    if not "grass_fuel_load" in og_names:
+       wx["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
+    if not "percent_cured" in og_names:
+        wx["percent_cured"] = wx.apply(lambda row:util.seasonal_curing(
+            util.julian(row["mon"], row["day"])), axis=1)
+    if not "solrad" in wx.columns:
         if not silent:
            print("Solar Radiation not provided so will be calculated")
         needs_solrad = True
     else:
         needs_solrad = False
     # check for values outside valid ranges
-    if not (all(wx["RH"] >= 0) and all(wx["RH"] <= 100)):
-        raise ValueError("All RH must be between 0-100")
-    if not all(wx["WS"] >= 0):
-        raise ValueError("All WS must be >= 0")
-    if not all(wx["PREC"] >= 0):
-        raise ValueError("All PREC must be >= 0")
-    if not (all(wx["MON"] >= 1) and all(wx["MON"] <= 12)):
-        raise ValueError("All MON must be between 1-12")
-    if (not needs_solrad) and (not all(wx['SOLRAD'] >= 0)):
-       raise ValueError("All SOLRAD must be >= 0")
-    if ("PERCENT_CURED" in og_names) and (not (
-       all(wx["PERCENT_CURED"] >= 0) and all(wx["PERCENT_CURED"] <= 100))):
-       raise ValueError("All PERCENT_CURED must be between 0-100")
-    if ("GRASS_FUEL_LOAD" in og_names) and (not (all(wx["GRASS_FUEL_LOAD"] > 0))):
-       raise ValueError("All GRASS_FUEL_LOAD must be > 0")
-    if not (all(wx["DAY"] >= 1) and all(wx["DAY"] <= 31)):
-        raise ValueError("All DAY must be 1-31")
+    if not (all(wx["rh"] >= 0) and all(wx["rh"] <= 100)):
+        raise ValueError("All relative humidity (rh) must be between 0-100")
+    if not all(wx["ws"] >= 0):
+        raise ValueError("All wind speed (ws) must be >= 0")
+    if not all(wx["prec"] >= 0):
+        raise ValueError("All precipitation (prec) must be >= 0")
+    if not (all(wx["mon"] >= 1) and all(wx["mon"] <= 12)):
+        raise ValueError("All months (mon) must be between 1-12")
+    if (not needs_solrad) and (not all(wx['solrad'] >= 0)):
+       raise ValueError("All solar radiation (solrad) must be >= 0")
+    if ("percent_cured" in og_names) and (not (
+       all(wx["percent_cured"] >= 0) and all(wx["percent_cured"] <= 100))):
+       raise ValueError("All percent_cured must be between 0-100")
+    if ("grass_fuel_load" in og_names) and (not (all(wx["grass_fuel_load"] > 0))):
+       raise ValueError("All grass_fuel_load must be > 0")
+    if not (all(wx["day"] >= 1) and all(wx["day"] <= 31)):
+        raise ValueError("All day must be 1-31")
     if is_mcffmc:
        if not (0 <= ffmc_or_mcffmc_old <= 250):
           raise ValueError("mcffmc values must be between 0-250")
@@ -843,30 +818,27 @@ def hFWI(
     
     # loop over every station year
     results = None
-    for idx, by_year in wx.groupby(["ID", "YR"], sort = False):
+    for idx, by_year in wx.groupby(["id", "yr"], sort = False):
         if not silent:
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
-        w = util.getSunlight(w, get_solrad = needs_solrad)
+        w = util.get_sunlight(w, get_solrad = needs_solrad)
         r = _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
             mcgfmc_matted_old, mcgfmc_standing_old,
             prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
     
     # remove optional variables that we added
-    results.columns = map(str.upper, results.columns)
     if not had_stn:
-       results = results.drop(columns = "ID")
+       results = results.drop(columns = "id")
     if not had_minute:
-       results = results.drop(columns = "MINUTE")
+       results = results.drop(columns = "minute")
     if not had_date:
-       results = results.drop(columns = "DATE")
+       results = results.drop(columns = "date")
     if not had_timestamp:
-       results = results.drop(columns = "TIMESTAMP")
-    results = results.drop(columns = "TIMEZONE")
-
-    results.columns = map(str.lower, results.columns)
+       results = results.drop(columns = "timestamp")
+    results = results.drop(columns = "timezone")
 
     # round decimal places of output columns
     if not (round_out == None or round_out == "None"):
@@ -874,7 +846,7 @@ def hFWI(
             "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
             "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
             "prec_cumulative", "canopy_drying"]
-        if "SOLRAD" not in og_names:
+        if "solrad" not in og_names:
            outcols.insert(0, "solrad")
         results[outcols] = results[outcols].map(round, ndigits = round_out)
 

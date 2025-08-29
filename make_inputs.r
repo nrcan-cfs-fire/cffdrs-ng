@@ -32,7 +32,7 @@ make_inputs <- function(df_wx, timezone) {
     wx$PERCENT_CURED <- seasonal_curing(wx$JULIAN)
     wx$GRASS_FUEL_LOAD <- DEFAULT_GRASS_FUEL_LOAD
     wx$TIMEZONE <- timezone
-    wx <- getSunlight(wx, with_solrad = TRUE)
+    wx <- get_sunlight(wx, with_solrad = TRUE)
     cols_out <- unlist(strsplit(header_out, ","))
     colnames(wx) <- tolower(colnames(wx))
     wx <- wx[, ..cols_out]

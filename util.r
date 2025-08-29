@@ -9,7 +9,7 @@ library(lubridate)
 #'
 #' @param data          data to check
 #' @return              whether each entry in data is 1 unit from the next entry
-isSequential <- function(data) {
+is_sequential <- function(data) {
   v <- na.omit(unique(data - data.table::shift(data, 1)))
   return(length(data) == 1 || (1 == v[[1]] && length(v) == 1))
 }
@@ -18,16 +18,16 @@ isSequential <- function(data) {
 #'
 #' @param df            data to check
 #' @return              whether each entry is 1 day from the next entry
-isSequentialDays <- function(df) {
-  return(isSequential(as.Date(df$DATE)))
+is_sequential_days <- function(df) {
+  return(is_sequential(as.Date(df$date)))
 }
 
 #' Determine if data is sequential hours
 #'
 #' @param df            data to check
 #' @return              whether each entry is 1 hour from the next entry
-isSequentialHours <- function(df) {
-  return(isSequential(as.POSIXct(df$TIMESTAMP)))
+is_sequential_hours <- function(df) {
+  return(is_sequential(as.POSIXct(df$timestamp)))
 }
 
 #' Find specific humidity
@@ -35,7 +35,7 @@ isSequentialHours <- function(df) {
 #' @param temp        Temperature (Celcius)
 #' @param rh          Relative humidity (percent, 0-100)
 #' @return            Specific humidity (g/kg)
-findQ <- function(temp, rh) {
+find_q <- function(temp, rh) {
   # find absolute humidity
   svp <- 6.108 * exp(17.27 * temp / (temp + 237.3))
   vp <- svp * rh / 100.0
@@ -47,7 +47,7 @@ findQ <- function(temp, rh) {
 #'  @param q           Specific humidity (g/kg)
 #'  @param temp        Temperature (Celcius)
 #'  @return            Relative humidity (percent, 0-100)
-findrh <- function(q, temp) {
+find_rh <- function(q, temp) {
   cur_vp <- (273.17 + temp) * q / 217
   return(100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))))
 }
@@ -77,71 +77,71 @@ solar_reduction <- function(DTR){
 #' @param dt                data.table to add columns to
 #' @param get_solrad        Whether to calculate solar radiation
 #' @return                  Sunrise, sunset, sunlight hours, and solar radiation (kW/m^2)
-getSunlight <- function(dt, get_solrad = FALSE) {
+get_sunlight <- function(dt, get_solrad = FALSE) {
   # columns to split along unique days
-  cols_day <- c("LAT", "LONG", "DATE", "TIMEZONE")
+  cols_day <- c("lat", "long", "date", "timezone")
   # required columns
-  cols_req <- c("LAT", "LONG", "TIMEZONE", "TIMESTAMP")
+  cols_req <- c("lat", "long", "timezone", "timestamp")
   if (get_solrad) {
-    cols_req <- c(cols_req, "TEMP")
+    cols_req <- c(cols_req, "temp")
   }
   for (n in cols_req) {
     stopifnot(n %in% colnames(dt))
   }
   df_copy <- copy(dt)
   # (re)make date column
-  df_copy[, DATE := as_date(TIMESTAMP)]
+  df_copy[, date := as_date(timestamp)]
 
   # calculate sunrise and sunset
   # drop duplicate days
   df_stn_dates <- unique(df_copy[, ..cols_day])
-  df_dates <- unique(df_stn_dates[, list(DATE)])
-  df_dates[, JD := julian(month(DATE), day(DATE))]
+  df_dates <- unique(df_stn_dates[, list(date)])
+  df_dates[, jd := julian(month(date), day(date))]
   dechour <- 12.0
-  df_dates[, FRACYEAR := 2.0 * pi / 365.0 * (JD - 1.0 + (dechour - 12.0) / 24.0)]
-  df_dates[, EQTIME := 229.18 * (0.000075 +
-    0.001868 * cos(FRACYEAR) - 0.032077 * sin(FRACYEAR) -
-    0.014615 * cos(2.0 * FRACYEAR) - 0.040849 * sin(2.0 * FRACYEAR))]
-  df_dates[, DECL := 0.006918 -
-    0.399912 * cos(FRACYEAR) + 0.070257 * sin(FRACYEAR) -
-    0.006758 * cos(FRACYEAR * 2.0) + 0.000907 * sin(2.0 * FRACYEAR) -
-    0.002697 * cos(3.0 * FRACYEAR) + 0.00148 * sin(3.0 * FRACYEAR)]
-  df_dates[, ZENITH := 90.833 * pi / 180.0]
+  df_dates[, fracyear := 2.0 * pi / 365.0 * (jd - 1.0 + (dechour - 12.0) / 24.0)]
+  df_dates[, eqtime := 229.18 * (0.000075 +
+    0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
+    0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear))]
+  df_dates[, decl := 0.006918 -
+    0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
+    0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
+    0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear)]
+  df_dates[, zenith := 90.833 * pi / 180.0]
   # at this point we actually need the LAT/LONG/TIMEZONE
-  df_dates <- merge(df_stn_dates, df_dates, by = c("DATE"))
-  df_dates[, TIMEOFFSET := EQTIME + 4 * LONG - 60 * TIMEZONE]
-  df_dates[, X_TMP := cos(ZENITH) / (cos(LAT * pi / 180.0) * cos(DECL)) -
-    tan(LAT * pi / 180.0) * tan(DECL)]
+  df_dates <- merge(df_stn_dates, df_dates, by = c("date"))
+  df_dates[, timeoffset := eqtime + 4 * long - 60 * timezone]
+  df_dates[, x_tmp := cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) -
+    tan(lat * pi / 180.0) * tan(decl)]
   # keep in range
-  df_dates[, X_TMP := pmax(-1, pmin(1, X_TMP))]
-  df_dates[, HALFDAY := 180.0 / pi * acos(X_TMP)]
-  df_dates[, SUNRISE := (720.0 - 4.0 * (LONG + HALFDAY) - EQTIME) / 60 + TIMEZONE]
-  df_dates[, SUNSET := (720.0 - 4.0 * (LONG - HALFDAY) - EQTIME) / 60 + TIMEZONE]
+  df_dates[, x_tmp := pmax(-1, pmin(1, x_tmp))]
+  df_dates[, halfday := 180.0 / pi * acos(x_tmp)]
+  df_dates[, sunrise := (720.0 - 4.0 * (long + halfday) - eqtime) / 60 + timezone]
+  df_dates[, sunset := (720.0 - 4.0 * (long - halfday) - eqtime) / 60 + timezone]
   df_all <- merge(df_copy, df_dates, by = cols_day)
 
   # calculate solar radiation
   if (get_solrad) {
-    df_all[, HR := hour(TIMESTAMP)]
-    df_all[, TST := as.numeric(HR) * 60.0 + TIMEOFFSET]
-    df_all[, HOURANGLE := TST / 4 - 180]
-    df_all[, ZENITH := acos(sin(LAT * pi / 180) * sin(DECL) +
-      cos(LAT * pi / 180) * cos(DECL) * cos(HOURANGLE * pi / 180))]
-    df_all[, ZENITH := pmin(pi / 2, ZENITH)]
-    df_all[, COS_ZENITH := cos(ZENITH)]
-    df_all[, VPD := 6.11 * (1.0 - RH / 100.0) * exp(17.29 * TEMP / (TEMP + 237.3))]
-    df_all[, SOLRAD := 0.0]
-    df_all[(hour(TIMESTAMP) >= SUNRISE) & (hour(TIMESTAMP) <= SUNSET),
-      SOLRAD := COS_ZENITH * 0.92 * (1.0 - exp(-0.22 * VPD))]
+    df_all[, hr := hour(timestamp)]
+    df_all[, tst := as.numeric(hr) * 60.0 + timeoffset]
+    df_all[, hourangle := tst / 4 - 180]
+    df_all[, zenith := acos(sin(lat * pi / 180) * sin(decl) +
+      cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180))]
+    df_all[, zenith := pmin(pi / 2, zenith)]
+    df_all[, cos_zenith := cos(zenith)]
+    df_all[, vpd := 6.11 * (1.0 - rh / 100.0) * exp(17.29 * temp / (temp + 237.3))]
+    df_all[, solrad := 0.0]
+    df_all[(hour(timestamp) >= sunrise) & (hour(timestamp) <= sunset),
+      solrad := cos_zenith * 0.92 * (1.0 - exp(-0.22 * vpd))]
 
-    cols_sun <- c("SOLRAD", "SUNRISE", "SUNSET")
+    cols_sun <- c("solrad", "sunrise", "sunset")
   } else {
-    cols_sun <- c("SUNRISE", "SUNSET")
+    cols_sun <- c("sunrise", "sunset")
   }
 
   # don't output intermediate calculations/variables
   cols <- c(names(dt), cols_sun)
   df_result <- df_all[, ..cols]
-  df_result[, SUNLIGHT_HOURS := SUNSET - SUNRISE]
+  df_result[, sunlight_hours := sunset - sunrise]
   return(df_result)
  }
 

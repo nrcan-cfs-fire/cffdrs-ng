@@ -31,9 +31,9 @@ daily_to_minmax <- function(df) {
     hadId <- TRUE
   }
   df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
-  df[, q := findQ(temp, rh)]
-  df[, rh_min := pmin(100, pmax(0, findrh(q, temp_max)))]
-  df[, rh_max := pmin(100, pmax(0, findrh(q, temp_min)))]
+  df[, q := find_q(temp, rh)]
+  df[, rh_min := pmin(100, pmax(0, find_rh(q, temp_max)))]
+  df[, rh_max := pmin(100, pmax(0, find_rh(q, temp_min)))]
   df[, ws_min := 0.15 * ws]
   df[, ws_max := 1.25 * ws]
   if (hadId) {

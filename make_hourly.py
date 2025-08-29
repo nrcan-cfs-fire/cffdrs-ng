@@ -264,7 +264,7 @@ def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
     latitude = r["LAT"].iloc[0]
     longitude = r["LONG"].iloc[0]
     r["TIMEZONE"] = timezone
-    r = util.getSunlight(r, with_solrad=False)
+    r = util.get_sunlight(r, with_solrad=False)
     # FIX: is solar noon just midpoint between sunrise and sunset?
     r["SOLARNOON"] = r.apply(
         lambda row: (row["SUNSET"] - row["SUNRISE"]) / 2 + row["SUNRISE"], axis=1

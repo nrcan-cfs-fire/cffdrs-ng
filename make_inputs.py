@@ -78,7 +78,7 @@ if "__main__" == __name__:
             axis=1,
         )
     wx["TIMEZONE"] = timezone
-    wx = util.getSunlight(wx, with_solrad=True)
+    wx = util.get_sunlight(wx, with_solrad=True)
     if "PERCENT_CURED" not in wx.columns:
         wx["JULIAN"] = wx.apply(lambda row: util.julian(row["MON"], row["DAY"]), axis=1)
         wx["PERCENT_CURED"] = wx["JULIAN"].apply(util.seasonal_curing)

@@ -143,10 +143,13 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
     stop("Expected a single YR value for input weather")
   }
   r$HR <- 12
-  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0),
-    tz = paste0("Etc/GMT", ifelse(timezone > 0, "-", "+"), abs(timezone))
-  )]
-  if (!(nrow(r) > 1 && isSequential(as.Date(r$TIMESTAMP)))) {
+  if (timezone == -3.5) {  # the only non-integer Canadian timezone
+    tz_name <- "Canada/Newfoundland"
+  } else {
+    tz_name <- paste0("Etc/GMT", ifelse(timezone > 0, "-", "+"), abs(timezone))
+  }
+  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00", YR, MON, DAY, HR, 0), tz = tz_name)]
+  if (!(nrow(r) > 1 && is_sequential(as.Date(r$TIMESTAMP)))) {
     if (skipInvalid) {
       warning(paste0(r$ID[[1]], " for ", r$YR[[1]], " - Expected input to be sequential daily weather"))
       return(NULL)
@@ -167,7 +170,7 @@ minmax_to_hourly_single <- function(w, timezone, skipInvalid = FALSE, verbose = 
   r[, HR := hour(TIMESTAMP)]
   # FIX: convert this to not need to do individual stations
   r[, TIMEZONE := timezone]
-  r <- getSunlight(r, with_solrad = FALSE)
+  r <- get_sunlight(r, with_solrad = FALSE)
   # FIX: is solar noon just midpoint between sunrise and sunset?
   r[, SOLARNOON := (SUNSET - SUNRISE) / 2 + SUNRISE]
   r[, RH_OPP_MIN := 1 - RH_MAX / 100]

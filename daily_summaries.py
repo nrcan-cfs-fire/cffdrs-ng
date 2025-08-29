@@ -173,10 +173,10 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
 
   # round decimal places of output columns
   if not (round_out == None or round_out == "None"):
-      outcols = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
-          "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth"]
-      results[outcols] = results[outcols].map(round, ndigits = round_out)
-      
+    outcols = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
+      "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth"]
+    results[outcols] = results[outcols].map(round, ndigits = round_out)
+    
   return results
 
 
