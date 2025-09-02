@@ -611,21 +611,19 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
 #'
 #' @param    w                    hourly values weather stream
-#' @param    ffmc_or_mcffmc_old   previous value for FFMC or mcffmc
-#' @param    is_mcffmc            is above a value of mcffmc or FFMC
+#' @param    ffmc_old             previous value FFMC (this or mcffmc_old should be NA)
+#' @param    mcffmc_old           previous value mcffmc (this or ffmc_old should be NA)
 #' @param    dmc_old              previous value for DMC
 #' @param    dc_old               previous value for DC
 #' @param    mcgfmc_matted_old    previous value for matted mcgfmc
 #' @param    mcgfmc_standing_old  previous value for standing mcgfmc
-#' @param    dmc_before_rain      DMC before rainfall
-#' @param    dc_before_rain       DC before rainfall
 #' @param    prec_cumulative      cumulative precipitation this rainfall
 #' @param    canopy_drying        consecutive hours of no rain
 #' @return                        hourly values FWI and weather stream
 .stnHFWI <- function(
   w,
-  ffmc_or_mcffmc_old,
-  is_mcffmc,
+  ffmc_old,
+  mcffmc_old,
   dmc_old,
   dc_old,
   mcgfmc_matted_old,
@@ -633,25 +631,36 @@ rain_since_intercept_reset <- function(rain, canopy) {
   prec_cumulative,
   canopy_drying) {
   if (!is_sequential_hours(w)) {
-    stop("Expected input to be sequential hourly weather")
+    stop("Expected hourly weather input to be sequential")
   }
   if (length(na.omit(unique(w$id))) != 1) {
-    stop("Expected a single ID value for input weather")
+    stop("_stnHFWI() function only accepts a single station ID")
   }
   if (length(na.omit(unique(w$lat))) != 1) {
-    stop("Expected a single latitude (lat) value for input weather")
+    stop("Expected a single latitude (lat) value each station year")
   }
   if (length(na.omit(unique(w$long))) != 1) {
-    stop("Expected a single longitude (long) value for input weather")
+    stop("Expected a single longitude (long) each station year")
+  }
+  if (length(na.omit(unique(w$timezone))) != 1) {
+    stop("Expected a single UTC offset (timezone) each station year")
   }
   if (length(na.omit(unique(w$grass_fuel_load))) != 1) {
-    stop("Expected a single grass_fuel_load value")
+    stop("Expected a single grass_fuel_load value each station year")
   }
   r <- as.data.table(copy(w))
-  if (!is_mcffmc) {
-    mcffmc <- ffmc_to_mcffmc(ffmc_or_mcffmc_old)
+  if (is.na(mcffmc_old)) {
+    if (is.na(ffmc_old)) {
+      stop("Either ffmc_old OR mcffmc_old should be NA, not both")
+    } else {
+      mcffmc <- ffmc_to_mcffmc(ffmc_old)
+    }
   } else {
-    mcffmc <- ffmc_or_mcffmc_old
+    if (is.na(ffmc_old)) {
+      mcffmc <- mcffmc_old
+    } else {
+      stop("One of ffmc_old OR mcffmc_old should be NA, not neither")
+    }
   }
   mcgfmc_matted <- mcgfmc_matted_old
   mcgfmc_standing <- mcgfmc_standing_old
@@ -765,15 +774,12 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' Calculate hourly FWI indices from hourly weather stream.
 #'
 #' @param    df_wx                hourly values weather stream
-#' @param    timezone             integer offset from GMT to use for sun calculations
-#' @param    ffmc_or_mcffmc_old   previous value for FFMC or mcffmc (startup 85)
-#' @param    is_mcffmc            is above a value of mcffmc or FFMC (default False)
+#' @param    ffmc_old             previous value for FFMC (startup 85, NA for mcffmc_old)
+#' @param    mcffmc_old           previous value mcffmc (default NA for ffmc_old input)
 #' @param    dmc_old              previous value for DMC (startup 6)
 #' @param    dc_old               previous value for DC (startup 15)
 #' @param    mcgfmc_matted_old    previous value for matted mcgfmc (startup FFMC = 85)
 #' @param    mcgfmc_standing_old  previous value for standing mcgfmc (startup FFMC = 85)
-#' @param    dmc_before_rain      DMC before rainfall (default 0)
-#' @param    dc_before_rain       DC before rainfall (default 0)
 #' @param    prec_cumulative      cumulative precipitation this rainfall (default 0)
 #' @param    canopy_drying        consecutive hours of no rain (default 0)
 #' @param    silent               suppresses informative print statements (default False)
@@ -781,9 +787,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @return                        hourly values FWI and weather stream
 hFWI <- function(
   df_wx,
-  timezone,
-  ffmc_or_mcffmc_old = FFMC_DEFAULT,
-  is_mcffmc = FALSE,
+  ffmc_old = FFMC_DEFAULT,
+  mcffmc_old = NA,
   dmc_old = DMC_DEFAULT,
   dc_old = DC_DEFAULT,
   mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
@@ -792,7 +797,7 @@ hFWI <- function(
   canopy_drying = 0.0,
   silent = FALSE,
   round_out = 4
-  ) {  # not using dmc_old or dc_old reference to match Python
+  ) {
   # check df_wx class for data.frame or data.table
   wasDf <- is.data.frame(df_wx)
   if (wasDf) {
@@ -811,7 +816,7 @@ hFWI <- function(
     %in% names(wx)))
   # check for one hour run and startup moisture all set to default
   if (nrow(wx) == 1 &&
-    ffmc_or_mcffmc_old == FFMC_DEFAULT && is_mcffmc == FALSE &&
+    ffmc_old == FFMC_DEFAULT && is.na(mcffmc_old) &&
     dmc_old == DMC_DEFAULT && dc_old == DC_DEFAULT &&
     mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &&
     mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)) {
@@ -837,7 +842,6 @@ hFWI <- function(
     wx[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00",
       yr, mon, day, hr, minute))]
   }
-  wx$timezone <- timezone
   if (!"grass_fuel_load" %in% og_names) {
     wx$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
   }
@@ -859,6 +863,9 @@ hFWI <- function(
     wx <- wx[, -..cols_extra_solar]
   }
   # check for values outside valid ranges
+  if (class(wx$timezone) == "character") {
+    stop("UTC offset (timezone) should be a number, not class 'character'")
+  }
   stopifnot(all(wx$rh >= 0 & wx$rh <= 100))
   stopifnot(all(wx$ws >= 0))
   stopifnot(all(wx$prec >= 0))
@@ -867,8 +874,18 @@ hFWI <- function(
   stopifnot(wx$solrad >= 0)
   stopifnot(wx$grass_fuel_load > 0)
   stopifnot(wx$percent_cured >= 0 & wx$percent_cured <= 100)
-  if (!is_mcffmc) {
-    stopifnot(ffmc_or_mcffmc_old >= 0 & ffmc_or_mcffmc_old <= 101)
+  if (is.na(mcffmc_old)) {
+    if (is.na(ffmc_old)) {
+      stop("Either ffmc_old OR mcffmc_old should be NA, not both")
+    } else {
+      stopifnot(ffmc_old >= 0 & ffmc_old <= 101)
+    }
+  } else {
+    if (is.na(ffmc_old)) {
+      stopifnot(mcffmc_old >= 0 & mcffmc_old <= 250)
+    } else {
+      stop("One of ffmc_old OR mcffmc_old should be NA (omitted), not neither")
+    }
   }
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
@@ -884,7 +901,7 @@ hFWI <- function(
       }
       # FIX: convert this to not need to do individual stations
       w <- get_sunlight(by_year, get_solrad = needs_solrad)
-      r <- .stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+      r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
         prec_cumulative, canopy_drying)
       results <- rbind(results, r)
@@ -904,7 +921,6 @@ hFWI <- function(
   if (!hadTimestamp) {
     results <- results[, -c("timestamp")]
   }
-  results <- results[, -c("timezone")]
 
   # format decimal places of output columns
   if (!is.na(round_out)) {
@@ -929,37 +945,36 @@ hFWI <- function(
 #                prec_cumulative, canopy_drying, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
-  if (length(args) < 3) {
-    stop("at least 3 arguments required: input csv, output csv, timezone")
+  if (length(args) < 2) {
+    stop("at least 2 arguments required: input csv and output csv")
   }
   input <- args[1]
   output <- args[2]
-  timezone <- as.numeric(args[3])
   # load optional arguments if provided, or set to default
-  if (length(args) >= 4) ffmc_or_mcffmc_old <- as.numeric(args[4])
-  else ffmc_or_mcffmc_old <- FFMC_DEFAULT
-  if (length(args) >= 5) is_mcffmc <- as.logical(args[5])
-  else is_mcffmc <- FALSE
-  if (length(args) >= 6) dmc_old <- as.numeric(args[6])
+  if (length(args) >= 3) ffmc_old <- as.numeric(args[3])
+  else ffmc_old <- FFMC_DEFAULT
+  if (length(args) >= 4) mcffmc_old <- as.logical(args[4])
+  else mcffmc_old <- NA
+  if (length(args) >= 5) dmc_old <- as.numeric(args[5])
   else dmc_old <- DMC_DEFAULT
-  if (length(args) >= 7) dc_old <- as.numeric(args[7])
+  if (length(args) >= 6) dc_old <- as.numeric(args[6])
   else dc_old <- DC_DEFAULT
-  if (length(args) >= 8) mcgfmc_matted_old <- as.numeric(args[8])
+  if (length(args) >= 7) mcgfmc_matted_old <- as.numeric(args[7])
   else mcgfmc_matted_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
-  if (length(args) >= 9) mcgfmc_standing_old <- as.numeric(args[9])
+  if (length(args) >= 8) mcgfmc_standing_old <- as.numeric(args[8])
   else mcgfmc_standing_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
-  if (length(args) >= 10) prec_cumulative <- as.numeric(args[12])
+  if (length(args) >= 9) prec_cumulative <- as.numeric(args[9])
   else prec_cumulative <- 0.0
-  if (length(args) >= 11) canopy_drying <- as.numeric(args[13])
+  if (length(args) >= 10) canopy_drying <- as.numeric(args[10])
   else canopy_drying <- 0.0
-  if (length(args) >= 12) silent <- as.logical(args[14])
+  if (length(args) >= 11) silent <- as.logical(args[11])
   else silent <- FALSE
-  if (length(args) >= 13) round_out <- args[15]
+  if (length(args) >= 12) round_out <- args[12]
   else round_out <- 4
-  if (length(args) >= 14) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 13) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
-  df_out <- hFWI(df_in, timezone, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+  df_out <- hFWI(df_in, ffmc_old, mcffmc_old, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying,
     silent, round_out)
   write.csv(df_out, output, row.names = FALSE)

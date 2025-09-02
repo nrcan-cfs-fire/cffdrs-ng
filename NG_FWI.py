@@ -567,21 +567,19 @@ def rain_since_intercept_reset(rain, canopy):
 # Calculate hourly FWI indices from hourly weather stream for a single station
 #
 # @param    w                   hourly values weather stream
-# @param    ffmc_or_mcffmc_old  previous value for FFMC or mcffmc
-# @param    is_mcffmc           is above a value of mcffmc or FFMC
+# @param    ffmc_old            previous value FFMC (this or mcffmc_old should be None)
+# @param    mcffmc_old          previous value mcffmc (this or ffmc_old should be None)
 # @param    dmc_old             previous value for DMC
 # @param    dc_old              previous value for DC
 # @param    mcgfmc_matted_old   previous value for matted mcgfmc
 # @param    mcgfmc_standing_old previous value for standing mcgfmc
-# @param    dmc_before_rain     DMC before rainfall
-# @param    dc_before_rain      DC before rainfall
 # @param    prec_cumulative     cumulative precipitation this rainfall
 # @param    canopy_drying       consecutive hours of no rain
 # @return                       hourly values FWI and weather stream
 def _stnHFWI(
     w,
-    ffmc_or_mcffmc_old,
-    is_mcffmc,
+    ffmc_old,
+    mcffmc_old,
     dmc_old,
     dc_old,
     mcgfmc_matted_old,
@@ -589,27 +587,35 @@ def _stnHFWI(
     prec_cumulative,
     canopy_drying):
     if not util.is_sequential_hours(w):
-        raise RuntimeError("Expected input to sequential hourly weather")
+        raise RuntimeError("Expected hourly weather input to be sequential")
     if len(w["id"].unique()) != 1:
-        raise RuntimeError("Expected a single ID value for input weather")
+        raise RuntimeError("_stnHFWI() function only accepts a single station ID")
     if len(w["lat"].unique()) != 1:
-        raise RuntimeError("Expected a single latitude (lat) value for input weather")
+        raise RuntimeError("Expected a single latitude (lat) each station year")
     if len(w["long"].unique()) != 1:
-        raise RuntimeError("Expected a single longitude (long) value for input weather")
+        raise RuntimeError("Expected a single longitude (long) each station year")
+    if len(w["timezone"].unique()) != 1:
+        raise RuntimeError("Expected a single UTC offset (timezone) each station year")
     if len(w["grass_fuel_load"].unique()) != 1:
-        raise RuntimeError("Expected a single grass_fuel_load value")
+        raise RuntimeError("Expected a single grass_fuel_load value each station year")
     r = w.loc[:]
-    if not is_mcffmc:
-       mcffmc = ffmc_to_mcffmc(ffmc_or_mcffmc_old)
+    if mcffmc_old == None or mcffmc_old == "None":
+        if ffmc_old == None or ffmc_old == "None":
+            raise ValueError("Either ffmc_old OR mcffmc_old should be NA, not both")
+        else:
+            mcffmc = ffmc_to_mcffmc(ffmc_old)
     else:
-       mcffmc = ffmc_or_mcffmc_old
+        if ffmc_old == None or ffmc_old == "None":
+            mcffmc = mcffmc_old
+        else:
+            raise ValueError("One of ffmc_old OR mcffmc_old should be NA, not neither")
     mcgfmc_matted = mcgfmc_matted_old
     mcgfmc_standing = mcgfmc_standing_old
     mcdmc = dmc_to_mcdmc(dmc_old)
     mcdc = dc_to_mcdc(dc_old)
     # FIX: just use loop for now so it matches C code
     canopy = {"rain_total_prev": prec_cumulative,
-              "drying_since_intercept": canopy_drying}
+        "drying_since_intercept": canopy_drying}
     results = []
     for i in range(len(r)):
         cur = r.iloc[i].to_dict()
@@ -618,18 +624,18 @@ def _stnHFWI(
         if canopy["rain_total_prev"] + cur["prec"] <= FFMC_INTERCEPT:  # not enough rain
             rain_ffmc = 0.0
         elif canopy["rain_total_prev"] > FFMC_INTERCEPT:  # already saturated canopy
-           rain_ffmc = cur["prec"]
+            rain_ffmc = cur["prec"]
         else:
             rain_ffmc = canopy["rain_total_prev"] + cur["prec"] - FFMC_INTERCEPT
         mcffmc = hourly_fine_fuel_moisture(
-           mcffmc,
-           cur["temp"],
-           cur["rh"],
-           cur["ws"],
-           rain_ffmc
+            mcffmc,
+            cur["temp"],
+            cur["rh"],
+            cur["ws"],
+            rain_ffmc
         )
         cur["mcffmc"] = mcffmc
-        #  convert to code for output, but keep using moisture % for precision
+        # convert to code for output, but keep using moisture % for precision
         cur["ffmc"] = mcffmc_to_ffmc(mcffmc)
         # not ideal, but at least encapsulates the code for each index
         mcdmc = duff_moisture_code(
@@ -681,7 +687,7 @@ def _stnHFWI(
             cur["temp"],
             cur["rh"],
             cur["ws"],
-            cur["prec"]*0.06,
+            cur["prec"] * 0.06,
             0.0,
             cur["grass_fuel_load"]
         )        
@@ -712,15 +718,12 @@ def _stnHFWI(
 # Calculate hourly FWI indices from hourly weather stream.
 #
 # @param    df_wx               hourly values weather stream
-# @param    timezone            integer offset from GMT to use for sun calculations
-# @param    ffmc_or_mcffmc_old  previous value for FFMC or mcffmc (startup 85)
-# @param    is_mcffmc           is above a value of mcffmc or FFMC (default False)
+# @param    ffmc_old            previous value for FFMC (startup 85, None for mcffmc_old)
+# @param    mcffmc_old          previous value mcffmc (default None for ffmc_old input)
 # @param    dmc_old             previous value for DMC (startup 6)
 # @param    dc_old              previous value for DC (startup 15)
 # @param    mcgfmc_matted_old   previous value for matted mcgfmc (startup FFMC = 85)
 # @param    mcgfmc_standing_old previous value for standing mcgfmc (startup FFMC = 85)
-# @param    dmc_before_rain     DMC before rainfall (default 6)
-# @param    dc_before_rain      DC before rainfall (default 15)
 # @param    prec_cumulative     cumulative precipitation this rainfall (default 0)
 # @param    canopy_drying       consecutive hours of no rain (default 0)
 # @param    silent              suppresses informative print statements (default False)
@@ -728,9 +731,8 @@ def _stnHFWI(
 # @return                       hourly values FWI and weather stream
 def hFWI(
     df_wx,
-    timezone,
-    ffmc_or_mcffmc_old = FFMC_DEFAULT,
-    is_mcffmc = False,
+    ffmc_old = FFMC_DEFAULT,
+    mcffmc_old = None,
     dmc_old = DMC_DEFAULT,
     dc_old = DC_DEFAULT,
     mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
@@ -744,12 +746,13 @@ def hFWI(
     wx.columns = map(str.lower, wx.columns)
     og_names = wx.columns
     # check for required columns
-    if not all(x in wx.columns for x in (
-       ['lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec'])):
-       raise RuntimeError("Missing required input column(s)")
+    if not all(x in wx.columns for x in 
+        ['lat', 'long', 'timezone', 'yr', 'mon', 'day', 'hr',
+        'temp', 'rh', 'ws', 'prec']):
+        raise RuntimeError("Missing required input column(s)")
     # check for one hour run and startup moisture all set to default
     if (df_wx.shape[0] == 1 and
-        ffmc_or_mcffmc_old == FFMC_DEFAULT and is_mcffmc == False and
+        ffmc_old == FFMC_DEFAULT and mcffmc_old == None and
         dmc_old == DMC_DEFAULT and dc_old == DC_DEFAULT and
         mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) and
         mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)):
@@ -775,21 +778,22 @@ def hFWI(
                 row["yr"], row["mon"], row["day"], row["hr"], row["minute"]
                 ), axis=1
             )
-    wx["timezone"] = timezone
     if not "grass_fuel_load" in og_names:
-       wx["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
+        wx["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
     if not "percent_cured" in og_names:
-        wx["percent_cured"] = wx.apply(lambda row:util.seasonal_curing(
+        wx["percent_cured"] = wx.apply(lambda row: util.seasonal_curing(
             util.julian(row["mon"], row["day"])), axis=1)
     if not "solrad" in wx.columns:
         if not silent:
-           print("Solar Radiation not provided so will be calculated")
+            print("Solar Radiation not provided so will be calculated")
         needs_solrad = True
     else:
         needs_solrad = False
     # check for values outside valid ranges
+    if any(isinstance(tz, str) for tz in wx["timezone"]):
+        raise ValueError("UTC offset (timezone) should be a number, not a string")
     if not (all(wx["rh"] >= 0) and all(wx["rh"] <= 100)):
-        raise ValueError("All relative humidity (rh) must be between 0-100")
+        raise ValueError("All relative humidity (rh) must be between 0-100%")
     if not all(wx["ws"] >= 0):
         raise ValueError("All wind speed (ws) must be >= 0")
     if not all(wx["prec"] >= 0):
@@ -797,20 +801,25 @@ def hFWI(
     if not (all(wx["mon"] >= 1) and all(wx["mon"] <= 12)):
         raise ValueError("All months (mon) must be between 1-12")
     if (not needs_solrad) and (not all(wx['solrad'] >= 0)):
-       raise ValueError("All solar radiation (solrad) must be >= 0")
+        raise ValueError("All solar radiation (solrad) must be >= 0")
     if ("percent_cured" in og_names) and (not (
-       all(wx["percent_cured"] >= 0) and all(wx["percent_cured"] <= 100))):
-       raise ValueError("All percent_cured must be between 0-100")
+        all(wx["percent_cured"] >= 0) and all(wx["percent_cured"] <= 100))):
+        raise ValueError("All percent_cured must be between 0-100%")
     if ("grass_fuel_load" in og_names) and (not (all(wx["grass_fuel_load"] > 0))):
-       raise ValueError("All grass_fuel_load must be > 0")
+        raise ValueError("All grass_fuel_load must be > 0")
     if not (all(wx["day"] >= 1) and all(wx["day"] <= 31)):
         raise ValueError("All day must be 1-31")
-    if is_mcffmc:
-       if not (0 <= ffmc_or_mcffmc_old <= 250):
-          raise ValueError("mcffmc values must be between 0-250")
+    if mcffmc_old == None or mcffmc_old == "None":
+        if ffmc_old == None or ffmc_old == "None":
+            raise ValueError("Either ffmc_old OR mcffmc_old should be None, not both")
+        elif not (0 <= ffmc_old <= 101):
+            raise ValueError("ffmc_old must be between 0-101")
     else:
-        if not (0 <= ffmc_or_mcffmc_old <= 101):
-            raise ValueError("ffmc values must be between 0-101")
+        if ffmc_old == None or ffmc_old == "None":
+            if not (0 <= mcffmc_old <= 250):
+                raise ValueError("mcffmc_old must be between 0-250%")
+        else:
+            raise ValueError("One of ffmc_old OR mcffmc_old should be None, not neither")
     if not (dmc_old >= 0):
         raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
@@ -824,21 +833,20 @@ def hFWI(
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index()
         w = util.get_sunlight(w, get_solrad = needs_solrad)
-        r = _stnHFWI(w, ffmc_or_mcffmc_old, is_mcffmc, dmc_old, dc_old,
+        r = _stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
             mcgfmc_matted_old, mcgfmc_standing_old,
             prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
     
     # remove optional variables that we added
     if not had_stn:
-       results = results.drop(columns = "id")
+        results = results.drop(columns = "id")
     if not had_minute:
-       results = results.drop(columns = "minute")
+        results = results.drop(columns = "minute")
     if not had_date:
-       results = results.drop(columns = "date")
+        results = results.drop(columns = "date")
     if not had_timestamp:
-       results = results.drop(columns = "timestamp")
-    results = results.drop(columns = "timezone")
+        results = results.drop(columns = "timestamp")
 
     # round decimal places of output columns
     if not (round_out == None or round_out == "None"):
@@ -847,7 +855,7 @@ def hFWI(
             "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
             "prec_cumulative", "canopy_drying"]
         if "solrad" not in og_names:
-           outcols.insert(0, "solrad")
+            outcols.insert(0, "solrad")
         results[outcols] = results[outcols].map(round, ndigits = round_out)
 
     return results
@@ -858,12 +866,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "NG_FWI")
     # add all inputs to hFWI
     parser.add_argument("input", help = "Input csv data file")
-    parser.add_argument("output", help = "Output csv file name and/or location")
-    parser.add_argument("timezone", help = "UTC offset for all input data", type = float)
-    parser.add_argument("ffmc_or_mcffmc_old", nargs = "?", default = FFMC_DEFAULT,
-        type = float, help = "Starting FFMC or mcffmc value (default FFMC = 85)")
-    parser.add_argument("is_mcffmc", nargs = "?", default = False, type = bool,
-        help = "Whether ffmc_or_mcffmc_old is mcffmc (default False, meaning FFMC)")
+    parser.add_argument("output", help = "Output csv file name and location")
+    parser.add_argument("ffmc_old", nargs = "?", default = FFMC_DEFAULT,
+        help = "Starting value for FFMC (startup 85, None for mcffmc_old)")
+    parser.add_argument("mcffmc_old", nargs = "?", default = None,
+        help = "Starting value for mcffmc (default None for ffmc_old input)")
     parser.add_argument("dmc_old", nargs = "?", default = DMC_DEFAULT, type = float,
         help = "Starting DMC (default 6)")
     parser.add_argument("dc_old", nargs = "?", default = DC_DEFAULT, type = float,
@@ -884,7 +891,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
-    df_out = hFWI(df_in, args.timezone, args.ffmc_or_mcffmc_old, args.is_mcffmc,
+    df_out = hFWI(df_in, args.ffmc_old, args.mcffmc_old,
         args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
         args.prec_cumulative, args.canopy_drying, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)
