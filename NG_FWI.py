@@ -1,3 +1,4 @@
+# Computes hourly FWI indices for an input hourly weather stream
 import datetime
 import logging
 import argparse
@@ -6,7 +7,6 @@ from math import exp, log, pow, sqrt
 import pandas as pd
 
 import util
-from old_cffdrs import daily_drought_code, daily_duff_moisture_code
 
 
 logger = logging.getLogger("cffdrs")
@@ -28,18 +28,11 @@ OFFSET_SUNSET = 0 #0.5
 
 # Fuel Load (kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
-MAX_SOLAR_PROPAGATION = 0.85
 
 # default startup values
 FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
-
-# FIX: figure out what this should be
-DEFAULT_LATITUDE = 55.0
-DEFAULT_LONGITUDE = -120.0
-
-# HOUR_TO_START_FROM = 12
 
 MPCT_TO_MC = 250.0 * 59.5 / 101.0
 FFMC_INTERCEPT = 0.5
@@ -257,7 +250,6 @@ def initial_spread_index(ws, ffmc):
     isi = 0.208 * fw * ff
     return isi
 
-
 ##
 # Calculate Build-up Index (BUI)
 #
@@ -273,7 +265,6 @@ def buildup_index(dmc, dc):
         if bui <= 0:
             bui = 0.0
     return bui
-
 
 ##
 # Calculate Fire Weather Index (FWI)
@@ -375,7 +366,6 @@ def hourly_grass_fuel_moisture(
         m = e + moe * exp(-1.0 * log(10.0) * xkd * time_increment)
     return m
 
-
 def Pign(mc, wind2m, Cint, Cmc, Cws):
     #  Thisd is the general standard form for the probability of sustained flaming models for each FF cover type
     #     here :
@@ -387,7 +377,6 @@ def Pign(mc, wind2m, Cint, Cmc, Cws):
     Prob = 1.0 / (1.0 + exp(-1.0 * (Cint + Cmc * mc + Cws * wind2m)))
     return Prob
 
-
 def curing_factor(cur):
     # cur is the percentage cure of the grass fuel complex.  100= fully cured
     #   ....The OPPOSITE (100-x) of greenness...
@@ -396,7 +385,6 @@ def curing_factor(cur):
     #    and as in CSIRO code:https://research.csiro.au/spark/resources/model-library/csiro-grassland-models/
     cf = (1.036 / (1 + 103.989 * exp(-0.0996 * (cur - 20)))) if (cur >= 20.0) else 0.0
     return cf
-
 
 def mcgfmc_to_gfmc(mc, cur, wind):
     #   THIS is the way to get the CODE value from cured grassland moisture
@@ -447,7 +435,6 @@ def mcgfmc_to_gfmc(mc, cur, wind):
       egmc = 250.0
     return mcffmc_to_ffmc(egmc)
 
-
 def matted_grass_spread_ROS(ws, mc, cur):
     #  /*  CUT grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code
     #   We use this for MATTED grass in our post-winter context
@@ -473,7 +460,6 @@ def matted_grass_spread_ROS(ws, mc, cur):
       fm = 0.0
     cf = curing_factor(cur)
     return fw * fm * cf
-
 
 def standing_grass_spread_ROS(ws, mc, cur):
     #  /*  standing grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code)
@@ -527,7 +513,6 @@ def grass_spread_index(ws, mc, cur, standing):
     
     return 1.11 * ros
 
-
 ##
 # Calculate Grassland Fire Weather Index
 #
@@ -548,7 +533,6 @@ def drying_units():  # temp, rh, ws, rain, solrad
     # for now, just add 1 drying "unit" per hour
     return 1.0
 
-
 def rain_since_intercept_reset(rain, canopy):
     # for now, want 5 "units" of drying (which is 1 per hour to start)
     TARGET_DRYING_SINCE_INTERCEPT = 5.0
@@ -561,7 +545,6 @@ def rain_since_intercept_reset(rain, canopy):
             canopy["rain_total_prev"] = 0.0
             canopy["drying_since_intercept"] = 0.0
     return canopy
-
 
 ##
 # Calculate hourly FWI indices from hourly weather stream for a single station
@@ -713,7 +696,6 @@ def _stnHFWI(
     del r["index"]
     return r
 
-
 ##
 # Calculate hourly FWI indices from hourly weather stream.
 #
@@ -859,7 +841,6 @@ def hFWI(
         results[outcols] = results[outcols].map(round, ndigits = round_out)
 
     return results
-
 
 if __name__ == "__main__":
     # run hFWI by command line. run with option -h or --help to see usage

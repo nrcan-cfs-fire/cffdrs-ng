@@ -1,11 +1,8 @@
+# Various utility functions used by the other files
 import datetime
-import logging
-from math import acos, cos, exp, log, pi, sin, tan
-import re
+from math import acos, cos, exp, pi, sin, tan
 import numpy as np
 import pandas as pd
-
-
 
 
 ##
@@ -19,7 +16,6 @@ def is_sequential_days(data):
         == (data["timestamp"] - data["timestamp"].shift(1)).iloc[1:]
     )
 
-
 ##
 # Determine if data is sequential hours
 #
@@ -30,7 +26,6 @@ def is_sequential_hours(data):
         datetime.timedelta(hours=1)
         == (data["timestamp"] - data["timestamp"].shift(1)).iloc[1:]
     )
-
 
 ##
 # Find specific humidity
@@ -45,7 +40,6 @@ def find_q(temp, rh):
     q = 217 * vp / (273.17 + temp)
     return q
 
-
 ##
 # Find relative humidity
 #
@@ -57,7 +51,6 @@ def find_rh(q, temp):
     rh = 100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3)))
     return rh
 
-
 ##
 # Find day of year. Does not properly deal with leap years.
 #
@@ -67,7 +60,6 @@ def find_rh(q, temp):
 def julian(mon, day):
     month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
     return month[int(mon) - 1] + int(day)
-
 
 ##
 # Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
@@ -100,13 +92,13 @@ def get_sunlight(df, get_solrad = False):
         lambda jd: 2.0 * pi / 365.0 * (jd - 1.0 + (dec_hour - 12.0) / 24.0))
     df_dates["eqtime"] = df_dates["fracyear"].apply(
         lambda fracyear: 229.18 * (0.000075 +
-            0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
-            0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear)))
+        0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
+        0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear)))
     df_dates["decl"] = df_dates["fracyear"].apply(
         lambda fracyear: 0.006918 -
-            0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
-            0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
-            0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear))
+        0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
+        0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
+        0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear))
     df_dates["zenith"] = 90.833 * pi / 180.0
     # at this point we actually need the LAT/LONG/TIMEZONE
     df_dates = pd.merge(df_stn_dates, df_dates, on = ["date"])
@@ -133,8 +125,8 @@ def get_sunlight(df, get_solrad = False):
         df_all["hourangle"] = df_all.apply(lambda x: x["tst"] / 4 - 180, axis = 1)
         df_all["zenith"] = df_all.apply(
             lambda x: acos(sin(x["lat"] * pi / 180) * sin(x["decl"]) +
-                cos(x["lat"] * pi / 180) * cos(x["decl"]) *
-                cos(x["hourangle"] * pi / 180)), axis = 1)
+            cos(x["lat"] * pi / 180) * cos(x["decl"]) *
+            cos(x["hourangle"] * pi / 180)), axis = 1)
         df_all["zenith"] = df_all["zenith"].apply(lambda zenith: min(pi / 2, zenith))
         # need later so keep column
         df_all["cos_zenith"] = df_all["zenith"].apply(cos)
@@ -195,71 +187,10 @@ def seasonal_curing(julian_date):
         96.0,
         96.0,
         96.0,
-        96.0,
+        96.0
     ]
     jd_class = julian_date // 10
     first = PERCENT_CURED[jd_class]
     last = PERCENT_CURED[jd_class + 1]
     period_frac = (julian_date % 10) / 10.0
     return first + (last - first) * period_frac
-
-
-def save_csv(df, file):
-    COLS_ID = ["id","wstind"]
-    COLS_LOC = ["lat", "long"]
-    COLS_DATE = ["yr", "mon", "day", "hr", "peak_time", "duration"]
-    COLS_RH = ["rh"]
-    COLS_WX = ["temp", "ws", "wind_speed_smoothed"]
-    COLS_PREC = ["prec"]
-    COLS_SOLRAD = ["solrad"]
-    COLS_INDICES = [
-        "ffmc",
-        "dmc",
-        "dc",
-        "isi",
-        "bui",
-        "fwi",
-        "dsr",
-        "gfmc",
-        "gsi",
-        "gfwi",
-        "peak_isi_smoothed",
-        "peak_gsi_smoothed"
-    ]
-    COLS_SUN_TIMES = ["sunrise", "sunset"]
-    COLS_EXTRA = ["mcffmc", "mcgfmc"]
-    COLS_GFL = ["grass_fuel_load"]
-    COLS_PC = ["percent_cured"]
-    cols_used = []
-    result = df.copy()
-    result.columns = map(str.lower, result.columns)
-
-    def apply_format(cols, fmt, as_int=False):
-        def fix_col(x):
-            if as_int:
-                x = int(x)
-            # HACK: deal with negative 0
-            return(re.sub("^-0\\.0*$", "0.0", fmt.format(x)))
-
-        for col in result.columns:
-            # HACK: deal with min/max columns
-            col_root = col.replace("_min", "").replace("_max", "")
-            if col_root in cols:
-                cols_used.append(col)
-                result[col] = result[col].apply(fix_col)
-
-    apply_format(COLS_ID, "{}")
-    apply_format(COLS_LOC, "{:.4f}")
-    apply_format(COLS_DATE, "{:02d}", True)
-    apply_format(COLS_RH, "{:.0f}")
-    apply_format(COLS_WX, "{:.1f}")
-    apply_format(COLS_PREC, "{:.2f}")
-    apply_format(COLS_SOLRAD, "{:.4f}")
-    apply_format(COLS_INDICES, "{:.1f}")
-    apply_format(COLS_SUN_TIMES, "{}")
-    apply_format(COLS_EXTRA, "{:.4f}")
-    apply_format(COLS_GFL, "{:.2f}")
-    apply_format(COLS_PC, "{:.1f}")
-    result = result[[col for col in result.columns if col in cols_used]]
-    result.to_csv(file, index=False)
-    

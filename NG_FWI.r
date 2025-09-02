@@ -2,21 +2,18 @@
 library(lubridate)
 library(data.table)
 source("util.r")
-#source("old_cffdrs.r")
+
 
 DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.937
 
 HOURLY_K_DMC <- 2.22
-# HOURLY_K_DC <- 0.017066
-# HOURLY_K_DMC <- 0.27
 HOURLY_K_DC <- 0.085
 DMC_OFFSET_TEMP <- 0.0
 DC_OFFSET_TEMP <- 0.0
 
 DC_DAILY_CONST <- 0.36
 DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
-
 
 OFFSET_SUNRISE <- 0 ##2.5
 OFFSET_SUNSET <- 0 ##0.5
@@ -28,17 +25,6 @@ DEFAULT_GRASS_FUEL_LOAD <- 0.35
 FFMC_DEFAULT <- 85.0
 DMC_DEFAULT <- 6.0
 DC_DEFAULT <- 15.0
-GFMC_DEFAULT <- FFMC_DEFAULT
-
-# FIX: figure out what this should be
-DEFAULT_LATITUDE <- 55.0
-DEFAULT_LONGITUDE <- -120.0
-
-# # just apply "daily" indices to noon directly
-# HOUR_TO_START_FROM <- 12
-# # result seemed to match better at noon so try starting from there instead
-# # # start with daily indices at peak burn
-# # HOUR_TO_START_FROM <- 16
 
 MPCT_TO_MC <- 250.0 * 59.5 / 101.0
 FFMC_INTERCEPT <- 0.5
@@ -399,7 +385,6 @@ hourly_grass_fuel_moisture <- function(
   return(m)
 }
 
-
 Pign <- function(mc, wind2m, Cint, Cmc, Cws) {
   #  Thisd is the general standard form for the probability of sustained flaming models for each FF cover type
   #     here :
@@ -425,9 +410,6 @@ curing_factor <- function(cur) {
   )
   return(cf)
 }
-
-
-
 
 mcgfmc_to_gfmc <- function(mc, cur, wind) {
   #   THIS is the way to get the CODE value from cured grassland moisture
@@ -478,7 +460,6 @@ mcgfmc_to_gfmc <- function(mc, cur, wind) {
   return(mcffmc_to_ffmc(egmc))
 }
 
-
 matted_grass_spread_ROS <- function(ws, mc, cur) {
   #  /*  CUT grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code
   #   We use this for MATTED grass in our post-winter context
@@ -506,7 +487,6 @@ matted_grass_spread_ROS <- function(ws, mc, cur) {
   cf <- curing_factor(cur)
   return(fw * fm * cf)
 }
-
 
 standing_grass_spread_ROS <- function(ws, mc, cur) {
   #  /*  standing grass  Rate  of spread from cheney 1998  (and new CSIRO grassland code)
@@ -539,7 +519,6 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
   return(fw * fm * cf)
 }
 
-
 #' Calculate Grassland Spread Index (GSI)
 #'
 #' @param ws              Wind Speed (km/h)
@@ -566,7 +545,6 @@ grass_spread_index <- function(ws, mc, cur, standing) {
   
   return(1.11 * ros)
 }
-
 
 #' Calculate Grassland Fire Weather Index
 #'
@@ -605,8 +583,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
   }
   return(canopy)
 }
-
-
 
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
 #'
