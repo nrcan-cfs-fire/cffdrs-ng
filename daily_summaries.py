@@ -160,10 +160,12 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       ordinal_day = util.julian(by_date.at[0, "mon"], by_date.at[0, "day"])
       if (ordinal_day < NG_FWI.DATE_GRASS):
         standing = False
+        mcgfmc = by_date.at[peak_time, "mcgfmc_matted"]
       else:
         standing = True
+        mcgfmc = by_date.at[peak_time, "mcgfmc_standing"]
       results['gsi_smooth'].append(NG_FWI.grass_spread_index(
-        by_date.at[peak_time, "ws_smooth"], by_date.at[peak_time, "gfmc"],
+        by_date.at[peak_time, "ws_smooth"], mcgfmc,
         by_date.at[peak_time, "percent_cured"], standing))
 
   if not had_stn:

@@ -66,95 +66,6 @@ smooth_5pt <- function(source) {
   return(dest)
 }
 
-
-#smooth_7pt <- function(source) {
-#binomial smoother  ... specifically for the 24 hour day
-#1pt = 1
-#3pt = (1 2 1) = 4
-#5pt = (1 4 6 4 1) = 16
-#7pt = (1 6 15 20 15 6 1) = 64
-
-
-#  dest <- numeric(24)
-
-#  dest[1] <- source[1]
-#  dest[24] <- source[24]
-
-#  miss <- 0
-#  for (i in 1:3){
-#    if (source[i] < -90.0){
-#      miss <- miss + 1
-#    }
-#  }
-#  if (miss == 0){
-#    dest[2] <- (0.25 * source[1]) + (0.5 * source[2]) + (0.25 * source[3])
-#  }
-#  else {
-#    dest[2] <- source[2]
-#  }
-
-
-#  miss <- 0
-#  for (i in 1:5){
-#    if (source[i] < -90.0){
-#      miss <- miss + 1
-#    }
-#  }
-#  if (miss == 0){
-#    dest[3] <- (1.0/16.0 * source[1]) + (4.0/16.0 * source[2]) + (6.0/16.0 * source[3]) + (4.0/16.0 * source[4]) + (1.0/16.0 * source[5])
-#  }
-#  else {
-#    dest[3] <- source[3]
-#  }
-
-
-#  for (i in 4:21){
-#    miss <- 0
-#    for (j in (i-3):(i+3)){
-#      if (source[j] < -90.0){
-#        miss <- miss + 1
-#      }
-#    }
-#    if (miss == 0){
-#      dest[i] <- (1.0/64.0 * source[i - 3]) + (6.0/64.0 * source[i - 2]) + (15.0/64.0 * source[i - 1]) + (20.0/64.0 * source[i]) + (15.0/64.0 * source[i + 1]) + (6.0/64.0 * source[i + 2]) + (1.0/64.0 * source[i + 3])
-#    }
-#    else {
-#      dest[i] <- source[i]
-#    }
-#  }
-
-
-#  miss <- 0
-#  for (i in 20:24){
-#    if (source[i] < -90.0){
-#      miss <- miss + 1
-#    }
-#  }
-#  if (miss == 0){
-#    dest[22] <- (1.0/16.0 * source[20]) + (4.0/16.0 * source[21]) + (6.0/16.0 * source[22]) + (4.0/16.0 * source[23]) + (1.0/16.0 * source[24])
-#  }
-#  else {
-#    dest[3] <- source[3]
-#  }
-
-
-#  miss <- 0 
-#  for (i in 22:24){
-#    if (source[i] < -90.0){
-#      miss <- miss + 1
-#    }
-#  }
-#  if (miss == 0){
-#    dest[23] <- (0.25 * source[22]) + (0.5 * source[23]) + (0.25 * source[24])
-#  }
-#  else {
-#    dest[23] <- source[23]
-#  }
-
-
-#  return(dest)
-#}
-
 #' Calculate a pseudo-date that changes not at midnight but forward at another hour
 #'
 #' @param   yr        year
@@ -242,8 +153,10 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
       # calculate some extra variables before creating datatable all at once
       if (by_date[1, julian(mon, day)] < DATE_GRASS) {
         standing <- FALSE
+        mcgfmc <- by_date[peak_time, mcgfmc_matted]
       } else {
         standing <- TRUE
+        mcgfmc <- by_date[peak_time, mcgfmc_standing]
       }
       # load to format sunrise and sunset as hh:mm from decimal hours later
       sr <- by_date[peak_time, sunrise]
@@ -271,7 +184,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
         ws_smooth = by_date[peak_time, ws_smooth],
         isi_smooth = by_date[peak_time, isi_smooth],
         gsi_smooth = by_date[peak_time,
-          grass_spread_index(ws_smooth, gfmc, percent_cured, standing)])
+          grass_spread_index(ws_smooth, mcgfmc, percent_cured, standing)])
 
       results <- rbind(results, daily_report)
     }
