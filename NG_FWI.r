@@ -903,7 +903,7 @@ hFWI <- function(
     outcols <- c("sunrise", "sunset", "sunlight_hours",
       "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
-      "dmc_before_rain", "dc_before_rain", "prec_cumulative", "canopy_drying")
+      "prec_cumulative", "canopy_drying")
     if (!"solrad" %in% og_names) {
       outcols <- c('solrad', outcols)
     }
@@ -916,7 +916,7 @@ hFWI <- function(
   return(results)
 }
 
-# run hFWI by command line via Rscript, requires 3 args: input csv, output csv, timezone
+# run hFWI by command line via Rscript, requires 2 args: input csv and output csv
 # optional args: ffmc_or_mcffmc, is_mcffmc, dmc, dc, mcgfmc_matted, mcgfmc_standing,
 #                prec_cumulative, canopy_drying, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
