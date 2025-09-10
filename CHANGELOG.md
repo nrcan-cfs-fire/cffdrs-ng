@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "unreleased" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
-## [To be released] - yyyy-mm-dd
+## 2025-09-10
 
 ### Added
 - Preliminary calculation variables for `hFWI()` function are included in output and are optional inputs for "live hourly runs" (*Python* and *R*)
@@ -10,7 +10,9 @@ All notable changes to this project will be documented in this file. The format 
 - `hFWI()` and `generate_daily_summaries()` functions now automatically round output values to 4 decimal places, which can be changed via an optional `round_out` argument (*Python* and *R*)
 - `hFWI()` and `generate_daily_summaries()` pass through extra columns in input data frame (*Python* and *R*)
 - Help information for running **hFWI.py** by command line (*Python*)
+- **SECURITY.md** file
 ### Changed
+- GitHub repository organized into folders (for structure overview see README)
 - DMC calculation in `hFWI()` to better respond to long and heavy rain events (*Python* and *R*)
 - Solar radiation calculation in `getSunlight()` to only need each hour's weather data instead of a whole day (*Python* and *R*)
 - `timezone` input in `hFWI()` moved from function argument to column in hourly data frame (*Python* and *R*)
@@ -43,7 +45,9 @@ All notable changes to this project will be documented in this file. The format 
 ### Removed
 - Alternative data frame column names for `hFWI()` function. Year, month, wind speed, and precipitation now must be `yr`, `mon`, `ws`, or `prec` respectively (*Python* and *R*)
 - Unused functions in **util** (*Python* and *R*)
-- **make_inputs**, **make_daily**, and **old_cffdrs** code files (*Python* and *R*)
+- **make_inputs**, **make_daily**, and **old_cffdrs** code files
+- **test.sh** file
+- **test_hffmc.csv** and **wx_hourly.csv** data files. The remaining PRF dataset is used in a tutorial found on the website
 - **CMakeLists.txt** file
 ### Fixed
 - `generate_daily_summaries()` retrieves `isi_smooth` and `gsi_smooth` at the proper (peak) hour (*Python* and *R*)
