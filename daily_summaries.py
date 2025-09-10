@@ -1,6 +1,5 @@
 import logging
-import os.path
-import sys
+import argparse
 import pandas as pd
 import NG_FWI
 import util
@@ -52,177 +51,150 @@ def smooth_5pt(source):
   else:
     dest[cap-2] = source.iloc[cap-2]
   return dest
-  
 
-#this function calculates a fake date based on 5am-5am instead of midnight to midnight
-#used for generating daily summaries to make data look at 5am-5am instead
-#output form is "year-julian_day", with the julian day rounded back if the time is before 5am
-#for Jan 1st where the julian day rollback would make it zero it gets bumped to the last day of the previous year
-def pseudo_date(year, month, day, hour):
-  
-  adjusted_jd = None
-  adjusted_year = None
-  if (hour >= 5):
-    adjusted_jd = util.julian(month, day)
+## 
+# Calculate a pseudo-date that changes not at midnight but forward at another hour
+# @param    yr        year
+# @param    mon       month number
+# @param    day       day of month
+# @param    hr        hour of day
+# @param    reset_hr  the new boundary hour instead of midnight (default 5)
+# @return             pseudo-date including year and ordinal day of the form "YYYY-D"
+def pseudo_date(yr, mon, day, hr, reset_hr = 5):
+  if hr < reset_hr:
+    adjusted_jd = util.julian(mon, day) - 1
   else:
-    adjusted_jd = util.julian(month, day) - 1
+    adjusted_jd = util.julian(mon, day)
   
-  if adjusted_jd == 0:
-    adjusted_year = year - 1
-    adjusted_jd = util.julian(12,31)
+  if adjusted_jd == 0:  # where Jan 1 shifts to 0, bump it to end of previous year
+    adjusted_jd = util.julian(12, 31)
+    adjusted_yr = yr - 1
   else:
-    adjusted_year = year
-    
-  out = "{}-{}".format(adjusted_year, adjusted_jd)
-  return out
-
-
-def generate_daily_summaries(hourly_data):
-  #note: need to account for spill over inlast day after pseudo_date calc where there is not 24 hours in the data
+    adjusted_yr = yr
   
+  return "{}-{}".format(adjusted_yr, adjusted_jd)
+
+##
+# Calculate Daily Summaries from hourly FWI indices
+# @param    hourly_FWI      hourly FWI dataframe (output of hFWI())
+# @param    reset_hr        new boundary to define day to summarize (default 5)
+# @param    silent          suppresses informative print statements (default False)
+# @param    round_out       decimals to truncate output to, None for none (default 4)
+# @return                   daily summary of peak FWI conditions
+def generate_daily_summaries(hourly_FWI, reset_hr = 5,
+  silent = False, round_out = 4):
+  hourly_data = hourly_FWI.copy()
   Spread_Threshold_ISI = 5.0
-  
-  
-  cols = ["wstind","yr","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","peak_gsi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr","gfmc","gsi","gfwi","sunrise","sunset"]
-  results = pd.DataFrame(columns=cols)
-  
-  for stn in hourly_data["id"].unique():
-    #print(stn)
-    by_stn = hourly_data.loc[hourly_data["id"] == stn]
-    by_stn["pseudo_DATE"] =  by_stn.apply(
-            lambda row: pseudo_date(
-                row["yr"], row["mon"], row["day"], row["hr"]
-            ),
-            axis=1,
-        )
-    
-    
-    for p_date in by_stn["pseudo_DATE"].unique():
-      by_date = by_stn.loc[by_stn["pseudo_DATE"] == p_date]
 
+  # check for "id" column
+  if "id" in hourly_data.columns:
+    had_stn = True
+  else:
+    if (len(hourly_data['yr'].unique()) == 1 and
+      len(hourly_data['lat'].unique()) == 1 and
+      len(hourly_data['long'].unique()) == 1):
+      hourly_data['id'] = "stn"
+      had_stn = False
+    else:
+      logger.error("Missing 'id' column with multiple years and locations in data")
+  
+  # initialize dictionary of lists
+  outcols = ["id", "yr", "mon", "day", "sunrise", "sunset", "peak_hr", "duration",
+    "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr", "gfmc", "gsi", "gfwi",
+    "ws_smooth", "isi_smooth", "gsi_smooth"]
+  results = {k: [] for k in outcols}
+  
+  for stn, by_stn in hourly_data.groupby("id", sort = False):
+    if not silent:
+      print("Summarizing " + stn + " to daily")
+    by_stn["pseudo_DATE"] = by_stn.apply(lambda row:
+      pseudo_date(row["yr"], row["mon"], row["day"], row["hr"], reset_hr), axis = 1)
+    
+    for _, by_date in by_stn.groupby("pseudo_DATE", sort = False):
+      by_date = by_date.reset_index()
 
-      if ((by_date.reset_index()).index[by_date["hr"] == 17].tolist().__len__() == 0):
+      # if this pseudo-date doesn't have more than 12 hours, skip
+      if by_date.shape[0] <= 12:
         continue
-
-      peak_time_traditional_spot = (by_date.reset_index()).index[by_date["hr"] == 17].tolist()[0]
       
+      # find daily peak burn times
+      by_date["ws_smooth"] = smooth_5pt(by_date["ws"])
+      by_date["isi_smooth"] = by_date.apply(lambda row:
+        NG_FWI.initial_spread_index(row["ws_smooth"], row["ffmc"]), axis = 1)
       
-      
-      peak_time = -1
-      duration = 0
-      wind_smooth = smooth_5pt(by_date["ws"])
-      peak_isi_smooth = -1
-      peak_gsi_smooth = -1
-      max_ffmc = 0
-      ffmc = 0
-      gfmc = 0
-      dmc = 0
-      dc = 0
-      isi = 0
-      gsi = 0
-      bui = 0
-      fwi = 0
-      gfwi = 0
-      dsr = 0
-
-      
-      
-
-      for i in range(0,by_date.shape[0]):
-        smooth_isi = 0
-        if (wind_smooth[i] > -90.0) and (by_date.iloc[i]["ffmc"] > -90.0):
-          smooth_isi = NG_FWI.initial_spread_index(wind_smooth[i], by_date.iloc[i]["ffmc"])
-        else:
-          smooth_isi = -98.9
-      
-        if smooth_isi > peak_isi_smooth:
-          peak_time = i
-          peak_isi_smooth = smooth_isi
-        if by_date.iloc[i]["ffmc"] > max_ffmc:
-          max_ffmc = by_date.iloc[i]["ffmc"]
-        if smooth_isi > Spread_Threshold_ISI:
-          duration = duration + 1
-       
-      if (smooth_isi < 5) and (duration == 24):
-         duration = 0
-      
+      max_ffmc = by_date["ffmc"].max()
       if max_ffmc < 85.0:
-        peak_time = peak_time_traditional_spot
-    
-      ffmc = by_date.iloc[peak_time]["ffmc"]
-      dmc = by_date.iloc[peak_time]["dmc"]
-      dc = by_date.iloc[peak_time]["dc"]
-      isi = by_date.iloc[peak_time]["isi"]
-      bui = by_date.iloc[peak_time]["bui"]
-      fwi = by_date.iloc[peak_time]["fwi"]
-      dsr = by_date.iloc[peak_time]["dsr"]
-      smooth_ws_peak = wind_smooth[peak_time]
+        peak_time = 12  # 12 hours into pseudo-date
+      else:
+        peak_time = by_date["isi_smooth"].idxmax()
       
-      gfmc = by_date.iloc[peak_time]["gfmc"]
-      gsi = by_date.iloc[peak_time]["gsi"]
-      gfwi = by_date.iloc[peak_time]["gfwi"]
+      # find the rest of the values at peak
+      results['id'].append(stn)
+      results['yr'].append(by_date.at[0, "yr"])
+      results['mon'].append(by_date.at[0, "mon"])
+      results['day'].append(by_date.at[0, "day"])
+      
+      # format sunrise and sunset as hh:mm from decimal hours
+      sr = by_date.at[peak_time, "sunrise"]
+      ss = by_date.at[peak_time, "sunset"]
+      results['sunrise'].append("{:02d}:{:02d}".format(int(sr), int(60 * (sr - int(sr)))))
+      results['sunset'].append("{:02d}:{:02d}".format(int(ss), int(60 * (ss - int(ss)))))
+      
+      results['peak_hr'].append(by_date.at[peak_time, "hr"])
+      results['duration'].append(sum(by_date["isi_smooth"] > Spread_Threshold_ISI))
 
-    
+      results['ffmc'].append(by_date.at[peak_time, "ffmc"])
+      results['dmc'].append(by_date.at[peak_time, "dmc"])
+      results['dc'].append(by_date.at[peak_time, "dc"])
+      results['isi'].append(by_date.at[peak_time, "isi"])
+      results['bui'].append(by_date.at[peak_time, "bui"])
+      results['fwi'].append(by_date.at[peak_time, "fwi"])
+      results['dsr'].append(by_date.at[peak_time, "dsr"])
+      results['gfmc'].append(by_date.at[peak_time, "gfmc"])
+      results['gsi'].append(by_date.at[peak_time, "gsi"])
+      results['gfwi'].append(by_date.at[peak_time, "gfwi"])
+      
+      results['ws_smooth'].append(by_date.at[peak_time, "ws_smooth"])
+      results['isi_smooth'].append(by_date.at[peak_time, "isi_smooth"])
 
-
-      pick_year = by_date["yr"].unique()
-      if pick_year.shape[0] > 1:
-        pick_year = pick_year[0]
-      else:
-         pick_year = pick_year[0]
-      pick_month = by_date["mon"].unique()
-      if pick_month.shape[0] > 1:
-        pick_month = pick_month[0]
-      else:
-         pick_month = pick_month[0]
-      pick_day = by_date["day"].unique()
-      if pick_day.shape[0] > 1:
-        pick_day = pick_day[0]
-      else:
-        pick_day = pick_day[0]
-
-
-      standing = True
-      if (util.julian(pick_month, pick_day) < NG_FWI.DATE_GRASS):
+      ordinal_day = util.julian(by_date.at[0, "mon"], by_date.at[0, "day"])
+      if (ordinal_day < NG_FWI.DATE_GRASS):
         standing = False
-      peak_gsi_smooth = NG_FWI.grass_spread_index(smooth_ws_peak, gfmc, by_date.iloc[peak_time]["percent_cured"], standing)
+        mcgfmc = by_date.at[peak_time, "mcgfmc_matted"]
+      else:
+        standing = True
+        mcgfmc = by_date.at[peak_time, "mcgfmc_standing"]
+      results['gsi_smooth'].append(NG_FWI.grass_spread_index(
+        by_date.at[peak_time, "ws_smooth"], mcgfmc,
+        by_date.at[peak_time, "percent_cured"], standing))
 
-      sunrise_val = by_date.iloc[peak_time]["sunrise"]
-      sunset_val = by_date.iloc[peak_time]["sunset"]
-    
-      peak_time = by_date.iloc[peak_time]["hr"]
-
-      sunrise_formated = "{}:{}".format(int(sunrise_val),int(60*(sunrise_val-int(sunrise_val))))
-      sunset_formated = "{}:{}".format(int(sunset_val),int(60*(sunset_val-int(sunset_val))))
-
-
-      daily_report_line = [by_date["id"].unique()[0], pick_year, pick_month, pick_day, peak_time, duration, smooth_ws_peak, peak_isi_smooth, peak_gsi_smooth, ffmc, dmc,  dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi, sunrise_formated, sunset_formated]
-      
-      daily_report = pd.DataFrame(columns=cols)
-      daily_report.loc[0] = daily_report_line
-
-      
-      results = pd.concat([results,daily_report])
-
+  if not had_stn:
+    results.pop("id")
   
-  results = results[["wstind","yr","mon","day","peak_time","duration","wind_speed_smoothed","peak_isi_smoothed","peak_gsi_smoothed","ffmc","dmc","dc","isi","bui","fwi","dsr","gfmc","gsi","gfwi","sunrise","sunset"]]
+  results = pd.DataFrame(results)
 
+  # round decimal places of output columns
+  if not (round_out == None or round_out == "None"):
+    outcols = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
+      "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth"]
+    results[outcols] = results[outcols].map(round, ndigits = round_out)
+    
   return results
 
 
-if "__main__" == __name__:
-    args = sys.argv[1:]
-    if len(args) != 2:
-        logger.fatal(
-            "\n".join(
-                [
-                    f"Command line:   {sys.argv[0]}  <input file>  <output file>\n"
-                ]
-            )
-        )
-        sys.exit(1)
-    infile = args[0]
-    outfile = args[1]
-    hourly_data = pd.read_csv(infile)
-    summaries = generate_daily_summaries(hourly_data)
-    util.save_csv(summaries, outfile)
+if __name__ == "__main__":
+  # run generate_daily_summaries() by command line
+  # run with option -h or --help to see usage
+  parser = argparse.ArgumentParser(prog = "daily_summaries")
+  parser.add_argument("input", help = "Input csv data file")
+  parser.add_argument("output", help = "Output csv file name and/or location")
+  parser.add_argument("reset_hr", nargs = "?", default = 5, type = int,
+    help = "New boundary to define day to summarize instead of midnight (default 5)")
+  parser.add_argument("-s", "--silent", action = "store_true")
+  parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
+    help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
+  
+  args = parser.parse_args()
+  df_in = pd.read_csv(args.input)
+  df_out = generate_daily_summaries(df_in, args.reset_hr, args.silent, args.round_out)
+  df_out.to_csv(args.output, index = False)
