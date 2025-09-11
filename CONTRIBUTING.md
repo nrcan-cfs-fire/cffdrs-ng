@@ -8,7 +8,7 @@ We welcome your feedback and bug reports! We are **not** actively seeking code c
     - Operating system (e.g. Windows, macOS, Linux), software versions (e.g. Python, R, C), and environment details
     - What you expected versus what happened
 
-2. For other kinds of feedback, feel free to send us an email at [firedanger-dangerincendie@nrcan-rncan.gc.ca](mailto:firedanger-dangerincendie@nrcan-rncan.gc.ca)
+2. For other kinds of feedback, **especially security issues**, send us an email at [firedanger-dangerincendie@nrcan-rncan.gc.ca](mailto:firedanger-dangerincendie@nrcan-rncan.gc.ca)
 
 We'll do our best to respond to your issues and incorporate your suggestions. However, we cannot guarantee that all suggestions will be implemented.  
 

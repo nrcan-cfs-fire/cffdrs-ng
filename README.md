@@ -12,27 +12,41 @@ While we are not actively seeking code contributions at this time, see our [cont
 The next generation revisions to CFFDRS will be released in stages and will be collectively referred to as CFFDRS2025. The Fire Weather Index system (FWI2025) is the first module released.
 
 ## Repository Structure
-The only branch of this repository with code intended for use is in the default *main* branch. All the code (in all three languages) is currently unorganized in the repository root directory. This will change and be **reorganized in Fall 2025**, with ample notice and warning. 
+The only branch of this repository with code intended for use is in the default *main* branch. The code is organized into CFFDRS Subsystems followed by programming language in the following structure:  
 
-cffdrs-ng/ 
-- data/ 
-    - `test_hffmc.csv` 
-    - `wx_hourly.csv` 
-    - `wx_prf.csv` (test data of hourly weather recorded from the Petawawa Research Forest in 2007) 
-- `.gitignore` 
-- `CMakeLists.txt` 
-- `CONTRIBUTING.md` (guidelines on providing feedback and reporting bugs) 
-- `LICENSE.txt` (GPL 2.0 license) 
-- `NG_FWI` [.c, .py, .r] (functions and equations for generating FWI2025 outputs) 
-- `README.md` 
-- `daily_summaries` [.py, .r] (function to generate the daily summary output) 
-- `make_daily` [.c, .py, .r] (converts hourly weather data to daily data) 
-- `make_hourly` [.c, .py, .r] (converts daily min/max weather data to hourly data) 
-- `make_inputs` [.c, .py, .r] 
-- `make_minmax` [.c, .py, .r] (converts daily weather data to daily min/max data) 
-- `old_cffdrs` [.py, .r] 
-- `test.sh` 
-- `util` [.c, .h, .py, .r] (basic, intermediate functions that are not a part of FWI2025 equations)
+cffdrs-ng/
+- data/
+    - `PRF2007_hourly_wx.csv` (test data of hourly weather recorded from the Petawawa Research Forest in 2007)
+- FWI/
+    - C/
+        - `make_hourly.c` (converts daily min/max weather data to hourly data)
+        - `make_inputs.c` (converts hourly weather data into a data file that has all the inputs required for NG_FWI)
+        - `make_minmax.c` (converts daily weather data to daily min/max data)
+        - `NG_FWI.c` (functions and equations for generating FWI2025 outputs)
+        - `util.c` (basic, intermediate functions that are not a part of FWI2025 equations)
+        - `util.h` (basic, intermediate functions that are not a part of FWI2025 equations)
+    - Python/
+        - tutorial/
+            - `tutorial_hourly_FWI.py`
+        - `daily_summaries.py` (function to generate the daily summary output)
+        - `make_hourly.py` (converts daily min/max weather data to hourly data)
+        - `make_minmax.py` (converts daily weather data to daily min/max data)
+        - `NG_FWI.py` (functions and equations for generating FWI2025 outputs)
+        - `util.py` (basic, intermediate functions that are not a part of FWI2025 equations)
+    - R/
+        - tutorial/
+            - `tutorial_hourly_FWI.r`
+        - `daily_summaries.r` (function to generate the daily summary output)
+        - `make_hourly.r` (converts daily min/max weather data to hourly data)
+        - `make_minmax.r` (converts daily weather data to daily min/max data)
+        - `NG_FWI.r` (functions and equations for generating FWI2025 outputs)
+        - `util.r` (basic, intermediate functions that are not a part of FWI2025 equations)
+- `.gitignore`
+- `CHANGELOG.md`
+- `CONTRIBUTING.md` (guideline on providing feedback and reporting bugs)
+- `LICENSE.txt` (GPL 2.0 license)
+- `README.md`
+- `SECURITY.md`
 
 ## Revisions to FWI
 FWI2025 remains a daily, landscape-level planning tool. Changes include improving daily weather tracking, reconciling different versions of codes and indices, and introducing new codes and indices.  
