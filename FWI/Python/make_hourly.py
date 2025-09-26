@@ -6,9 +6,9 @@ import pandas as pd
 import util
 from util import save_csv
 
-C_TEMP = {"c_alpha": 0.2, "c_beta": 2.0, "c_gamma": -2.9}
-C_RH = {"c_alpha": 0.4, "c_beta": 1.9, "c_gamma": -2.9}
-C_WIND = {"c_alpha": 1.2, "c_beta": 1.7, "c_gamma": -1.5}
+C_TEMP = {"c_alpha": 0.0, "c_beta": 2.75, "c_gamma": -1.9}
+C_RH = {"c_alpha": 0.25, "c_beta": 2.75, "c_gamma": -2.0}
+C_WIND = {"c_alpha": 1.0, "c_beta": 1.5, "c_gamma": -1.3}
 
 
 def make_prediction(

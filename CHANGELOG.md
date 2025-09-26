@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "unreleased" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## 2025-09-26
+
+### Changed
+- Parameters used to create typical diurnal curve for `make_hourly()` (*Python* and *R*)
+
+| Parameter     | Old Value | New Value |
+| ------------- | --------- | --------- |
+| Temp $\alpha$ | 0.2       | 0.0       |
+| Temp $\beta$  | 2.0       | 2.75      |
+| Temp $\gamma$ | -2.9      | -1.9      |
+| RH $\alpha$   | 0.4       | 0.25      |
+| RH $\beta$    | 1.9       | 2.75      |
+| RH $\gamma$   | -2.9      | -2.0      |
+| WS $\alpha$   | 1.2       | 1.0       |
+| WS $\beta$    | 1.7       | 1.5       |
+| WS $\gamma$   | -1.5      | -1.3      |
+
+### Fixed
+- Data inputs to `hFWI()` that have multiple years for the same ID (station) are properly split by year (*R*)
+
 ## 2025-09-10
 
 ### Added
