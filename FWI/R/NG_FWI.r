@@ -870,13 +870,13 @@ hFWI <- function(
   results <- NULL
   for (stn in unique(wx$id)) {
     by_stn <- wx[id == stn]
-    for (yr in unique(by_stn$yr)) {
-      by_year <- by_stn[yr == yr, ]
+    for (y in unique(by_stn$yr)) {
+      by_y <- by_stn[yr == y, ]
       if (!silent) {
-        print(paste0("Running ", stn, " for ", yr))
+        print(paste0("Running ", stn, " for ", y))
       }
       # FIX: convert this to not need to do individual stations
-      w <- get_sunlight(by_year, get_solrad = needs_solrad)
+      w <- get_sunlight(by_y, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
         prec_cumulative, canopy_drying)
