@@ -155,7 +155,9 @@ duff_moisture_code <- function(
   # drying
   sunrise_start <- sunrise + OFFSET_SUNRISE
   sunset_start <- sunset + OFFSET_SUNSET
-  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+  # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  if ((hr >= sunrise_start && hr <= sunset_start) ||
+    (hr < 6 && (hr + 24 >= sunrise_start && hr + 24 <= sunset_start))) {  # daytime
     if (temp < 0) {
       temp <- 0.0
     }
@@ -212,7 +214,9 @@ drought_code <- function(
   # drying
   sunrise_start <- sunrise + OFFSET_SUNRISE
   sunset_start <- sunset + OFFSET_SUNSET
-  if (hr >= sunrise_start && hr <= sunset_start) {  # daytime
+  # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  if ((hr >= sunrise_start && hr <= sunset_start) ||
+    (hr < 6 && (hr + 24 >= sunrise_start && hr + 24 <= sunset_start))) {  # daytime
     offset <- 3.0
     mult <- 0.015
     if (temp > 0) {
@@ -606,6 +610,10 @@ rain_since_intercept_reset <- function(rain, canopy) {
   mcgfmc_standing_old,
   prec_cumulative,
   canopy_drying) {
+  if (length(na.omit(unique(w$yr))) != 1) {
+    # only a warning for cases where data extends between years (e.g. southern hemisphere)
+    warning("_stnHFWI() function received more than one year")
+  }
   if (!is_sequential_hours(w)) {
     stop("Expected hourly weather input to be sequential")
   }
@@ -750,6 +758,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' Calculate hourly FWI indices from hourly weather stream.
 #'
 #' @param    df_wx                hourly values weather stream
+#' @param    timezone             UTC offset (default None for column provided in df_wx)
 #' @param    ffmc_old             previous value for FFMC (startup 85, NA for mcffmc_old)
 #' @param    mcffmc_old           previous value mcffmc (default NA for ffmc_old input)
 #' @param    dmc_old              previous value for DMC (startup 6)
@@ -763,6 +772,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
 #' @return                        hourly values FWI and weather stream
 hFWI <- function(
   df_wx,
+  timezone = NA,
   ffmc_old = FFMC_DEFAULT,
   mcffmc_old = NA,
   dmc_old = DMC_DEFAULT,
@@ -788,8 +798,20 @@ hFWI <- function(
   colnames(wx) <- tolower(colnames(wx))
   og_names <- names(wx)
   # check for required columns
-  stopifnot(all(c('lat', 'long', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 'ws', 'prec')
-    %in% names(wx)))
+  req_cols <- c("lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec")
+  for (col in req_cols) {
+    if (!col %in% names(wx)) {
+      stop(paste("Missing required input column:", col))
+    }
+  }
+  # check timezone
+  if (is.na(timezone)) {
+    if (!"timezone" %in% names(wx)) {
+      stop("Either provide a timezone column or specify argument in hFWI")
+    }
+  } else {
+    wx[, timezone := ..timezone]
+  }
   # check for one hour run and startup moisture all set to default
   if (nrow(wx) == 1 &&
     ffmc_old == FFMC_DEFAULT && is.na(mcffmc_old) &&
@@ -835,7 +857,8 @@ hFWI <- function(
   # check for unnecessary columns
   cols_extra_solar <- intersect(names(wx), c("sunrise", "sunset", "sunlight_hours"))
   if (0 < length(cols_extra_solar)) {
-    warning(sprintf("Ignoring and recalculating columns: [%s]", paste0(cols_extra_solar, collapse = ", ")))
+    warning(sprintf("Ignoring and recalculating columns: [%s]",
+      paste0(cols_extra_solar, collapse = ", ")))
     wx <- wx[, -..cols_extra_solar]
   }
   # check for values outside valid ranges
@@ -870,6 +893,7 @@ hFWI <- function(
   results <- NULL
   for (stn in unique(wx$id)) {
     by_stn <- wx[id == stn]
+    # splitting on "yr" makes it split in the middle of southern hemisphere fire season
     for (y in unique(by_stn$yr)) {
       by_y <- by_stn[yr == y, ]
       if (!silent) {
@@ -917,8 +941,8 @@ hFWI <- function(
 }
 
 # run hFWI by command line via Rscript, requires 2 args: input csv and output csv
-# optional args: ffmc_or_mcffmc, is_mcffmc, dmc, dc, mcgfmc_matted, mcgfmc_standing,
-#                prec_cumulative, canopy_drying, silent, round_out
+# optional args: timezone, ffmc_old, mcffmc_old, dmc_old, dc_old, mcgfmc_matted_old,
+#                mcgfmc_standing_old, prec_cumulative, canopy_drying, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
@@ -927,30 +951,32 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   input <- args[1]
   output <- args[2]
   # load optional arguments if provided, or set to default
-  if (length(args) >= 3) ffmc_old <- as.numeric(args[3])
+  if (length(args) >= 3) timezone <- as.numeric(args[3])
+  else timezone <- NA
+  if (length(args) >= 4) ffmc_old <- as.numeric(args[3])
   else ffmc_old <- FFMC_DEFAULT
-  if (length(args) >= 4) mcffmc_old <- as.logical(args[4])
+  if (length(args) >= 5) mcffmc_old <- as.logical(args[4])
   else mcffmc_old <- NA
-  if (length(args) >= 5) dmc_old <- as.numeric(args[5])
+  if (length(args) >= 6) dmc_old <- as.numeric(args[5])
   else dmc_old <- DMC_DEFAULT
-  if (length(args) >= 6) dc_old <- as.numeric(args[6])
+  if (length(args) >= 7) dc_old <- as.numeric(args[6])
   else dc_old <- DC_DEFAULT
-  if (length(args) >= 7) mcgfmc_matted_old <- as.numeric(args[7])
+  if (length(args) >= 8) mcgfmc_matted_old <- as.numeric(args[7])
   else mcgfmc_matted_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
-  if (length(args) >= 8) mcgfmc_standing_old <- as.numeric(args[8])
+  if (length(args) >= 9) mcgfmc_standing_old <- as.numeric(args[8])
   else mcgfmc_standing_old <- ffmc_to_mcffmc(FFMC_DEFAULT)
-  if (length(args) >= 9) prec_cumulative <- as.numeric(args[9])
+  if (length(args) >= 10) prec_cumulative <- as.numeric(args[9])
   else prec_cumulative <- 0.0
-  if (length(args) >= 10) canopy_drying <- as.numeric(args[10])
+  if (length(args) >= 11) canopy_drying <- as.numeric(args[10])
   else canopy_drying <- 0.0
-  if (length(args) >= 11) silent <- as.logical(args[11])
+  if (length(args) >= 12) silent <- as.logical(args[11])
   else silent <- FALSE
-  if (length(args) >= 12) round_out <- args[12]
+  if (length(args) >= 13) round_out <- args[12]
   else round_out <- 4
-  if (length(args) >= 13) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 14) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
-  df_out <- hFWI(df_in, ffmc_old, mcffmc_old, dmc_old, dc_old,
+  df_out <- hFWI(df_in, timezone, ffmc_old, mcffmc_old, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying,
     silent, round_out)
   write.csv(df_out, output, row.names = FALSE)

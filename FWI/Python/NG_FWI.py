@@ -169,7 +169,9 @@ def duff_moisture_code(
     # drying
     sunrise_start = sunrise + OFFSET_SUNRISE
     sunset_start = sunset + OFFSET_SUNSET
-    if (sunrise_start <= hr <= sunset_start):  # daytime
+    # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+    if (sunrise_start <= hr <= sunset_start or
+        (hr < 6 and sunrise_start <= hr + 24 <= sunset_start)):  # daytime
         if temp < 0:
             temp = 0.0
         rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
@@ -220,7 +222,9 @@ def drought_code(
     # drying
     sunrise_start = sunrise + OFFSET_SUNRISE
     sunset_start = sunset + OFFSET_SUNSET
-    if (sunrise_start <= hr <= sunset_start):  # daytime
+    # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+    if (sunrise_start <= hr <= sunset_start or
+        (hr < 6 and sunrise_start <= hr + 24 <= sunset_start)):  # daytime
         offset = 3.0
         mult = 0.015
         if temp > 0:
@@ -569,6 +573,9 @@ def _stnHFWI(
     mcgfmc_standing_old,
     prec_cumulative,
     canopy_drying):
+    if len(w["yr"].unique()) != 1:
+        # only a warning in case data extends between years (e.g. southern hemisphere)
+        logger.warning("_stnHFWI() function received more than one year")
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected hourly weather input to be sequential")
     if len(w["id"].unique()) != 1:
@@ -700,6 +707,7 @@ def _stnHFWI(
 # Calculate hourly FWI indices from hourly weather stream.
 #
 # @param    df_wx               hourly values weather stream
+# @param    timezone            UTC offset (default None for column provided in df_wx)
 # @param    ffmc_old            previous value for FFMC (startup 85, None for mcffmc_old)
 # @param    mcffmc_old          previous value mcffmc (default None for ffmc_old input)
 # @param    dmc_old             previous value for DMC (startup 6)
@@ -713,6 +721,7 @@ def _stnHFWI(
 # @return                       hourly values FWI and weather stream
 def hFWI(
     df_wx,
+    timezone = None,
     ffmc_old = FFMC_DEFAULT,
     mcffmc_old = None,
     dmc_old = DMC_DEFAULT,
@@ -728,10 +737,16 @@ def hFWI(
     wx.columns = map(str.lower, wx.columns)
     og_names = wx.columns
     # check for required columns
-    if not all(x in wx.columns for x in 
-        ['lat', 'long', 'timezone', 'yr', 'mon', 'day', 'hr',
-        'temp', 'rh', 'ws', 'prec']):
-        raise RuntimeError("Missing required input column(s)")
+    req_cols = ["lat", "long", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec"]
+    for col in req_cols:
+        if not col in wx.columns:
+            raise RuntimeError("Missing required input column: " + col)
+    # check timezone
+    if timezone == None:
+        if not "timezone" in wx.columns:
+            raise RuntimeError("Either provide a timezone column or specify argument in hFWI")
+    else:
+        wx["timezone"] = timezone
     # check for one hour run and startup moisture all set to default
     if (df_wx.shape[0] == 1 and
         ffmc_old == FFMC_DEFAULT and mcffmc_old == None and
@@ -809,6 +824,7 @@ def hFWI(
     
     # loop over every station year
     results = None
+    # splitting on "yr" makes it split in the middle of southern hemisphere fire season
     for idx, by_year in wx.groupby(["id", "yr"], sort = False):
         if not silent:
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
@@ -848,6 +864,8 @@ if __name__ == "__main__":
     # add all inputs to hFWI
     parser.add_argument("input", help = "Input csv data file")
     parser.add_argument("output", help = "Output csv file name and location")
+    parser.add_argument("timezone", nargs = "?", default = None,
+        help = "UTC offset (default None for column provided in df_wx)")
     parser.add_argument("ffmc_old", nargs = "?", default = FFMC_DEFAULT,
         help = "Starting value for FFMC (startup 85, None for mcffmc_old)")
     parser.add_argument("mcffmc_old", nargs = "?", default = None,
@@ -872,7 +890,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
-    df_out = hFWI(df_in, args.ffmc_old, args.mcffmc_old,
+    df_out = hFWI(df_in, args.timezone, args.ffmc_old, args.mcffmc_old,
         args.dmc_old, args.dc_old, args.mcgfmc_matted_old, args.mcgfmc_standing_old,
         args.prec_cumulative, args.canopy_drying, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)

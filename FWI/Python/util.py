@@ -134,8 +134,8 @@ def get_sunlight(df, get_solrad = False):
             6.11 * (1.0 - x["rh"] / 100.0) * exp(17.29 * x["temp"] / (x["temp"] + 237.3)),
             axis = 1)
         df_all["solrad"] = df_all.apply(lambda x:
-            x["cos_zenith"] * 0.92 * (1.0 - exp(-0.22 * x["vpd"]))
-            if (x["sunrise"] <= x["hr"] <= x["sunset"]) else 0.0, axis = 1)
+            x["cos_zenith"] * 0.92 * (1.0 - exp(-0.22 * x["vpd"])), axis = 1)
+        df_all.loc[df_all["solrad"] < 1e-4, "solrad"] = 0.0  # always set low values to 0
         
         cols_sun = ["solrad", "sunrise", "sunset"]
     else:
