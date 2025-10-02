@@ -2,6 +2,7 @@
 #define _UTIL_H
 #include <math.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -52,6 +53,19 @@ struct row_minmax
   int year, mon, day;
   double temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain;
 };
+
+struct flags{
+  bool solrad_flag;
+  bool percent_cured_flag;
+};
+
+
+/*
+* Gets the temp range for the data - do not call after you have started reading files, 
+* this needs to loop through the file to get the min and max temp
+*/
+double read_temp_range(char *file, const char *header);
+
 /**
  * Read a row from an hourly weather stream file
  */
@@ -59,7 +73,7 @@ int read_row(FILE *inp, struct row *r);
 /**
  * Read a row from an hourly fwi inputs stream file
  */
-int read_row_inputs(FILE *inp, struct row *r);
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
 /**
  * Read a row from a daily weather stream file
  */
@@ -97,6 +111,12 @@ double findrh(double q, double temp);
  * @param[out] solrad       Hourly solar radiation (kW/m^2)
  */
 void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad);
+
+
+double single_hour_solrad_estimation(double lat, double lon, int jd, double timezone, int hour, double rh, double temp);
+
+
+
 /**
  * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
  *
@@ -147,7 +167,10 @@ int julian(int mon, int day);
  * @param input       Input file to check for string
  * @param header      String to match
  */
-void check_header(FILE *input, const char *header);
+void check_header(FILE *input, const char *header, struct flags *f);
+
+void check_header_legacy(FILE *input, const char *header);
+
 /**
  * Check that weather parameters are valid
  *
@@ -168,7 +191,7 @@ void check_weather(double temp, double rh, double wind, double rain);
  * @param percent_cured   Grass curing (percent, 0-100)
  * @param grass_fuel_load Grass fuel load ((kg/m^2))
  */
-void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load);
+void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load, struct flags *f);
 double seasonal_curing(int julian_date);
 
 /* C90 max() also causing problems */
