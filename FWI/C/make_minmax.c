@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
     printf("\n\n ***** FILE  %s  does not exist\n", argv[1]);
     exit(1);
   }
-  check_header(inp, header);
+  check_header_legacy(inp, header);
   FILE *out = fopen(argv[2], "w");
   fprintf(out, "%s\n", header_out);
   struct row_daily cur;
