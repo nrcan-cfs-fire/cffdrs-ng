@@ -2,7 +2,47 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdarg.h>
+
+
+
+double read_temp_range(char *file, const char *header){
+  FILE *inp = fopen(file, "r");
+  if (inp == NULL)
+  {
+    printf("\n\n ***** FILE  %s  does not exist\n", file);
+    exit(1);
+  }
+
+  double temp_min = 1000000.0;
+  double temp_max = -1000000.0;
+
+  struct flags flag_holder = {false,false};
+  check_header(inp, header, &flag_holder);
+  struct row cur;
+  int err = read_row_inputs(inp, &cur, &flag_holder);
+
+  while(err > 0){
+    if(temp_min > cur.temp){
+      temp_min = cur.temp;
+    }
+
+
+    if(temp_max < cur.temp){
+      temp_max = cur.temp;
+    }
+
+    err = read_row_inputs(inp, &cur, &flag_holder);
+  }
+
+  fclose(inp);
+  double temp_range = temp_max - temp_min;
+  printf("%f %f %f\n", temp_max, temp_min, temp_range);
+  return temp_range;
+
+}
+
 
 /* abs() isn't working either */
 double _abs(double x)
@@ -51,6 +91,29 @@ void solar_radiation(double lat, double lon, int mon, int day, double timezone, 
   solar_radiation_julian(lat, lon, jd, timezone, temp_range, solrad);
 }
 
+
+double single_hour_solrad_estimation(double lat, double lon, int jd, double timezone, int hour, double rh, double temp){
+  double dechour = 12.0;
+  double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
+  double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
+  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
+  double timeoffset = eqtime + 4 * lon - 60 * timezone;
+  double tst = ((double)hour)* 60.0 + timeoffset;
+  double hourangle = tst / 4 - 180;
+  double cos_zenith = cos(_min(M_PI / 2,acos(sin(lat * M_PI / 180) * sin(decl) + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180))));
+
+  double vpd = 6.11*(1.0 - rh/100.0)*exp(17.269*temp/(temp+237.3));
+
+  double a = 0.9211;
+  double b = 0.2214;
+
+  double solrad = (1.0*cos_zenith)*a*(1.0 - exp(-1.0*b*vpd));
+  if (solrad < 0.0001){
+    solrad = 0;
+  }
+  return solrad;
+}
+
 void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad)
 {
   /*
@@ -92,6 +155,7 @@ void solar_radiation_julian(double lat, double lon, int jd, double timezone, dou
   }
 }
 
+
 /*
  * Find sunrise and sunset for a given date and location.
  */
@@ -127,13 +191,294 @@ void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, doub
   *sunset = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60 + timezone;
 }
 
+
 int julian(int mon, int day)
 {
-  static const int month[13] = {0, 31, 59, 90, 120, 151, 181, 212, 242, 273, 304, 334, 365};
+  static const int month[13] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
   return month[mon - 1] + day;
 }
 
-void check_header(FILE *input, const char *header)
+void check_header(FILE *input, const char *header, struct flags *f)
+{
+
+  char in_buffer[120];
+
+  int in_buffer_len = 0;
+
+  printf("%d %d\n", strlen(header), in_buffer_len);
+
+  char intake[1];
+  int err = fscanf(input, "%c", &intake[0]);
+  printf("%d %d %c\n", strlen(header), in_buffer_len, intake[0]);
+  
+  while(intake[0] != '\n'){
+    if (0 == err)
+    {
+      printf("Error reading file\n");
+      exit(1);
+    }
+    in_buffer[in_buffer_len] = intake[0];
+    printf("%c \n",intake[0]);
+    in_buffer_len++;
+    //printf("%d\n",in_buffer_len);
+
+
+    err = fscanf(input, "%c", &intake[0]);
+    if(in_buffer_len==75){
+      printf("aaaaaaaaa%cbbbbbbbbbbb\n", intake[0]);
+      intake[0] = '\n';
+    }
+  }
+  printf("\n");
+  if(in_buffer_len > strlen(header)){
+    printf("%d,%d, %c\n", in_buffer_len, strlen(header), intake[0]);
+    printf("Header to long\n");
+    exit(1);
+  }
+
+  static const char *s_rem = "solrad,";
+  static const char *p_rem = "percent_cured,";
+
+  int s_start = -1;
+  int s_end = -1;
+
+  int p_start = -1;
+  int p_end = -1;
+
+
+  int s_buffer_len = 0;
+  int p_buffer_len = 0;
+  int sp_buffer_len = 0;
+
+  char s_buffer[120];
+  char p_buffer[120];
+  char sp_buffer[120];
+
+  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  //find solrad location
+  int pos = 0;
+  for(int i =0; i < in_buffer_len; i++){
+    if(pos < strlen(s_rem) && in_buffer[i] == s_rem[pos]){
+      pos++;
+      if(s_start == -1){
+        s_start = i;
+      }
+    }
+    else{
+      if(pos >= strlen(s_rem)){
+        s_end = i-1;
+      }
+      else{
+        s_start = -1;
+        pos = 0;
+      }
+    }
+  }
+  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  //find percent_cured location
+  pos = 0;
+  for(int i =0; i < in_buffer_len; i++){
+    if(pos < strlen(p_rem) && in_buffer[i] == p_rem[pos]){
+      pos++;
+      if(p_start == -1){
+        p_start = i;
+      }
+    }
+    else{
+      if(pos >= strlen(p_rem)){
+        p_end = i-1;
+      }
+      else{
+        p_start = -1;
+        pos = 0;
+      }
+    }
+  }
+  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  //produced header lists with removed columns
+  for(int i=0; i<in_buffer_len; i++){
+    printf("%d\n", s_buffer_len);
+    if(i < s_start || i > s_end){
+      s_buffer[s_buffer_len] = in_buffer[i];
+      s_buffer_len++;
+    }
+  }
+  for(int i=0; i<in_buffer_len; i++){
+    if(i < p_start || i > p_end){
+      p_buffer[p_buffer_len] = in_buffer[i];
+      p_buffer_len++;
+    }
+  }
+  for(int i=0; i<in_buffer_len; i++){
+    if((i < s_start || i > s_end) && (i < p_start || i > p_end)){
+      sp_buffer[sp_buffer_len] = in_buffer[i];
+      sp_buffer_len++;
+    }
+  }
+  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  //check if anny match
+  bool base_match = true;
+  bool s_match = true;
+  bool p_match = true;
+  bool sp_match = true;
+
+  if(in_buffer_len != strlen(header)){
+    base_match = false;
+  }
+  if(in_buffer_len != s_buffer_len){
+    s_match = false;
+  }
+  if(in_buffer_len != p_buffer_len){
+    p_match = false;
+  }
+  if(in_buffer_len != sp_buffer_len){
+    sp_match = false;
+  }
+
+  if(base_match){
+    for(int i=0; i < in_buffer_len; i++){
+      if(in_buffer[i] != header[i]){
+        base_match = false;
+        break;
+      }
+    }
+  }
+  if(s_match){
+    for(int i=0; i < in_buffer_len; i++){
+      if(in_buffer[i] != s_buffer[i]){
+        s_match = false;
+        break;
+      }
+    }
+  }
+  if(p_match){
+    for(int i=0; i < in_buffer_len; i++){
+      if(in_buffer[i] != p_buffer[i]){
+        p_match = false;
+        break;
+      }
+    }
+  }
+  if(sp_match){
+    for(int i=0; i < in_buffer_len; i++){
+      if(in_buffer[i] != sp_buffer[i]){
+        sp_match = false;
+        break;
+      }
+    }
+  }
+
+  if(!base_match && !s_match && !p_match && !sp_match){
+      printf("Header size doesn't match\n");
+      printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+      exit(1);
+  }
+
+  if(s_match){
+    f->solrad_flag = true;
+  }
+  if(p_match){
+    f->percent_cured_flag = true;
+  }
+  if(sp_match){
+    f->percent_cured_flag = true;
+    f->solrad_flag = true;
+  }
+
+
+
+  
+
+
+  
+
+//  ###################################################################################################################################################################################################
+
+  /* printf("Checking header matches:\n\t%s\n", header); */
+  /* check that the header matches what is expected */
+//  char a[1];
+//  char buffer[120];
+//  int buffer_len = 0;
+//  const int n = strlen(header);
+//  int i;
+//  int err = 1; 
+//  bool skip_read_flag = false;
+//  bool halt_buffer_intake = false;
+  /* do this one character at a time because unsure how long line would be if we used %s */
+//  while (i < n )
+//  {
+//    if(!skip_read_flag){
+//      err = fscanf(input, "%c", a);
+//      i++;
+//    }
+//    if(skip_read_flag){
+//      skip_read_flag = false;
+//    }
+//    if (0 == err)
+//    {
+//      printf("Error reading file\n");
+//      exit(1);
+//    }
+    /* need a newline at end or else it's not really a match */
+//    if(a[0]=='\n'){
+//      break;
+//    }
+
+//    if (a[0] != header[i] && !halt_buffer_intake)
+//    {
+//      printf("%d %d\n", buffer_len, i);
+//      skip_read_flag = true;
+//      buffer[buffer_len] = header[i];
+//      buffer_len +=1;
+      //printf("Expected columns to be '%s'\n", header);
+      //exit(1);
+//    }
+//    else if(a[0] != header[i] && halt_buffer_intake){
+//      skip_read_flag = true;
+//      err = 0;
+//    }
+//    else if(buffer_len > 0){
+//      halt_buffer_intake = true;
+//    }
+//  }
+
+//  if(buffer_len > 0){
+//    char buffer_2[buffer_len];
+//    int bufffer_2_len = 0;
+
+    //solrad check
+//    char to_check[] = {'s','o','l','r','a','d',','};
+//    int spot = 0;
+//    for(i=0; i< (int)(sizeof(to_check)/sizeof(char)) +1;i++){
+//      if (spot >= buffer_len){
+//        break;
+//      }
+//      if(to_check[i] != buffer[spot]){
+//        buffer_2[bufffer_2_len] = buffer[spot];
+//        bufffer_2_len++;
+//        spot++;
+//      }
+//    }
+//    if(bufffer_2_len == buffer_len){
+      //solrad is missing
+//      f->solrad_flag = true;
+//    }
+
+    //percent cured check
+//    char to_check_2[] = {'p','e','r','c','e','n','t','_','c','u','r','e','d',','};
+//    spot = 0;
+//    for(i=0; i < (int)(sizeof(to_check_2)/sizeof(char))+1; i++){
+//      if(sizeof(buffer_2)==0 || to_check_2[i] != buffer_2[spot]){
+        //percent cured is missing
+//        f->percent_cured_flag = true;
+//        break;
+//      }
+//      spot++;
+//    }
+//  }
+}
+
+void check_header_legacy(FILE *input, const char *header)
 {
   /* printf("Checking header matches:\n\t%s\n", header); */
   /* check that the header matches what is expected */
@@ -177,11 +522,11 @@ void check_weather(double temp, double rh, double wind, double rain)
     exit(1);
   }
 }
-void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load)
+void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load, struct flags *f)
 {
   check_weather(temp, rh, wind, rain);
   /* just do basic checks, but use this so we can expand checks if desired */
-  if (solrad < 0)
+  if (!f->solrad_flag && solrad < 0)
   {
     printf("Solar radiation must be positive, but got %f\n", rh);
     exit(1);
@@ -199,7 +544,7 @@ void check_inputs(double temp, double rh, double wind, double rain, double solra
 }
 
 int read_row(FILE *inp, struct row *r)
-{
+{ 
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
   int err = fscanf(inp,
@@ -230,40 +575,130 @@ int read_row(FILE *inp, struct row *r)
   return err;
 }
 
-int read_row_inputs(FILE *inp, struct row *r)
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
 {
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
-  int err = fscanf(inp,
-                   "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
-                   &r->lat,
-                   a,
-                   &r->lon,
-                   a,
-                   &r->year,
-                   a,
-                   &r->mon,
-                   a,
-                   &r->day,
-                   a,
-                   &r->hour,
-                   a,
-                   &r->temp,
-                   a,
-                   &r->rh,
-                   a,
-                   &r->ws,
-                   a,
-                   &r->rain,
-                   a,
-                   &r->solrad,
-                   a,
-                   &r->percent_cured,
-                   a,
-                   &r->grass_fuel_load);
+  int err = 0;
+  if(f->percent_cured_flag && f->solrad_flag){
+    printf("path 1\n");
+    err = fscanf(inp,
+      "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf",
+      &r->lat,
+      a,
+      &r->lon,
+      a,
+      &r->year,
+      a,
+      &r->mon,
+      a,
+      &r->day,
+      a,
+      &r->hour,
+      a,
+      &r->temp,
+      a,
+      &r->rh,
+      a,
+      &r->ws,
+      a,
+      &r->rain,
+      a,
+      &r->grass_fuel_load);
+      r->percent_cured = seasonal_curing(julian(r->mon,r->day));
+  }
+  else if(f->percent_cured_flag && !f->solrad_flag){
+    printf("path 2\n");
+    err = fscanf(inp,
+      "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
+      &r->lat,
+      a,
+      &r->lon,
+      a,
+      &r->year,
+      a,
+      &r->mon,
+      a,
+      &r->day,
+      a,
+      &r->hour,
+      a,
+      &r->temp,
+      a,
+      &r->rh,
+      a,
+      &r->ws,
+      a,
+      &r->rain,
+      a,
+      &r->solrad,
+      a,
+      &r->grass_fuel_load);
+      r->percent_cured = seasonal_curing(julian(r->mon,r->day));
+  }
+  else if(!f->percent_cured_flag && f->solrad_flag){
+    printf("path 3\n");
+    err = fscanf(inp,
+      "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
+      &r->lat,
+      a,
+      &r->lon,
+      a,
+      &r->year,
+      a,
+      &r->mon,
+      a,
+      &r->day,
+      a,
+      &r->hour,
+      a,
+      &r->temp,
+      a,
+      &r->rh,
+      a,
+      &r->ws,
+      a,
+      &r->rain,
+      a,
+      &r->percent_cured,
+      a,
+      &r->grass_fuel_load);
+  }
+  else{
+    printf("path 4\n");
+    err = fscanf(inp,
+      "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
+      &r->lat,
+      a,
+      &r->lon,
+      a,
+      &r->year,
+      a,
+      &r->mon,
+      a,
+      &r->day,
+      a,
+      &r->hour,
+      a,
+      &r->temp,
+      a,
+      &r->rh,
+      a,
+      &r->ws,
+      a,
+      &r->rain,
+      a,
+      &r->solrad,
+      a,
+      &r->percent_cured,
+      a,
+      &r->grass_fuel_load);
+  }
+  
+  printf("%d\n", err);
   if (err > 0)
   {
-    check_inputs(r->temp, r->rh, r->ws, r->rain, r->solrad, r->percent_cured, r->grass_fuel_load);
+    check_inputs(r->temp, r->rh, r->ws, r->rain, r->solrad, r->percent_cured, r->grass_fuel_load, f);
   }
   return err;
 }
@@ -458,7 +893,7 @@ void save_csv(FILE *file, const char *fmt_all, ...)
 #endif
     switch (buffer[k - 1])
     {
-    case 'd':
+    case 'd': ;
       int value_int = va_arg(args, int);
       // no need to guard against "-0.0"
 #ifndef NDEBUG
@@ -470,7 +905,7 @@ void save_csv(FILE *file, const char *fmt_all, ...)
       break;
     case 'f':
     // fall through
-    case 'g':
+    case 'g': ;
       double value_double = va_arg(args, double);
 #ifndef NDEBUG
       printf("formatting %s with %f\n", &(buffer[j]), value_double);
