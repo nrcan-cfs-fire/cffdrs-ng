@@ -8,9 +8,9 @@ outputs hourly weather stream
 #include "util.h"
 
 /* Alpha/Beta/Gamma coefficients for Temperature, RH, and Wind Speed */
-const double C_TEMP[3] = {0.2, 2.0, -2.9};
-const double C_RH[3] = {0.4, 1.9, -2.9};
-const double C_WIND[3] = {1.2, 1.7, -1.5};
+const double C_TEMP[3] = {0.0, 2.75, -1.9};
+const double C_RH[3] = {0.25, 2.75, -2.0};
+const double C_WIND[3] = {1.0, 1.5, -1.3};
 
 double diurnal(double v_min, double v_max, double tv_min, double yv_sunset, double sunrise, double sunset, double solarnoon_yest, double sunset_yest, double sunrise_tom, const double *abg, double *hourly);
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  check_header(inp, header);
+  check_header_legacy(inp, header);
   /*  CSV headers */
   fprintf(out, "%s\n", header_out);
 
