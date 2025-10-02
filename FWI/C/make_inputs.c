@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
     exit(1);
   }
   /* check that the header matches what is expected */
-  check_header(inp, header);
+  check_header_legacy(inp, header);
   struct row cur;
   int err = populate_row(inp, &cur, TZadjust);
   struct row for_day[24];
