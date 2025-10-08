@@ -118,9 +118,8 @@ get_sunlight <- function(dt, get_solrad = FALSE) {
     df_all[, zenith := pmin(pi / 2, zenith)]
     df_all[, cos_zenith := cos(zenith)]
     df_all[, vpd := 6.11 * (1.0 - rh / 100.0) * exp(17.29 * temp / (temp + 237.3))]
-    df_all[, solrad := 0.0]
-    df_all[(hour(timestamp) >= sunrise) & (hour(timestamp) <= sunset),
-      solrad := cos_zenith * 0.92 * (1.0 - exp(-0.22 * vpd))]
+    df_all[, solrad := cos_zenith * 0.92 * (1.0 - exp(-0.22 * vpd))]
+    df_all[solrad < 1e-4, solrad := 0.0]  # always set low values to 0
 
     cols_sun <- c("solrad", "sunrise", "sunset")
   } else {

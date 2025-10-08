@@ -5,7 +5,7 @@ The [Canadian Forest Fire Danger Rating System (CFFDRS)](https://natural-resourc
 2. The 2021 document on [*An overview of the next generation of the Canadian Forest Fire Danger Rating System*](https://ostrnrcan-dostrncan.canada.ca/handle/1845/245411)
 3. [Sign up to our newsletter](https://forms.office.com/r/jmT8HVrsK8) where you can specifically select to receive code updates 
 
-This repository contains three programming languages: R, Python, and C (**all C code is still under development**). These three versions are written to produce the same results so users can choose the version that fits their own software systems.  
+This repository contains three programming languages: C, Python, and R. These three versions are written to produce the same results so users can choose the version that fits their own software systems.  
 
 While we are not actively seeking code contributions at this time, see our [contributing page](https://github.com/nrcan-cfs-fire/cffdrs-ng/blob/main/CONTRIBUTING.md) for details on how to provide us feedback and report bugs.  
 
@@ -19,12 +19,16 @@ cffdrs-ng/
     - `PRF2007_hourly_wx.csv` (test data of hourly weather recorded from the Petawawa Research Forest in 2007)
 - FWI/
     - C/
+        - `daily_summaries.c` (function to generate the daily summary output)
         - `make_hourly.c` (converts daily min/max weather data to hourly data)
         - `make_inputs.c` (converts hourly weather data into a data file that has all the inputs required for NG_FWI)
         - `make_minmax.c` (converts daily weather data to daily min/max data)
+        - `NG_FWI_main_historical.c` (old `main()` function before 2025/09/10 argument changes)
+        - `NG_FWI_main.c` (`main()` function for generating FWI2025 outputs)
         - `NG_FWI.c` (functions and equations for generating FWI2025 outputs)
+        - `NG_FWI.h`
         - `util.c` (basic, intermediate functions that are not a part of FWI2025 equations)
-        - `util.h` (basic, intermediate functions that are not a part of FWI2025 equations)
+        - `util.h`
     - Python/
         - tutorial/
             - `tutorial_hourly_FWI.py`
