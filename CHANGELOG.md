@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "unreleased" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## 2025-10-08
+
+### Added
+- Restored `timezone` argument in `hFWI()` to create/override `timezone` column in input data frame. Default is to use a provided `timezone` column (*Python* and *R*)
+
+### Changed
+- Updated daytime check in DMC and DC calculation for northern regions with midnight sun (*Python* and *R*)
+- Calculated `solrad` values less than 1e-4 are always automatically set to 0 (*Python* and *R*)
+
+## 2025-10-02
+
+### Added
+- Preliminary calculation variables for **NG_FWI.c** are included in output and inputs for "live hourly runs" (continuation runs) (*C*)
+- **daily_summaries.c** file to generate daily summary reports similar to Python and R (*C*)
+- **NG_FWI_main.c** file to hold the `main()` function for **NG_FWI.c** (*C*)
+- **NG_FWI_main_historical.c** file to keep the old usage and arguments for **NG_FWI.c** (*C*)
+
+### Changed
+- `solrad` and `percent_cured` columns are calculated if not provided (*C*)
+- Updated daytime check in DMC and DC calculation for northern regions with midnight sun (*C*)
+- Solar radiation calculation in **util.c** to only need each hour's weather data instead of a whole day (*C*)
+- Parameters used to create typical diurnal curve for `make_hourly()` (see similar 2025-09-26 changes for parameter values) (*C*)
+- Various changes to header checking for compatibility between files (*C*)
+
+
 ## 2025-09-26
 
 ### Changed
