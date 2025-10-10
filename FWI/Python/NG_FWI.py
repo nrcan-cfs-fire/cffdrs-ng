@@ -767,7 +767,8 @@ def hFWI(
     had_timestamp = "timestamp" in og_names
     if not had_date:
         wx["date"] = wx.apply(
-            lambda row: f'{row["yr"]:04d}-{row["mon"]:02d}-{row["day"]:02d}', axis=1
+            lambda row: f'{int(row["yr"]):04d}-{int(row["mon"]):02d}-{int(row["day"]):02d}',
+            axis=1
         )
     if not had_timestamp:
         wx["timestamp"] = wx.apply(

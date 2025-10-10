@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "unreleased" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## 2025-10-10
+
+### Fixed
+- Print statement in `generate_daily_summaries()` can handle numeric IDs (*Python*)
+- Generating `date` column in `hFWI()` converts input values to integer first (*Python*)
+
 ## 2025-10-08
 
 ### Added

@@ -106,7 +106,7 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
   
   for stn, by_stn in hourly_data.groupby("id", sort = False):
     if not silent:
-      print("Summarizing " + stn + " to daily")
+      print("Summarizing " + str(stn) + " to daily")
     by_stn["pseudo_DATE"] = by_stn.apply(lambda row:
       pseudo_date(row["yr"], row["mon"], row["day"], row["hr"], reset_hr), axis = 1)
     
