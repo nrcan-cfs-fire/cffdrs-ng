@@ -746,7 +746,7 @@ def hFWI(
         if not "timezone" in wx.columns:
             raise RuntimeError("Either provide a timezone column or specify argument in hFWI")
     else:
-        wx["timezone"] = timezone
+        wx["timezone"] = float(timezone)
     # check for one hour run and startup moisture all set to default
     if (df_wx.shape[0] == 1 and
         ffmc_old == FFMC_DEFAULT and mcffmc_old == None and
@@ -855,7 +855,7 @@ def hFWI(
             "prec_cumulative", "canopy_drying"]
         if "solrad" not in og_names:
             outcols.insert(0, "solrad")
-        results[outcols] = results[outcols].map(round, ndigits = round_out)
+        results[outcols] = results[outcols].map(round, ndigits = int(round_out))
 
     return results
 
@@ -866,7 +866,7 @@ if __name__ == "__main__":
     parser.add_argument("input", help = "Input csv data file")
     parser.add_argument("output", help = "Output csv file name and location")
     parser.add_argument("timezone", nargs = "?", default = None,
-        help = "UTC offset (default None for column provided in df_wx)")
+        help = "UTC offset (default None for column provided in input)")
     parser.add_argument("ffmc_old", nargs = "?", default = FFMC_DEFAULT,
         help = "Starting value for FFMC (startup 85, None for mcffmc_old)")
     parser.add_argument("mcffmc_old", nargs = "?", default = None,

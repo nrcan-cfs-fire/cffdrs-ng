@@ -1,10 +1,10 @@
 import datetime
-from math import acos, cos, exp, log, pi, sin, tan
+import argparse
+from math import exp, pi, sin
 
 import pandas as pd
 
 import util
-from util import save_csv
 
 C_TEMP = {"c_alpha": 0.0, "c_beta": 2.75, "c_gamma": -1.9}
 C_RH = {"c_alpha": 0.25, "c_beta": 2.75, "c_gamma": -2.0}
@@ -160,7 +160,7 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
         verbose=verbose,
     )
     # FIX: R version only looks at HOUR so wouldn't work with intervals != 1
-    t = v_temp[["ID", "TIMESTAMP", "DATE", "HR", "MINUTE", "LAT", "LONG", "TEMP"]]
+    t = v_temp[["ID", "TIMESTAMP", "DATE", "HR", "MINUTE", "LAT", "LONG", "TIMEZONE", "TEMP"]]
     w = v_wind[["ID", "TIMESTAMP", "WS"]]
     out = pd.merge(t, w)
     rh = make_prediction(
@@ -177,7 +177,7 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
     rh["RH"] = rh["RH_OPP"].apply(lambda rh_opp: 100 * (1 - rh_opp))
     rh = rh[["ID", "TIMESTAMP", "RH"]]
     out = pd.merge(out, rh)
-    output = out[["ID", "LAT", "LONG", "TIMESTAMP", "TEMP", "WS", "RH"]][:]
+    output = out[["ID", "LAT", "LONG", "TIMEZONE", "TIMESTAMP", "TEMP", "WS", "RH"]][:]
     if verbose:
         print("Assigning times")
     output["HR"] = output["TIMESTAMP"].apply(lambda x: x.hour)
@@ -209,21 +209,22 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
 # Convert daily min/max values stream to hourly values stream.
 # Uses Beck & Trevitt method with default A/B/G values.
 #
-# @param     w              daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain]
-# @param     timezone       integer offset from GMT to use for sun calculations
-# @param     skip_invalid   whether to continue if invalid data is found or throw an exception
+# @param     w              daily min/max values weather stream [lat, long, timezone, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
+# @param     skip_invalid   if station year data non-sequential, skip and raise warning
 # @param     verbose        whether to output progress messages
-# @return                   hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
+# @return                   hourly values weather stream [lat, long, timezone, yr, mon, day, hr, temp, rh, wind, prec]
+def minmax_to_hourly_single(w, skip_invalid=False, verbose=False):
     r = w.copy()
     r.columns = map(str.upper, r.columns)
     if 1 != len(r["LAT"].unique()):
         raise RuntimeError("Expected a single LAT value for input weather")
     if 1 != len(r["LONG"].unique()):
         raise RuntimeError("Expected a single LONG value for input weather")
+    if len(w["TIMEZONE"].unique()) != 1:
+        raise RuntimeError("Expected a single UTC offset (timezone) each station year")
     had_id = "ID" in r.columns
     if not had_id:
-        r["ID"] = 1
+        r["ID"] = "STN"
     elif 1 != len(r["ID"].unique()):
         raise RuntimeError("Expected a single ID value for input weather")
     if 1 != len(r["YR"].unique()):
@@ -235,7 +236,7 @@ def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
         ),
         axis=1,
     )
-    if not (len(r) > 1 and util.is_sequential_days(r)):
+    if not (len(r) == 1 or util.is_sequential_days(r)):
         if skip_invalid:
             raise RuntimeWarning(
                 f'{r["ID"].iloc[0]} for {r["YR"].iloc[0]} - Expected input to be sequential daily weather'
@@ -249,7 +250,7 @@ def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
             )
         }
     )
-    # duplicate start and end dates so we can use their values for yesterday and tomorrow in predictions
+    # duplicate start and end days to assume their values for one day before and after dataset
     yest = r.iloc[0][:]
     tom = r.iloc[-1][:]
     yest["TIMESTAMP"] = yest["TIMESTAMP"] - datetime.timedelta(days=1)
@@ -263,8 +264,8 @@ def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
     dates = r["TIMESTAMP"].unique()
     latitude = r["LAT"].iloc[0]
     longitude = r["LONG"].iloc[0]
-    r["TIMEZONE"] = timezone
-    r = util.get_sunlight(r, with_solrad=False)
+    r = util.get_sunlight(r, get_solrad = False)
+    r.columns = map(str.upper, r.columns)  # get_sunlight outputs lowercase columns
     # FIX: is solar noon just midpoint between sunrise and sunset?
     r["SOLARNOON"] = r.apply(
         lambda row: (row["SUNSET"] - row["SUNRISE"]) / 2 + row["SUNRISE"], axis=1
@@ -277,99 +278,80 @@ def minmax_to_hourly_single(w, timezone, skip_invalid=False, verbose=False):
     )
     df.columns = map(str.lower, df.columns)
     df = pd.merge(orig_dates, df, on=["date"])
-    columns = [
-        "lat",
-        "long",
-        "yr",
-        "mon",
-        "day",
-        "hr",
-        "temp",
-        "rh",
-        "ws",
-        "prec",
-    ]
+    cols = ["lat", "long", "timezone", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec"]
     if had_id:
-        df = df[["id"] + columns]
+        df = df[["id"] + cols]
     else:
-        df = df[columns]
+        df = df[cols]
     return df
 
 
 # Convert daily min/max values stream to hourly values stream.
 # Uses Beck & Trevitt method with default A/B/G values.
 #
-# @param     w              daily min/max values weather stream [lat, long, year, mon, day, hour, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain]
-# @param     timezone       integer offset from GMT to use for sun calculations
-# @param     skip_invalid   whether to continue if invalid data is found or throw an exception
-# @param     verbose        whether to output progress messages
-# @return                   hourly values weather stream [lat, long, year, mon, day, hour, temp, rh, wind, rain]
-def minmax_to_hourly(w, timezone, skip_invalid=False, verbose=False):
+# @param    w               daily min/max values weather stream [lat, long, yr, mon, day temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
+# @param    timezone        UTC offset (default None for column provided in w)
+# @param    skip_invalid    if station year data non-sequential, skip and raise warning
+# @param    verbose         whether to output progress messages
+# @param    round_out       decimals to truncate output to, None for none (default 4)
+# @return                   hourly values weather stream [lat, long, timezone, yr, mon, day, hr, temp, rh, wind, prec]
+def minmax_to_hourly(w, timezone = None, skip_invalid = False,
+                     verbose = False, round_out = 4):
     r = w.copy()
+    # check for required columns
     r.columns = map(str.upper, r.columns)
+    req_cols = ["LAT", "LONG", "YR", "MON", "DAY", "TEMP_MIN", "TEMP_MAX",
+                "RH_MIN", "RH_MAX", "WS_MIN", "WS_MAX", "PREC"]
+    for col in req_cols:
+        if not col in r.columns:
+            raise RuntimeError("Missing required input column: " + col)
+    # check for ID column
     had_id = "ID" in r.columns
     if not had_id:
-        r["ID"] = 1
+        r["ID"] = "STN"
+    # check timezone
+    if timezone == None:
+        if not "TIMEZONE" in r.columns:
+            raise RuntimeError("Either provide a timezone column or specify argument in minmax_to_hourly")
+    else:
+        r["TIMEZONE"] = float(timezone)
+    # loop over every station year
     result = None
     for stn in r["ID"].unique():
         by_stn = r[r["ID"] == stn]
         for yr in by_stn["YR"].unique():
             by_year = by_stn[by_stn["YR"] == yr]
             print(f"Running {stn} for {yr}")
-            df = minmax_to_hourly_single(by_year, timezone, skip_invalid, verbose)
+            df = minmax_to_hourly_single(by_year, skip_invalid, verbose)
             result = pd.concat([result, df])
+
+    # delete ID column if it wasn't provided
     if not had_id:
         del result["id"]
+
+    # round decimal places of output columns
+    if not (round_out == None or round_out == "None"):
+        outcols = ["temp", "rh", "ws"]
+        result[outcols] = result[outcols].map(round, ndigits = int(round_out))
+    
     return result
 
+if __name__ == "__main__":
+    # run minmax_to_hourly by command line. run with option -h or --help to see usage
+    parser = argparse.ArgumentParser(prog = "make_hourly")
 
-if "__main__" == __name__:
-    import os
-    import sys
+    parser.add_argument("input", help = "Input csv data file")
+    parser.add_argument("output", help = "Output csv file name and location")
+    parser.add_argument("timezone", nargs = "?", default = None,
+        help = "UTC offset (default None for column provided in input)")
+    parser.add_argument("skip_invalid", nargs = "?", default = False,
+        help = "If station year data non-sequential, skip and raise warning")
+    parser.add_argument("-v", "--verbose", action = "store_true")
+    parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
+        help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
 
-    COLUMNS = [
-        "lat",
-        "long",
-        "yr",
-        "mon",
-        "day",
-        "temp_min",
-        "temp_max",
-        "rh_min",
-        "rh_max",
-        "ws_min",
-        "ws_max",
-        "prec",
-    ]
-    if 4 != len(sys.argv):
-        print(
-            f"Command line:   {sys.argv[0]} <local GMToffset> <input file> <output file>\n"
-        )
-        print(
-            "<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )"
-        )
-        print(
-            "INPUT FILE format must be DAILY min/max weather data, comma seperated and take the form"
-        )
-        print(f"{COLUMNS}\n")
-        sys.exit(1)
-    inp = sys.argv[2]
-    out = sys.argv[3]
-    print(f"Opening input file >> {inp}")
-    if not os.path.exists(inp):
-        print(f"\n\n ***** FILE  {inp}  does not exist")
-        sys.exit(1)
-    TZadjust = int(sys.argv[1])
-    if TZadjust < -9 or TZadjust > -2:
-        print(
-            "/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2"
-        )
-        sys.exit(1)
-    df = pd.read_csv(inp)
-    try:
-        df = df[COLUMNS]
-    except:
-        print(f"Expected columns to be {COLUMNS}")
-        sys.exit(1)
-    hourly = minmax_to_hourly(df, TZadjust)
-    save_csv(hourly, out)
+    args = parser.parse_args()
+    df_in = pd.read_csv(args.input)
+    df_out = minmax_to_hourly(df_in, args.timezone, args.skip_invalid,
+                              args.verbose, args.round_out)
+    df_out.to_csv(args.output, index = False)
