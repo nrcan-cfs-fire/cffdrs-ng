@@ -1,6 +1,33 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "unreleased" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
+All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
+
+## 2025-10-20
+
+### Added
+- `timezone` argument in `minmax_to_hourly()` function defaults to using a column in input, or can still be specified (*Python* and *R*)
+- `round_out` argument in `minmax_to_hourly()` and `daily_to_minmax()` functions defaults to rounding weather variables to 4 decimal places (*Python* and *R*)
+- `daily_to_minmax()` and `minmax_to_hourly()` check for required input columns (*Python* and *R*)
+
+### Changed
+- `minmax_to_hourly()` can accept one row (one day) inputs (*Python* and *R*)
+- `daily_to_minmax()` and `minmax_to_hourly()` outputs preserve data frame/data table class from input (*R*)
+
+### Removed
+- Requirement that the `timezone` argument in `minmax_to_hourly()` be between -2 and -9 (*Python*)
+
+### Fixed
+- Running **NG_FWI**, **daily_summaries**, **make_hourly**, and **make_minmax** by command line properly converts `timezone`, `round_out`, and `reset_hr` arguments to corresponding number types (*Python* and *R*)
+- `minmax_to_hourly()` and `get_sunlight()` calculations allow for different data frame column name cases (*Python* and *R*)
+- `make_minmax` by command line doesn't use removed `save_csv()` function (*Python* and *R*)
+- `is_sequential_days()` and `is_sequential_hours()` works on a data frame copy and allows for different data frame column name cases (*Python* and *R*)
+- `hFWI()` output preserves data table class if input was a data table (*R*)
+
+## 2025-10-10
+
+### Fixed
+- Print statement in `generate_daily_summaries()` can handle numeric IDs (*Python*)
+- Generating `date` column in `hFWI()` converts input values to integer first (*Python*)
 
 ## 2025-10-08
 
@@ -25,7 +52,6 @@ All notable changes to this project will be documented in this file. The format 
 - Solar radiation calculation in **util.c** to only need each hour's weather data instead of a whole day (*C*)
 - Parameters used to create typical diurnal curve for `make_hourly()` (see similar 2025-09-26 changes for parameter values) (*C*)
 - Various changes to header checking for compatibility between files (*C*)
-
 
 ## 2025-09-26
 

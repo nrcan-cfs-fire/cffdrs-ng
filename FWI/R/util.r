@@ -17,7 +17,9 @@ is_sequential <- function(data) {
 #' @param df            data to check
 #' @return              whether each entry is 1 day from the next entry
 is_sequential_days <- function(df) {
-  return(is_sequential(as.Date(df$date)))
+  data <- copy(df)
+  colnames(data) <- tolower(colnames(data))
+  return(is_sequential(as.Date(data$date)))
 }
 
 #' Determine if data is sequential hours
@@ -25,6 +27,8 @@ is_sequential_days <- function(df) {
 #' @param df            data to check
 #' @return              whether each entry is 1 hour from the next entry
 is_sequential_hours <- function(df) {
+  data <- copy(df)
+  colnames(data) <- tolower(colnames(data))
   return(is_sequential(as.POSIXct(df$timestamp)))
 }
 
@@ -67,6 +71,7 @@ julian <- function(mon, day) {
 #' @param get_solrad        Whether to calculate solar radiation
 #' @return                  Sunrise, sunset, sunlight hours, and solar radiation (kW/m^2)
 get_sunlight <- function(dt, get_solrad = FALSE) {
+  colnames(dt) <- tolower(colnames(dt))
   # columns to split along unique days
   cols_day <- c("lat", "long", "date", "timezone")
   # required columns
@@ -78,7 +83,7 @@ get_sunlight <- function(dt, get_solrad = FALSE) {
     stopifnot(n %in% colnames(dt))
   }
   df_copy <- copy(dt)
-  # (re)make date column
+  # (re)make date column, strips timestamp of default UTC (GMT) timezone generated in hFWI()
   df_copy[, date := as_date(timestamp)]
 
   # calculate sunrise and sunset

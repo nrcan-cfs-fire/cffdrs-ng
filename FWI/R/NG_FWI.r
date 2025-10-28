@@ -785,12 +785,12 @@ hFWI <- function(
   round_out = 4
   ) {
   # check df_wx class for data.frame or data.table
-  wasDf <- is.data.frame(df_wx)
-  if (wasDf) {
+  wasDT <- is.data.table(df_wx)
+  if (wasDT) {
+    wx <- copy(df_wx)
+  } else if (is.data.frame(df_wx)) {
     wx <- copy(df_wx)
     setDT(wx)
-  } else if (is.data.table(df_wx)) {
-    wx <- copy(df_wx)
   } else {
     stop("Input weather stream df_wx needs to be a data.frame or data.table!")
   }
@@ -805,12 +805,12 @@ hFWI <- function(
     }
   }
   # check timezone
-  if (is.na(timezone)) {
+  if (is.na(timezone) || timezone == "NA") {
     if (!"timezone" %in% names(wx)) {
       stop("Either provide a timezone column or specify argument in hFWI")
     }
   } else {
-    wx[, timezone := ..timezone]
+    wx[, timezone := as.numeric(..timezone)]
   }
   # check for one hour run and startup moisture all set to default
   if (nrow(wx) == 1 &&
@@ -837,6 +837,7 @@ hFWI <- function(
     wx[, date := as.character(as.Date(sprintf("%04d-%02d-%02d", yr, mon, day)))]
   }
   if (!hadTimestamp) {
+    # as_datetime() defaults to UTC, but we only use timestamp for it's combined yr, mon, day, hr
     wx[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00",
       yr, mon, day, hr, minute))]
   }
@@ -923,7 +924,7 @@ hFWI <- function(
   }
 
   # format decimal places of output columns
-  if (!is.na(round_out)) {
+  if (!(is.na(round_out) || round_out == "NA")) {
     outcols <- c("sunrise", "sunset", "sunlight_hours",
       "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
@@ -931,10 +932,10 @@ hFWI <- function(
     if (!"solrad" %in% og_names) {
       outcols <- c('solrad', outcols)
     }
-    set(results, j = outcols, value = round(results[, ..outcols], round_out))
+    set(results, j = outcols, value = round(results[, ..outcols], as.integer(round_out)))
   }
 
-  if (wasDf) {
+  if (!wasDT) {
     setDF(results)
   }
   return(results)
@@ -951,7 +952,7 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   input <- args[1]
   output <- args[2]
   # load optional arguments if provided, or set to default
-  if (length(args) >= 3) timezone <- as.numeric(args[3])
+  if (length(args) >= 3) timezone <- args[3]
   else timezone <- NA
   if (length(args) >= 4) ffmc_old <- as.numeric(args[3])
   else ffmc_old <- FFMC_DEFAULT

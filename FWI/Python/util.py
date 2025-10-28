@@ -11,9 +11,11 @@ import pandas as pd
 # @param data          data to check
 # @return              whether each entry is 1 day from the next entry
 def is_sequential_days(data):
+    test = data.copy()
+    test.columns = map(str.lower, test.columns)
     return np.all(
         datetime.timedelta(days=1)
-        == (data["timestamp"] - data["timestamp"].shift(1)).iloc[1:]
+        == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 
 ##
@@ -22,9 +24,11 @@ def is_sequential_days(data):
 # @param data          data to check
 # @return              whether each entry is 1 hour from the next entry
 def is_sequential_hours(data):
+    test = data.copy()
+    test.columns = map(str.lower, test.columns)
     return np.all(
         datetime.timedelta(hours=1)
-        == (data["timestamp"] - data["timestamp"].shift(1)).iloc[1:]
+        == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 
 ##
@@ -69,6 +73,7 @@ def julian(mon, day):
 # @param get_solrad        Whether to calculate solar radiation
 # @return                  Sunrise, sunset, sunlight hours, and solar radiation (kW/m^2)
 def get_sunlight(df, get_solrad = False):
+    df.columns = map(str.lower, df.columns)
     # columns to split along unique days
     cols_day = ["lat", "long", "date", "timezone"]
     # required columns
