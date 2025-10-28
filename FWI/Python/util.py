@@ -1,6 +1,7 @@
 # Various utility functions used by the other files
 import datetime
 from math import acos, cos, exp, pi, sin, tan
+from calendar import isleap
 import numpy as np
 import pandas as pd
 
@@ -55,15 +56,15 @@ def find_rh(q, temp):
     rh = 100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3)))
     return rh
 
-##
-# Find day of year. Does not properly deal with leap years.
-#
-# @param mon         Month
-# @param day         Day of month
-# @return            Day of year
-def julian(mon, day):
-    month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
-    return month[int(mon) - 1] + int(day)
+# ##
+# # Find day of year. Does not properly deal with leap years.
+# #
+# # @param mon         Month
+# # @param day         Day of month
+# # @return            Day of year
+# def julian(mon, day):
+#     month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+#     return month[int(mon) - 1] + int(day)
 
 ##
 # Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
@@ -82,19 +83,20 @@ def get_sunlight(df, get_solrad = False):
         cols_req.append("temp")
     for n in cols_req:
         if n not in df.columns:
-            raise RuntimeError(f"Expected column '{n}' not found")
-    df_copy = df.loc[:]
-    # (re)make date column
-    df_copy.loc[:, "date"] = df_copy["timestamp"].apply(lambda ts: ts.date())
+            raise RuntimeError(f'Expected column "{n}" not found')
+    df_copy = df.copy()
     
     # calculate sunrise and sunset
     # drop duplicate days
     df_stn_dates = df_copy[cols_day].drop_duplicates()
     df_dates = df_stn_dates[["date"]].drop_duplicates()
-    df_dates["jd"] = df_dates["date"].apply(lambda d: julian(d.month, d.day))
+    df_dates["jd"] = df_dates["date"].apply(lambda d: int(d.strftime("%j")))
+    # calculate fraction of the year
     dec_hour = 12.0
     df_dates["fracyear"] = df_dates["jd"].apply(
-        lambda jd: 2.0 * pi / 365.0 * (jd - 1.0 + (dec_hour - 12.0) / 24.0))
+        lambda jd: 2.0 * pi * (jd - 1.0 + (dec_hour - 12.0) / 24.0))
+    df_dates["fracyear"] = df_dates.apply(lambda row: row["fracyear"] / 366.0 if
+        isleap(row["date"].year) else row["fracyear"] / 365.0, axis = 1)
     df_dates["eqtime"] = df_dates["fracyear"].apply(
         lambda fracyear: 229.18 * (0.000075 +
         0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
@@ -154,6 +156,7 @@ def get_sunlight(df, get_solrad = False):
     return df_result
 
 def seasonal_curing(julian_date):
+    # store default values of percent_cured every 10 days of the year
     PERCENT_CURED = [
         96.0,
         96.0,
@@ -194,6 +197,7 @@ def seasonal_curing(julian_date):
         96.0,
         96.0
     ]
+    # linear interpolation between every default 10-day value
     jd_class = julian_date // 10
     first = PERCENT_CURED[jd_class]
     last = PERCENT_CURED[jd_class + 1]

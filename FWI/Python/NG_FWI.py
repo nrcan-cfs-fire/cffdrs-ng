@@ -588,7 +588,7 @@ def _stnHFWI(
         raise RuntimeError("Expected a single UTC offset (timezone) each station year")
     if len(w["grass_fuel_load"].unique()) != 1:
         raise RuntimeError("Expected a single grass_fuel_load value each station year")
-    r = w.loc[:]
+    r = w.copy()
     if mcffmc_old == None or mcffmc_old == "None":
         if ffmc_old == None or ffmc_old == "None":
             raise ValueError("Either ffmc_old OR mcffmc_old should be NA, not both")
@@ -682,7 +682,7 @@ def _stnHFWI(
             cur["grass_fuel_load"]
         )        
         
-        if (util.julian(cur["mon"], cur["day"]) < DATE_GRASS):
+        if (int(cur["date"].strftime("%j")) < DATE_GRASS):
             standing = False
             mcgfmc = mcgfmc_matted
         else:
@@ -763,24 +763,21 @@ def hFWI(
     if not had_minute:
         wx["minute"] = 0
     # check for optional columns that can be calculated
-    had_date = "date" in og_names
     had_timestamp = "timestamp" in og_names
-    if not had_date:
-        wx["date"] = wx.apply(
-            lambda row: f'{int(row["yr"]):04d}-{int(row["mon"]):02d}-{int(row["day"]):02d}',
-            axis=1
-        )
+    had_date = "date" in og_names
     if not had_timestamp:
         wx["timestamp"] = wx.apply(
             lambda row: datetime.datetime(
                 row["yr"], row["mon"], row["day"], row["hr"], row["minute"]
                 ), axis=1
             )
+    if not had_date:
+        wx["date"] = wx["timestamp"].apply(lambda ts: ts.date())
     if not "grass_fuel_load" in og_names:
         wx["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
     if not "percent_cured" in og_names:
-        wx["percent_cured"] = wx.apply(lambda row: util.seasonal_curing(
-            util.julian(row["mon"], row["day"])), axis=1)
+        wx["percent_cured"] = wx["date"].apply(lambda d:
+            util.seasonal_curing(int(d.strftime("%j"))))
     if not "solrad" in wx.columns:
         if not silent:
             print("Solar Radiation not provided so will be calculated")
@@ -798,7 +795,7 @@ def hFWI(
         raise ValueError("All precipitation (prec) must be >= 0")
     if not (all(wx["mon"] >= 1) and all(wx["mon"] <= 12)):
         raise ValueError("All months (mon) must be between 1-12")
-    if (not needs_solrad) and (not all(wx['solrad'] >= 0)):
+    if (not needs_solrad) and (not all(wx["solrad"] >= 0)):
         raise ValueError("All solar radiation (solrad) must be >= 0")
     if ("percent_cured" in og_names) and (not (
         all(wx["percent_cured"] >= 0) and all(wx["percent_cured"] <= 100))):
@@ -842,10 +839,10 @@ def hFWI(
         results = results.drop(columns = "id")
     if not had_minute:
         results = results.drop(columns = "minute")
-    if not had_date:
-        results = results.drop(columns = "date")
     if not had_timestamp:
         results = results.drop(columns = "timestamp")
+    if not had_date:
+        results = results.drop(columns = "date")
 
     # round decimal places of output columns
     if not (round_out == None or round_out == "None"):

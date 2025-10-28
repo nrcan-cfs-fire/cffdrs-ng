@@ -3,6 +3,7 @@ import argparse
 import pandas as pd
 import NG_FWI
 import util
+import datetime
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
@@ -61,13 +62,14 @@ def smooth_5pt(source):
 # @param    reset_hr  the new boundary hour instead of midnight (default 5)
 # @return             pseudo-date including year and ordinal day of the form "YYYY-D"
 def pseudo_date(yr, mon, day, hr, reset_hr = 5):
+  d = datetime.date(yr, mon, day)
   if hr < reset_hr:
-    adjusted_jd = util.julian(mon, day) - 1
+    adjusted_jd = int(d.strftime("%j")) - 1
   else:
-    adjusted_jd = util.julian(mon, day)
+    adjusted_jd = int(d.strftime("%j"))
   
   if adjusted_jd == 0:  # where Jan 1 shifts to 0, bump it to end of previous year
-    adjusted_jd = util.julian(12, 31)
+    adjusted_jd = int(datetime.date(yr - 1, 12, 31).strftime("%j"))  # for leap yr
     adjusted_yr = yr - 1
   else:
     adjusted_yr = yr
@@ -90,13 +92,13 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
   if "id" in hourly_data.columns:
     had_stn = True
   else:
-    if (len(hourly_data['yr'].unique()) == 1 and
-      len(hourly_data['lat'].unique()) == 1 and
-      len(hourly_data['long'].unique()) == 1):
-      hourly_data['id'] = "stn"
+    if (len(hourly_data["yr"].unique()) == 1 and
+      len(hourly_data["lat"].unique()) == 1 and
+      len(hourly_data["long"].unique()) == 1):
+      hourly_data["id"] = "stn"
       had_stn = False
     else:
-      logger.error("Missing 'id' column with multiple years and locations in data")
+      logger.error('Missing "id" column with multiple years and locations in data')
   
   # initialize dictionary of lists
   outcols = ["id", "yr", "mon", "day", "sunrise", "sunset", "peak_hr", "duration",
@@ -129,42 +131,42 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
         peak_time = by_date["isi_smooth"].idxmax()
       
       # find the rest of the values at peak
-      results['id'].append(stn)
-      results['yr'].append(by_date.at[0, "yr"])
-      results['mon'].append(by_date.at[0, "mon"])
-      results['day'].append(by_date.at[0, "day"])
+      results["id"].append(stn)
+      results["yr"].append(by_date.at[0, "yr"])
+      results["mon"].append(by_date.at[0, "mon"])
+      results["day"].append(by_date.at[0, "day"])
       
       # format sunrise and sunset as hh:mm from decimal hours
       sr = by_date.at[peak_time, "sunrise"]
       ss = by_date.at[peak_time, "sunset"]
-      results['sunrise'].append("{:02d}:{:02d}".format(int(sr), int(60 * (sr - int(sr)))))
-      results['sunset'].append("{:02d}:{:02d}".format(int(ss), int(60 * (ss - int(ss)))))
+      results["sunrise"].append("{:02d}:{:02d}".format(int(sr), int(60 * (sr - int(sr)))))
+      results["sunset"].append("{:02d}:{:02d}".format(int(ss), int(60 * (ss - int(ss)))))
       
-      results['peak_hr'].append(by_date.at[peak_time, "hr"])
-      results['duration'].append(sum(by_date["isi_smooth"] > Spread_Threshold_ISI))
+      results["peak_hr"].append(by_date.at[peak_time, "hr"])
+      results["duration"].append(sum(by_date["isi_smooth"] > Spread_Threshold_ISI))
 
-      results['ffmc'].append(by_date.at[peak_time, "ffmc"])
-      results['dmc'].append(by_date.at[peak_time, "dmc"])
-      results['dc'].append(by_date.at[peak_time, "dc"])
-      results['isi'].append(by_date.at[peak_time, "isi"])
-      results['bui'].append(by_date.at[peak_time, "bui"])
-      results['fwi'].append(by_date.at[peak_time, "fwi"])
-      results['dsr'].append(by_date.at[peak_time, "dsr"])
-      results['gfmc'].append(by_date.at[peak_time, "gfmc"])
-      results['gsi'].append(by_date.at[peak_time, "gsi"])
-      results['gfwi'].append(by_date.at[peak_time, "gfwi"])
+      results["ffmc"].append(by_date.at[peak_time, "ffmc"])
+      results["dmc"].append(by_date.at[peak_time, "dmc"])
+      results["dc"].append(by_date.at[peak_time, "dc"])
+      results["isi"].append(by_date.at[peak_time, "isi"])
+      results["bui"].append(by_date.at[peak_time, "bui"])
+      results["fwi"].append(by_date.at[peak_time, "fwi"])
+      results["dsr"].append(by_date.at[peak_time, "dsr"])
+      results["gfmc"].append(by_date.at[peak_time, "gfmc"])
+      results["gsi"].append(by_date.at[peak_time, "gsi"])
+      results["gfwi"].append(by_date.at[peak_time, "gfwi"])
       
-      results['ws_smooth'].append(by_date.at[peak_time, "ws_smooth"])
-      results['isi_smooth'].append(by_date.at[peak_time, "isi_smooth"])
+      results["ws_smooth"].append(by_date.at[peak_time, "ws_smooth"])
+      results["isi_smooth"].append(by_date.at[peak_time, "isi_smooth"])
 
-      ordinal_day = util.julian(by_date.at[0, "mon"], by_date.at[0, "day"])
-      if (ordinal_day < NG_FWI.DATE_GRASS):
+      d = datetime.date(by_date.at[0, "yr"], by_date.at[0, "mon"], by_date.at[0, "day"])
+      if (int(d.strftime("%j")) < NG_FWI.DATE_GRASS):
         standing = False
         mcgfmc = by_date.at[peak_time, "mcgfmc_matted"]
       else:
         standing = True
         mcgfmc = by_date.at[peak_time, "mcgfmc_standing"]
-      results['gsi_smooth'].append(NG_FWI.grass_spread_index(
+      results["gsi_smooth"].append(NG_FWI.grass_spread_index(
         by_date.at[peak_time, "ws_smooth"], mcgfmc,
         by_date.at[peak_time, "percent_cured"], standing))
 
