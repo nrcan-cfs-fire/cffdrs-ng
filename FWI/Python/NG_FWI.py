@@ -39,7 +39,9 @@ FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
-DATE_GRASS = 181
+# Transition from matted to standing grass in a calendar year
+MON_STANDING = 7
+DAY_STANDING = 1
 
 ##
 # Convert to fine fuel moisture content (%)
@@ -606,6 +608,8 @@ def _stnHFWI(
     # FIX: just use loop for now so it matches C code
     canopy = {"rain_total_prev": prec_cumulative,
         "drying_since_intercept": canopy_drying}
+    # first year for transition btwn matted and standing (esp if southern hemisphere)
+    DATE_GRASS_STANDING = datetime.date(r.at[0, "yr"], MON_STANDING, DAY_STANDING)
     results = []
     for i in range(len(r)):
         cur = r.iloc[i].to_dict()
@@ -682,7 +686,8 @@ def _stnHFWI(
             cur["grass_fuel_load"]
         )        
         
-        if (int(cur["date"].strftime("%j")) < DATE_GRASS):
+        # check if matted to standing transition happened already
+        if cur["date"] < DATE_GRASS_STANDING:
             standing = False
             mcgfmc = mcgfmc_matted
         else:
@@ -699,8 +704,8 @@ def _stnHFWI(
         cur["canopy_drying"] = canopy["drying_since_intercept"]
         # append results for this row
         results.append(cur)
+    
     r = pd.DataFrame(results)
-    del r["index"]
     return r
 
 ##
@@ -776,8 +781,8 @@ def hFWI(
     if not "grass_fuel_load" in og_names:
         wx["grass_fuel_load"] = DEFAULT_GRASS_FUEL_LOAD
     if not "percent_cured" in og_names:
-        wx["percent_cured"] = wx["date"].apply(lambda d:
-            util.seasonal_curing(int(d.strftime("%j"))))
+        wx["percent_cured"] = wx.apply(lambda row:
+            util.seasonal_curing(row["yr"], row["mon"], row["day"]), axis = 1)
     if not "solrad" in wx.columns:
         if not silent:
             print("Solar Radiation not provided so will be calculated")
@@ -827,12 +832,13 @@ def hFWI(
         if not silent:
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
         logger.debug(f"Running for {idx}")
-        w = by_year.reset_index()
+        w = by_year.reset_index(drop = True)
         w = util.get_sunlight(w, get_solrad = needs_solrad)
         r = _stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
             mcgfmc_matted_old, mcgfmc_standing_old,
             prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
+    results.reset_index(drop = True, inplace = True)
     
     # remove optional variables that we added
     if not had_stn:

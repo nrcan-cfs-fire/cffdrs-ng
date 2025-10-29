@@ -68,7 +68,6 @@ def find_rh(q, temp):
 
 ##
 # Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
-# (does not take leap years into account)
 #
 # @param df                Dataframe to add columns to
 # @param get_solrad        Whether to calculate solar radiation
@@ -155,17 +154,20 @@ def get_sunlight(df, get_solrad = False):
         lambda x: x["sunset"] - x["sunrise"], axis = 1)
     return df_result
 
-def seasonal_curing(julian_date):
+##
+# Set default percent_cured values based off annual variation in Boreal Plains region
+#
+# @param yr             Year
+# @param mon            Month of year
+# @param day            Day of month
+# @param start_mon      Month of grassland fuel greenup (Boreal Plains Mar 12)
+# @param start_day      Day of grassland fuel greenup (Boreal Plains Mar 12)
+# @return               percent_cured [%], percent of grassland fuel that is cured
+
+def seasonal_curing(yr, mon, day, start_mon = 3, start_day = 12):
     # store default values of percent_cured every 10 days of the year
     PERCENT_CURED = [
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
+        96.0,  # "winter" cured value
         95.0,
         93.0,
         92.0,
@@ -190,16 +192,19 @@ def seasonal_curing(julian_date):
         75.0,
         78.9,
         86.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0
+        96.0  # "winter" cured value for rest of year
     ]
-    # linear interpolation between every default 10-day value
-    jd_class = julian_date // 10
-    first = PERCENT_CURED[jd_class]
-    last = PERCENT_CURED[jd_class + 1]
-    period_frac = (julian_date % 10) / 10.0
-    return first + (last - first) * period_frac
+    # find last start date (year - 1 or year)
+    shift = datetime.date(yr, mon, day) - datetime.date(yr, start_mon, start_day)
+    if shift.days < 0:
+        shift = datetime.date(yr, mon, day) - datetime.date(yr - 1, start_mon, start_day)
+    days_in = shift.days + 1  # Start date is first value different (not 0th)
+    # check if date is in green phase or winter phase
+    if days_in < (len(PERCENT_CURED) - 1) * 10:
+        # linear interpolation between every 10-day value
+        per_cur0 = PERCENT_CURED[days_in // 10]
+        per_cur1 = PERCENT_CURED[days_in // 10 + 1]
+        period_frac = (days_in % 10) / 10.0
+        return per_cur0 + (per_cur1 - per_cur0) * period_frac
+    else:
+        return PERCENT_CURED[-1]

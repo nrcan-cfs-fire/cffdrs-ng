@@ -111,9 +111,12 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       print("Summarizing " + str(stn) + " to daily")
     by_stn["pseudo_DATE"] = by_stn.apply(lambda row:
       pseudo_date(row["yr"], row["mon"], row["day"], row["hr"], reset_hr), axis = 1)
-    
+    # first year for transition btwn matted and standing (esp if southern hemisphere)
+    DATE_GRASS_STANDING = datetime.date(by_stn.reset_index().at[0, "yr"],
+      NG_FWI.MON_STANDING, NG_FWI.DAY_STANDING)
+
     for _, by_date in by_stn.groupby("pseudo_DATE", sort = False):
-      by_date = by_date.reset_index()
+      by_date = by_date.reset_index(drop = True)
 
       # if this pseudo-date doesn't have more than 12 hours, skip
       if by_date.shape[0] <= 12:
@@ -160,7 +163,7 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       results["isi_smooth"].append(by_date.at[peak_time, "isi_smooth"])
 
       d = datetime.date(by_date.at[0, "yr"], by_date.at[0, "mon"], by_date.at[0, "day"])
-      if (int(d.strftime("%j")) < NG_FWI.DATE_GRASS):
+      if d < DATE_GRASS_STANDING:
         standing = False
         mcgfmc = by_date.at[peak_time, "mcgfmc_matted"]
       else:
