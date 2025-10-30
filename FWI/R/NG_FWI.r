@@ -31,7 +31,9 @@ FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
 DC_INTERCEPT <- 2.8
 
-DATE_GRASS <- 181
+# Transition from matted to standing grass in a calendar year
+MON_STANDING <- 7
+DAY_STANDING <- 1
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
@@ -653,6 +655,9 @@ rain_since_intercept_reset <- function(rain, canopy) {
   # FIX: just use loop for now so it matches C code
   canopy <- list(rain_total_prev = prec_cumulative,
     drying_since_intercept = canopy_drying)
+  # first year for transition btwn matted and standing (esp if southern hemisphere)
+  # does not account for fire seasons continuous across multiple years
+  DATE_GRASS_STANDING <- make_date(r[1, yr], MON_STANDING, DAY_STANDING)
   results <- NULL
   N <- nrow(r)
   for (i in 1:N) {
@@ -733,7 +738,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
       cur$grass_fuel_load
     )
 
-    if (julian(cur$mon, cur$day) < DATE_GRASS) {
+    # check if matted to standing transition happened already
+    if (cur$date < DATE_GRASS_STANDING) {
       standing <- FALSE
       mcgfmc <- mcgfmc_matted
     } else {
@@ -831,21 +837,20 @@ hFWI <- function(
     wx[, minute := 0]
   }
   # check for optional columns that can be calculated
-  hadDate <- "date" %in% og_names
   hadTimestamp <- "timestamp" %in% og_names
-  if (!hadDate) {
-    wx[, date := as.character(as.Date(sprintf("%04d-%02d-%02d", yr, mon, day)))]
-  }
+  hadDate <- "date" %in% og_names
   if (!hadTimestamp) {
-    # as_datetime() defaults to UTC, but we only use timestamp for it's combined yr, mon, day, hr
-    wx[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00",
-      yr, mon, day, hr, minute))]
+    # as_datetime() defaults to UTC, only use timestamp for combined yr, mon, day, hr
+    wx[, timestamp := make_datetime(yr, mon, day, hr, minute)]
+  }
+  if (!hadDate) {
+    wx[, date := make_date(yr, mon, day)]
   }
   if (!"grass_fuel_load" %in% og_names) {
-    wx$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
+    wx[, grass_fuel_load := DEFAULT_GRASS_FUEL_LOAD]
   }
   if (!"percent_cured" %in% og_names) {
-    wx$percent_cured <- seasonal_curing(julian(wx$mon, wx$day))
+    wx[, percent_cured := Vectorize(seasonal_curing)(yr, mon, day)]
   }
   if (!"solrad" %in% og_names) {
     if (!silent) {

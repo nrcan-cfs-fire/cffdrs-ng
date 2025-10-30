@@ -609,6 +609,7 @@ def _stnHFWI(
     canopy = {"rain_total_prev": prec_cumulative,
         "drying_since_intercept": canopy_drying}
     # first year for transition btwn matted and standing (esp if southern hemisphere)
+    # does not account for fire seasons continuous across multiple years
     DATE_GRASS_STANDING = datetime.date(r.at[0, "yr"], MON_STANDING, DAY_STANDING)
     results = []
     for i in range(len(r)):

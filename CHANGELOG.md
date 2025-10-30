@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## To be released
+
+### Changed
+- Leap years are properly accounted for in the transition between matted and standing GFMC, default percent_cured values, and in `get_sunlight()` (*Python* and *R*)
+- Transition between matted and standing GFMC and start of grassland fuel green up (decrease in `percent_cured`) now defined by calendar date instead of Julian date (ordinal date) (*Python* and *R*)
+
+| Transition                          | Old Value (Julian date) | New Value (Calendar date) |
+| ----------------------------------- | ----------------------- | ------------------------- |
+| End of matted grassland fuel        | 180                     | June 30th                 |
+| Start of standing grassland fuel    | 181                     | July 1st                  |
+| Start of green up (`percent_cured`) | 71 (implicit)           | March 12th                |
+
+### Fixed
+- `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)
+
 ## 2025-10-20
 
 ### Added
@@ -135,5 +150,4 @@ All notable changes to this project will be documented in this file. The format 
 - **make_inputs** as it is exceeded by `hFWI()` which performs the same jobs and will continue to be updated (*Python* and *R*)
 ### Removed
 - Debugging print statements in `standing_grass_spread_ROS()` function (*R*)
-
 - Incorrect and unused `dmc_to_moisture_percent()` function in **util.r** (*R*)

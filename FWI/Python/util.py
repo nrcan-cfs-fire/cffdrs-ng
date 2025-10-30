@@ -75,7 +75,7 @@ def find_rh(q, temp):
 def get_sunlight(df, get_solrad = False):
     df.columns = map(str.lower, df.columns)
     # columns to split along unique days
-    cols_day = ["lat", "long", "date", "timezone"]
+    cols_day = ["lat", "long", "timezone", "date"]
     # required columns
     cols_req = ["lat", "long", "timezone", "timestamp"]
     if get_solrad:
@@ -84,6 +84,8 @@ def get_sunlight(df, get_solrad = False):
         if n not in df.columns:
             raise RuntimeError(f'Expected column "{n}" not found')
     df_copy = df.copy()
+    if "date" not in df_copy.columns:
+        df_copy["date"] = df_copy["timestamp"].apply(lambda ts: ts.date())
     
     # calculate sunrise and sunset
     # drop duplicate days
@@ -160,8 +162,8 @@ def get_sunlight(df, get_solrad = False):
 # @param yr             Year
 # @param mon            Month of year
 # @param day            Day of month
-# @param start_mon      Month of grassland fuel greenup (Boreal Plains Mar 12)
-# @param start_day      Day of grassland fuel greenup (Boreal Plains Mar 12)
+# @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
+# @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
 # @return               percent_cured [%], percent of grassland fuel that is cured
 
 def seasonal_curing(yr, mon, day, start_mon = 3, start_day = 12):
@@ -194,12 +196,12 @@ def seasonal_curing(yr, mon, day, start_mon = 3, start_day = 12):
         86.0,
         96.0  # "winter" cured value for rest of year
     ]
-    # find last start date (year - 1 or year)
+    # find previous green up start date (year - 1 or year)
     shift = datetime.date(yr, mon, day) - datetime.date(yr, start_mon, start_day)
     if shift.days < 0:
         shift = datetime.date(yr, mon, day) - datetime.date(yr - 1, start_mon, start_day)
-    days_in = shift.days + 1  # Start date is first value different (not 0th)
-    # check if date is in green phase or winter phase
+    days_in = shift.days + 1  # green up start date is first value different (not 0th)
+    # check if date is in green phase or winter (cured) phase
     if days_in < (len(PERCENT_CURED) - 1) * 10:
         # linear interpolation between every 10-day value
         per_cur0 = PERCENT_CURED[days_in // 10]
