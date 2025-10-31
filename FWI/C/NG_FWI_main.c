@@ -14,13 +14,14 @@ int main(int argc, char *argv[])
 {
   /*  CSV headers */
   static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
-  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,sunrise,sunset,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load,mcgfmc_matted,mcgfmc_standing,dmc_before_rain,dc_before_rain,prec_cumulative,conpy_drying";
+  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load,timezone,sunrise,sunset,sunlight_hours,mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,prec_cumulative,canopy_drying";
   if (14 != argc)
   {
     printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <Starting mcFFMC> <starting mc GFMC matted> <starting mc GFMC standing> <starting DMC before rain> <starting DC before rain> <starting cumulative precipitation> <starting canopy drying> <input file> <output file>\n\n", argv[0]);
     printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
     printf("All times should be local standard time\n");
     printf("One of <starting FFMC> and <Starting mcFFMC> needs to be \"n\"\n");
+    printf("If <starting mc GFMC matted> or <starting mc GFMC standing> are set to \"n\" they will be set according to <starting FFMC> and <Starting mcFFMC>\n");
     printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
     printf("%s\n\n", header);
     exit(1);
@@ -28,6 +29,7 @@ int main(int argc, char *argv[])
 
   //double temp_range = read_temp_range(argv[12], header);
  
+
 
 
 
@@ -84,17 +86,49 @@ int main(int argc, char *argv[])
       printf(" /n/n *****   One and only one of <starting FFMC> and <Starting mcFFMC> can be specified the other must be NULL\n");
       exit(1);
   }
-  double mcgfmc_matted_old = atof(argv[6]);
-  if (mcgfmc_matted_old < 0)
-  {
-    printf(" /n/n *****   starting mcgfmc matted must be >=0\n");
-    exit(1);
+  int matted_tracker = 0;
+  int standing_tracker = 0;
+  double mcgfmc_matted_old;
+  if(*argv[6] == 'n'){
+    matted_tracker+=1;
+    if(mcffmc_old == -1){
+      matted_tracker += 10;
+      mcgfmc_matted_old = fine_fuel_moisture_from_code(ffmc_old);
+    }
+    else{
+      matted_tracker += 100;
+      mcgfmc_matted_old = mcffmc_old;
+    }
   }
-  double mcgfmc_standing_old = atof(argv[7]);
-  if (mcgfmc_standing_old < 0)
-  {
-    printf(" /n/n *****   starting mcgfmc standing must be >=0\n");
-    exit(1);
+  else{
+    matted_tracker += 1000;
+    mcgfmc_matted_old = atof(argv[6]);
+    if (mcgfmc_matted_old < 0){
+      matted_tracker += 10000;
+      printf(" /n/n *****   starting mcgfmc matted must be >=0\n");
+      exit(1);
+    }
+  }
+  double mcgfmc_standing_old;
+  if(*argv[7] == 'n'){
+    standing_tracker += 1;
+    if(mcffmc_old == -1){
+      standing_tracker += 10;
+      mcgfmc_standing_old = fine_fuel_moisture_from_code(ffmc_old);
+    }
+    else{
+      standing_tracker += 100;
+      mcgfmc_standing_old = mcffmc_old;
+    }
+  }
+  else{
+    standing_tracker += 1000;
+    mcgfmc_standing_old = atof(argv[7]);
+    if (mcgfmc_standing_old < 0){
+      standing_tracker += 10000;
+      printf(" /n/n *****   starting mcgfmc standing must be >=0\n");
+      exit(1);
+    }
   }
   const double dmc_before_rain_old = atof(argv[8]);
   if (dmc_before_rain_old < 0)
@@ -122,7 +156,7 @@ int main(int argc, char *argv[])
   }
 
    
-  /* printf("TZ=%d    start ffmc=%f  dmc=%f\n", TZadjust, ffmc_old, dmc_old); */
+
   double mcffmc;
   if(ffmc_old==-1){
     mcffmc = mcffmc_old;
@@ -223,8 +257,8 @@ int main(int argc, char *argv[])
     double fwi = fire_weather_index(isi, bui);
     double dsr = daily_severity_rating(fwi);
     
-    mcgfmc_matted = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc_matted);
-    mcgfmc_standing = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain*0.06, 0, mcgfmc_standing);
+    mcgfmc_matted = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc_matted, cur.grass_fuel_load);
+    mcgfmc_standing = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain*0.06, 0, mcgfmc_standing, cur.grass_fuel_load);
     mcgfmc = mcgfmc_standing;
     bool standing = true;
     if(julian(cur.mon, cur.day) < DATE_GRASS){
@@ -235,9 +269,10 @@ int main(int argc, char *argv[])
     double gfmc = grass_moisture_code(mcgfmc, cur.percent_cured, cur.ws);
     double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured, standing);
     double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
-    /* printf("\n"); */
+    
+    double sunlight_hours = sunset-sunrise;
     save_csv(out,
-             "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.4f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n",
+             "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
              cur.lat,
              cur.lon,
              cur.year,
@@ -249,8 +284,13 @@ int main(int argc, char *argv[])
              cur.ws,
              cur.rain,
              cur.solrad,
+             cur.percent_cured,
+             cur.grass_fuel_load,
+             TZadjust,
              cur.sunrise,
              cur.sunset,
+             sunlight_hours,
+             mcffmc,
              ffmc,
              dmc,
              dc,
@@ -258,17 +298,11 @@ int main(int argc, char *argv[])
              bui,
              fwi,
              dsr,
+             mcgfmc_matted,
+             mcgfmc_standing,
              gfmc,
              gsi,
              gfwi,
-             mcffmc,
-             mcgfmc,
-             cur.percent_cured,
-             cur.grass_fuel_load,
-             mcgfmc_matted,
-             mcgfmc_standing,
-             dmc_before_rain,
-             dc_before_rain,
              canopy.rain_total,
              canopy.drying_since_intercept);
     /*     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
@@ -299,7 +333,7 @@ int main(int argc, char *argv[])
                cur.grass_fuel_load); */
     old = cur;
     err = read_row_inputs(inp, &cur, &flag_holder);
-    printf("%d\n",err);
+    
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
     {
       printf("Latitude and Longitude must be constant\n");
@@ -313,6 +347,8 @@ int main(int argc, char *argv[])
       exit(1);
     }
   } /* end the main while(err>0)  */
+
+  
 
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
