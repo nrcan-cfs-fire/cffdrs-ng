@@ -155,7 +155,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
 
       # calculate some extra variables before creating datatable all at once
       d <- make_date(by_date[1, yr], by_date[1, mon], by_date[1, day])
-      if (d < DATE_GRASS_STANDING) {
+      if (GRASS_TRANSITION && d < DATE_GRASS_STANDING) {
         standing <- FALSE
         mcgfmc <- by_date[peak_time, mcgfmc_matted]
       } else {

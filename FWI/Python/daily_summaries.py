@@ -163,7 +163,7 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       results["isi_smooth"].append(by_date.at[peak_time, "isi_smooth"])
 
       d = datetime.date(by_date.at[0, "yr"], by_date.at[0, "mon"], by_date.at[0, "day"])
-      if d < DATE_GRASS_STANDING:
+      if NG_FWI.GRASS_TRANSITION and d < DATE_GRASS_STANDING:
         standing = False
         mcgfmc = by_date.at[peak_time, "mcgfmc_matted"]
       else:

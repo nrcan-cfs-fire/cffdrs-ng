@@ -1,37 +1,44 @@
 #' Computes hourly FWI indices for an input hourly weather stream
+
+# Import packages
 library(lubridate)
 library(data.table)
+
+# Import from other CFFDRS code files
 source("util.r")
 
-
-DAILY_K_DMC_DRYING <- 1.894
-DAILY_K_DC_DRYING <- 3.937
-
-HOURLY_K_DMC <- 2.22
-HOURLY_K_DC <- 0.085
-DMC_OFFSET_TEMP <- 0.0
-DC_OFFSET_TEMP <- 0.0
-
-DC_DAILY_CONST <- 0.36
-DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
-
-OFFSET_SUNRISE <- 0 ##2.5
-OFFSET_SUNSET <- 0 ##0.5
-
-# Fuel Load (kg/m^2)
-DEFAULT_GRASS_FUEL_LOAD <- 0.35
-
-# default startup values
+# Startup moisture code values
 FFMC_DEFAULT <- 85.0
 DMC_DEFAULT <- 6.0
 DC_DEFAULT <- 15.0
 
+# FFMC moisture content to code conversion factor
 MPCT_TO_MC <- 250.0 * 59.5 / 101.0
+
+# Wetting parameters
+DAILY_K_DMC_DRYING <- 1.894
+DAILY_K_DC_DRYING <- 3.937
+DC_DAILY_CONST <- 0.36
+DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
+
+# Precipitation intercept
 FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
 DC_INTERCEPT <- 2.8
 
-# Transition from matted to standing grass in a calendar year
+# Drying parameters
+OFFSET_SUNRISE <- 0
+OFFSET_SUNSET <- 0
+HOURLY_K_DMC <- 2.22
+HOURLY_K_DC <- 0.015
+DMC_OFFSET_TEMP <- 0.0
+DC_OFFSET_TEMP <- 0.0
+
+# Grassland fuel Load (kg/m^2)
+DEFAULT_GRASS_FUEL_LOAD <- 0.35
+
+# Transition from matted to standing grass in a calendar year (default July 1st)
+GRASS_TRANSITION <- TRUE  # FALSE for GFMC to always be standing
 MON_STANDING <- 7
 DAY_STANDING <- 1
 
@@ -47,22 +54,22 @@ mcffmc_to_ffmc <- function(mcffmc) {
 
 # Duff Moisture Code (DMC) to duff moisture content (%)
 dmc_to_mcdmc <- function(dmc) {
-   return((280 / exp(dmc / 43.43)) + 20)
+  return((280 / exp(dmc / 43.43)) + 20)
 }
 
 # duff moisture content (%) to DMC
 mcdmc_to_dmc <- function(mcdmc) {
-   return(43.43 * log(280 / (mcdmc - 20)))
+  return(43.43 * log(280 / (mcdmc - 20)))
 }
 
 # Drought Code (DC) to DC moisture content(%)
 dc_to_mcdc <- function(dc) {
-   return(400 * exp(-dc / 400))
+  return(400 * exp(-dc / 400))
 }
 
 # DC moisture content (%) to DC
 mcdc_to_dc <- function(mcdc) {
-   return(400 * log(400 / mcdc))
+  return(400 * log(400 / mcdc))
 }
 
 #' Calculate hourly fine fuel moisture content. Needs to be converted to get FFMC
@@ -204,7 +211,7 @@ drought_code <- function(
     } else {  # previously passed threshold
       rw <- prec * 0.83
     }
-    mr <- last_mcdc + 3.937 * rw / 2.0
+    mr <- last_mcdc + DAILY_K_DC_DRYING * rw / 2.0
   } else {
     mr <- last_mcdc
   }
@@ -220,9 +227,8 @@ drought_code <- function(
   if ((hr >= sunrise_start && hr <= sunset_start) ||
     (hr < 6 && (hr + 24 >= sunrise_start && hr + 24 <= sunset_start))) {  # daytime
     offset <- 3.0
-    mult <- 0.015
     if (temp > 0) {
-      pe <- mult * temp + offset / 16.0
+      pe <- HOURLY_K_DC * (temp + DC_OFFSET_TEMP) + offset / 16.0
     } else {
       pe <- 0
     }
@@ -739,7 +745,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
     )
 
     # check if matted to standing transition happened already
-    if (cur$date < DATE_GRASS_STANDING) {
+    if (GRASS_TRANSITION && cur$date < DATE_GRASS_STANDING) {
       standing <- FALSE
       mcgfmc <- mcgfmc_matted
     } else {

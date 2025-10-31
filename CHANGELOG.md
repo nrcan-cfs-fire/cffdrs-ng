@@ -4,15 +4,21 @@ All notable changes to this project will be documented in this file. The format 
 
 ## To be released
 
+### Added
+- Option when running `hFWI()` to have a transition from matted to standing grassland fuel (default, for regions with winter snowfall), or stick with standing instead (*Python* and *R*)
+- Standard `hFWI()` and `generate_daily_summaries()` output data (.csv files) using PRF 2007 hourly weather data
+
 ### Changed
-- Leap years are properly accounted for in the transition between matted and standing GFMC, default percent_cured values, and in `get_sunlight()` (*Python* and *R*)
-- Transition between matted and standing GFMC and start of grassland fuel green up (decrease in `percent_cured`) now defined by calendar date instead of Julian date (ordinal date) (*Python* and *R*)
+- Leap years are properly accounted for in the transition between matted and standing GFMC, default `percent_cured` values, and in `get_sunlight()` (*Python* and *R*)
+- Transition between matted and standing GFMC and start of grassland fuel green up now defined by calendar date instead of Julian date (ordinal date) (*Python* and *R*)
 
 | Transition                          | Old Value (Julian date) | New Value (Calendar date) |
 | ----------------------------------- | ----------------------- | ------------------------- |
 | End of matted grassland fuel        | 180                     | June 30th                 |
 | Start of standing grassland fuel    | 181                     | July 1st                  |
 | Start of green up (`percent_cured`) | 71 (implicit)           | March 12th                |
+
+- Reorganized **NG_FWI** header parameters (*Python* and *R*)
 
 ### Fixed
 - `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)

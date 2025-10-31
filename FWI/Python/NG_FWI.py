@@ -1,45 +1,50 @@
 # Computes hourly FWI indices for an input hourly weather stream
+
+# Import packages
 import datetime
 import logging
 import argparse
 from math import exp, log, pow, sqrt
-
 import pandas as pd
 
+# Import from other CFFDRS code files
 import util
-
 
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
-DAILY_K_DMC_DRYING = 1.894
-DAILY_K_DC_DRYING = 3.937
-
-HOURLY_K_DMC = 2.22
-HOURLY_K_DC = 0.085
-DMC_OFFSET_TEMP = 0.0
-DC_OFFSET_TEMP = 0.0
-
-DC_DAILY_CONST = 0.36
-DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
-
-OFFSET_SUNRISE = 0 #2.5
-OFFSET_SUNSET = 0 #0.5
-
-# Fuel Load (kg/m^2)
-DEFAULT_GRASS_FUEL_LOAD = 0.35
-
-# default startup values
+# Startup moisture code values
 FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
 
+# FFMC moisture content to code conversion factor
 MPCT_TO_MC = 250.0 * 59.5 / 101.0
+
+# Wetting parameters
+DAILY_K_DMC_DRYING = 1.894
+DAILY_K_DC_DRYING = 3.937
+DC_DAILY_CONST = 0.36
+DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
+
+# Precipitation intercept
 FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
-# Transition from matted to standing grass in a calendar year
+# Drying parameters
+OFFSET_SUNRISE = 0
+OFFSET_SUNSET = 0
+HOURLY_K_DMC = 2.22
+HOURLY_K_DC = 0.015
+DMC_OFFSET_TEMP = 0.0
+DC_OFFSET_TEMP = 0.0
+
+# Grassland Fuel Load (kg/m^2)
+DEFAULT_GRASS_FUEL_LOAD = 0.35
+
+# Transition from matted to standing grass in a calendar year (default July 1st)
+GRASS_TRANSITION = True  # False for GFMC to always be standing
 MON_STANDING = 7
 DAY_STANDING = 1
 
@@ -214,7 +219,7 @@ def drought_code(
             rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
         else:  # previously passed threshold
             rw = prec * 0.83
-        mr = last_mcdc + 3.937 * rw / 2.0
+        mr = last_mcdc + DAILY_K_DC_DRYING * rw / 2.0
     else:
         mr = last_mcdc
     
@@ -228,9 +233,8 @@ def drought_code(
     if (sunrise_start <= hr <= sunset_start or
         (hr < 6 and sunrise_start <= hr + 24 <= sunset_start)):  # daytime
         offset = 3.0
-        mult = 0.015
         if temp > 0:
-            pe = mult * temp + offset / 16.0
+            pe = HOURLY_K_DC * (temp + DC_OFFSET_TEMP) + offset / 16.0
         else:
             pe = 0
         invtau = pe / 400.0
@@ -688,7 +692,7 @@ def _stnHFWI(
         )        
         
         # check if matted to standing transition happened already
-        if cur["date"] < DATE_GRASS_STANDING:
+        if GRASS_TRANSITION and cur["date"] < DATE_GRASS_STANDING:
             standing = False
             mcgfmc = mcgfmc_matted
         else:
