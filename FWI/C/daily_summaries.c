@@ -157,9 +157,6 @@ void pseudo_date(int year, int month, int day, int hour, int reset_hour, struct 
 
 //daily summary for a specific pseudo-date
 struct daily_summary generate_daily_summary(struct day_vals day, int reset_hour){
-    //printf("start generate daily summaries\n");
-
-    printf("hour: %d\n", day.day[0]->hour);
 
     const double spread_threshold_isi = 5.0;
     struct daily_summary summary;
@@ -173,13 +170,12 @@ struct daily_summary generate_daily_summary(struct day_vals day, int reset_hour)
     }
     double *ws_smmoth_pt= (double*)malloc(sizeof(double)*day.hour_slots_filled);
     smooth_5pt(ws_pt, day.hour_slots_filled, ws_smmoth_pt);
-    //printf("smoothing function called\n");
 
     //calculate smoothed isi and find peak info
     int ffmc_max_spot = 0;
     int peak_time_spot = 0;
     int duration = 0;
-    printf("\t hours filled: %d\n",day.hour_slots_filled);
+    
     for(i = 0; i < day.hour_slots_filled; i++){
         day.day[i]->smooth_ws = ws_smmoth_pt[i];
         day.day[i]->smooth_isi = initial_spread_index(day.day[i]->smooth_ws, day.day[i]->ffmc);
@@ -198,8 +194,6 @@ struct daily_summary generate_daily_summary(struct day_vals day, int reset_hour)
     if(day.day[ffmc_max_spot]->ffmc < 85.0){
         peak_time_spot =  12;
     }
-    //printf("starting summary struct building\n");
-    printf("\t\t\t peak time spot: %d",peak_time_spot);
     summary.bui = day.day[peak_time_spot]->bui;
     summary.dc = day.day[peak_time_spot]->dc;
     summary.dmc = day.day[peak_time_spot]->dmc;
@@ -258,32 +252,31 @@ void check_header_daily_summaries(FILE *inp, const char *header){
         err = fscanf(inp, "%c", &intake[0]);
     }
 
-    if((pos != 236) || !matching){
+    if((pos != 223) || !matching){
         printf("Header does not match\n");
         exit(1); 
     }
 }
 
 int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *buffer, int reset_hour){
-    //printf("read in function start\n");
+    
     bool day_change_flag = false;
     int err = 0;
     int round = 0;
     while(!day_change_flag){
-        printf("round: %d\n", round);
+        
         round+=1;
         if(buffer->year == -1){
-            //printf("need read in of line\n");
-            //struct hour_vals hv;
             char waste_c[1];
             double waste_lf;
+            int waste_int;
             int year, month, day, hour;
             double ws, ffmc, dmc, dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi, mcgfmc_matted, mcgfmc_standing, sunrise, sunset, perc_cured;
             err = fscanf(inp,
-                        "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf\n",
+                        "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf\n",
                         &waste_lf,
                         waste_c,
-                        &waste_lf,
+                        &perc_cured,
                         waste_c,
                         &year,
                         waste_c,
@@ -303,9 +296,19 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
                         waste_c,
                         &waste_lf,
                         waste_c,
+                        &perc_cured,
+                        waste_c,
+                        &waste_lf,
+                        waste_c,
+                        &waste_int,
+                        waste_c,
                         &sunrise,
                         waste_c,
                         &sunset,
+                        waste_c,
+                        &waste_lf,
+                        waste_c,
+                        &waste_lf,
                         waste_c,
                         &ffmc,
                         waste_c,
@@ -321,6 +324,10 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
                         waste_c,
                         &dsr,
                         waste_c,
+                        &mcgfmc_matted,
+                        waste_c,
+                        &mcgfmc_standing,
+                        waste_c,
                         &gfmc,
                         waste_c,
                         &gsi,
@@ -329,26 +336,8 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
                         waste_c,
                         &waste_lf,
                         waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &perc_cured,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &mcgfmc_matted,
-                        waste_c,
-                        &mcgfmc_standing,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
                         &waste_lf);
-            //printf("scanned\n");
-            //buffer = malloc(sizeof(struct hour_vals));   
-            printf("trasnfering to buffer, err = %d\n",err);
+
             buffer->year = year;
             buffer->month = month;
             buffer->day = day;
@@ -369,23 +358,22 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
             buffer->sunrise = sunrise;
             buffer->sunset = sunset;
             buffer->perc_cured = perc_cured;
-            //printf("exiting null if\n");             
+                     
         }
         if(err == EOF){
             break;
         }
         struct pseudo_date *pd = (struct pseudo_date*)malloc(sizeof(struct pseudo_date));
         pseudo_date(buffer->year, buffer->month, buffer->day, buffer->hour, reset_hour, pd);
-        //printf("step2 read in: %d %d %d\n",pd.year, pd.jd, buffer->hour);
+        
         if(day->hour_slots_filled == 0){
-            printf("\ttrigger 1 read in  %d %d\n",pd->jd,pd->year);
-            //printf("\t\t%d %d",day->p_day->jd, day->p_day->jd);
+            
             day->day[0]->bui = buffer->bui;
             day->day[0]->day = buffer->day;
             day->day[0]->dc = buffer->dc;
             day->day[0]->dmc = buffer->dmc;
             day->day[0]->dsr = buffer->dsr;
-            printf("\tstep 1    %d %d\n",pd->jd,pd->year);
+            
             day->day[0]->ffmc = buffer->ffmc;
             day->day[0]->fwi = buffer->fwi;
             day->day[0]->gfmc = buffer->gfmc;
@@ -393,7 +381,7 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
             day->day[0]->gsi = buffer->gsi;
             day->day[0]->hour = buffer->hour;
             day->day[0]->isi = buffer->isi;
-            printf("\tstep 2   %d %d\n",pd->jd,pd->year);
+           
             day->day[0]->mcgfmc_matted = buffer->mcgfmc_matted;
             day->day[0]->mcgfmc_standing = buffer->mcgfmc_standing;
             day->day[0]->month = buffer->month;
@@ -402,62 +390,59 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
             day->day[0]->smooth_ws = buffer->smooth_ws;
             day->day[0]->sunrise = buffer->sunrise;
             day->day[0]->sunset = buffer->sunset;
-            printf("\tstep 3   %d %d\n",pd->jd,pd->year);
+          
             day->day[0]->ws = buffer->ws;
             day->day[0]->year = buffer->year;
             day->hour_slots_filled = 1;
-            //struct pseudo_date pd_lock;
-            //pd_lock.jd = pd.jd;
-            //pd_lock.year = pd.year;
+     
             day->p_day->jd = pd->jd;
             day->p_day->year = pd->year;
-            //printf("\t\t\t\t\t1  %d\n", day->day[0]->year);
+          
             buffer->year = -1;
-            printf("\tstep 4   %d %d\n",pd->jd,pd->year);
-            //printf("\t\t\t\t\t2  %d\n", day->day[0]->year);
+        
         }
         else if((pd->jd == day->p_day->jd) && (pd->year == day->p_day->year)){
-            printf("\ttrigger 2 read in %d %d %d %d     -   %d\n",pd->jd,day->p_day->jd,pd->year,day->p_day->year, day->hour_slots_filled);
+           
             day->day[day->hour_slots_filled]->bui = buffer->bui;
             day->day[day->hour_slots_filled]->day = buffer->day;
             day->day[day->hour_slots_filled]->dc = buffer->dc;
             day->day[day->hour_slots_filled]->dmc = buffer->dmc;
             day->day[day->hour_slots_filled]->dsr = buffer->dsr;
-            printf("\tstep 1\n");
+       
             day->day[day->hour_slots_filled]->ffmc = buffer->ffmc;
             day->day[day->hour_slots_filled]->fwi = buffer->fwi;
             day->day[day->hour_slots_filled]->gfmc = buffer->gfmc;
             day->day[day->hour_slots_filled]->gfwi = buffer->gfwi;
             day->day[day->hour_slots_filled]->gsi = buffer->gsi;
             day->day[day->hour_slots_filled]->hour = buffer->hour;
-            printf("\tstep 2\n");
+      
             day->day[day->hour_slots_filled]->isi = buffer->isi;
             day->day[day->hour_slots_filled]->mcgfmc_matted = buffer->mcgfmc_matted;
             day->day[day->hour_slots_filled]->mcgfmc_standing = buffer->mcgfmc_standing;
             day->day[day->hour_slots_filled]->month = buffer->month;
             day->day[day->hour_slots_filled]->perc_cured = buffer->perc_cured;
             day->day[day->hour_slots_filled]->smooth_isi = buffer->smooth_isi;
-            printf("\tstep 3\n");
+        
             day->day[day->hour_slots_filled]->smooth_ws = buffer->smooth_ws;
             day->day[day->hour_slots_filled]->sunrise = buffer->sunrise;
             day->day[day->hour_slots_filled]->sunset = buffer->sunset;
             day->day[day->hour_slots_filled]->ws = buffer->ws;
             day->day[day->hour_slots_filled]->year = buffer->year;
-            //day->day[day->hour_slots_filled] = buffer;
+        
             day->hour_slots_filled += 1;
             buffer->year = -1;
-            printf("\tstep 4\n");
+        
         }
         else{
-            printf("\ttrigger 3 read in   -  %d %d %d %d\n",day->p_day->jd, pd->jd, day->p_day->year, pd->year);
+          
             day_change_flag = true;
         }
-        printf("%d %d\n",pd->jd, pd->year);
+    
         free(pd);
         pd=NULL;
-        printf("iteration done\n");
+    
     }
-    printf("exiting read in function: %d\n", day->hour_slots_filled);
+
     return err;
 }
 
@@ -466,7 +451,7 @@ int main(int argc, char *argv[]){
     //################# args are --input file --output file
 
     //headers for csvs
-    static const char *header_in = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,sunrise,sunset,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,mcffmc,mcgfmc,percent_cured,grass_fuel_load,mcgfmc_matted,mcgfmc_standing,dmc_before_rain,dc_before_rain,prec_cumulative,conpy_drying";
+    static const char *header_in = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load,timezone,sunrise,sunset,sunlight_hours,mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,prec_cumulative,canopy_drying";
     static const char *header_out = "yr,mon,day,sunrise,sunset,peak_hr,duration,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,ws_smooth,isi_smooth,gsi_smooth";
 
     if(argc != 4){
@@ -494,16 +479,15 @@ int main(int argc, char *argv[]){
 
 
     check_header_daily_summaries(inp, header_in);
-    //printf("header good\n");
+    
     struct hour_vals *buffer;
     buffer = (struct hour_vals*)malloc(sizeof(struct hour_vals));
     buffer->year=-1;
-    //int *buffer_len = (int*)malloc(sizeof(int));
-    //buffer_len = 0;
+  
     FILE *out = fopen(argv[2], "w");
     fprintf(out, "%s\n", header_out);
     int err = 1;
-    //printf("into loop\n");
+   
     while(err>0){
         //run summary function for pseudo day
         struct day_vals *day = (struct day_vals*)malloc(sizeof(struct day_vals));
@@ -513,34 +497,34 @@ int main(int argc, char *argv[]){
         }
         day->hour_slots_filled=0;
         err = read_row_daily_summaries(inp, day, buffer, reset_hour);
-        //printf("row read in %d\n",err);
-        printf("buffer mem %d", buffer);
-        printf("buffer: %d %d %d %d\n", buffer->year, buffer->month, buffer->day, buffer->hour);
-        struct daily_summary summary = generate_daily_summary(*day,reset_hour);
-        //printf("!!!!!!!!!!\n");
+   
+        if(day->hour_slots_filled > 12){
+            struct daily_summary summary = generate_daily_summary(*day,reset_hour);
+            fprintf(out, "%02d,%02d,%02d,%.4f,%.4f,%02d,%02d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
+            summary.year,
+            summary.month,
+            summary.day,
+            summary.sunrise,
+            summary.sunset,
+            summary.peak_hour,
+            summary.duration,
+            summary.ffmc,
+            summary.dmc,
+            summary.dc,
+            summary.isi,
+            summary.bui,
+            summary.fwi,
+            summary.dsr,
+            summary.gfmc,
+            summary.gsi,
+            summary.gfwi,
+            summary.ws_smooth,
+            summary.isi_smooth,
+            summary.gsi_smooth);    
+        }
+      
 
         //output
-        fprintf(out, "%d,%d,%d,%f,%f,%d,%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
-                summary.year,
-                summary.month,
-                summary.day,
-                summary.sunrise,
-                summary.sunset,
-                summary.peak_hour,
-                summary.duration,
-                summary.ffmc,
-                summary.dmc,
-                summary.dc,
-                summary.isi,
-                summary.bui,
-                summary.fwi,
-                summary.dsr,
-                summary.gfmc,
-                summary.gsi,
-                summary.gfwi,
-                summary.ws_smooth,
-                summary.isi_smooth,
-                summary.gsi_smooth);
 
         free(day->p_day);
         for(int i = 0; i< 24; i++){
