@@ -38,7 +38,7 @@ double read_temp_range(char *file, const char *header){
 
   fclose(inp);
   double temp_range = temp_max - temp_min;
-  printf("%f %f %f\n", temp_max, temp_min, temp_range);
+  
   return temp_range;
 
 }
@@ -205,33 +205,32 @@ void check_header(FILE *input, const char *header, struct flags *f)
 
   int in_buffer_len = 0;
 
-  printf("%d %d\n", strlen(header), in_buffer_len);
+  
 
   char intake[1];
   int err = fscanf(input, "%c", &intake[0]);
-  printf("%d %d %c\n", strlen(header), in_buffer_len, intake[0]);
+  
   
   while(intake[0] != '\n'){
     if (0 == err)
     {
-      printf("Error reading file\n");
+      
       exit(1);
     }
     in_buffer[in_buffer_len] = intake[0];
-    printf("%c \n",intake[0]);
+    
     in_buffer_len++;
-    //printf("%d\n",in_buffer_len);
+    
 
 
     err = fscanf(input, "%c", &intake[0]);
     if(in_buffer_len==75){
-      printf("aaaaaaaaa%cbbbbbbbbbbb\n", intake[0]);
+      
       intake[0] = '\n';
     }
   }
-  printf("\n");
+  
   if(in_buffer_len > strlen(header)){
-    printf("%d,%d, %c\n", in_buffer_len, strlen(header), intake[0]);
     printf("Header to long\n");
     exit(1);
   }
@@ -254,7 +253,7 @@ void check_header(FILE *input, const char *header, struct flags *f)
   char p_buffer[120];
   char sp_buffer[120];
 
-  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  
   //find solrad location
   int pos = 0;
   for(int i =0; i < in_buffer_len; i++){
@@ -274,7 +273,7 @@ void check_header(FILE *input, const char *header, struct flags *f)
       }
     }
   }
-  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  
   //find percent_cured location
   pos = 0;
   for(int i =0; i < in_buffer_len; i++){
@@ -294,10 +293,10 @@ void check_header(FILE *input, const char *header, struct flags *f)
       }
     }
   }
-  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  
   //produced header lists with removed columns
   for(int i=0; i<in_buffer_len; i++){
-    printf("%d\n", s_buffer_len);
+    
     if(i < s_start || i > s_end){
       s_buffer[s_buffer_len] = in_buffer[i];
       s_buffer_len++;
@@ -315,7 +314,7 @@ void check_header(FILE *input, const char *header, struct flags *f)
       sp_buffer_len++;
     }
   }
-  printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+  
   //check if anny match
   bool base_match = true;
   bool s_match = true;
@@ -370,7 +369,7 @@ void check_header(FILE *input, const char *header, struct flags *f)
 
   if(!base_match && !s_match && !p_match && !sp_match){
       printf("Header size doesn't match\n");
-      printf("%d %d %d %d %d\n", strlen(header), in_buffer_len, s_buffer_len, p_buffer_len, sp_buffer_len);
+      
       exit(1);
   }
 
@@ -581,7 +580,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
   char a[1];
   int err = 0;
   if(f->percent_cured_flag && f->solrad_flag){
-    printf("path 1\n");
+    
     err = fscanf(inp,
       "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf",
       &r->lat,
@@ -608,7 +607,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       r->percent_cured = seasonal_curing(julian(r->mon,r->day));
   }
   else if(f->percent_cured_flag && !f->solrad_flag){
-    printf("path 2\n");
+    
     err = fscanf(inp,
       "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
       &r->lat,
@@ -637,7 +636,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       r->percent_cured = seasonal_curing(julian(r->mon,r->day));
   }
   else if(!f->percent_cured_flag && f->solrad_flag){
-    printf("path 3\n");
+    
     err = fscanf(inp,
       "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
       &r->lat,
@@ -665,7 +664,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       &r->grass_fuel_load);
   }
   else{
-    printf("path 4\n");
+    
     err = fscanf(inp,
       "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
       &r->lat,
@@ -695,7 +694,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       &r->grass_fuel_load);
   }
   
-  printf("%d\n", err);
+  
   if (err > 0)
   {
     check_inputs(r->temp, r->rh, r->ws, r->rain, r->solrad, r->percent_cured, r->grass_fuel_load, f);

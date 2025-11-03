@@ -96,7 +96,7 @@ double hourly_fine_fuel_moisture(const double temp,
                                  const double rain,
                                  const double lastmc)
 {
-  /* printf("%.1f,%.1f,%.1f,%.1f,%.1f\n", temp, rh, ws, rain, lastmc); */
+  
   static const double rf = 42.5;
   static const double drf = 0.0579;
   /* Time since last observation (hours) */
@@ -126,7 +126,7 @@ double hourly_fine_fuel_moisture(const double temp,
   double m = mo < ed
                  ? ew
                  : ed;
-  /* printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m); */
+  
   if (mo != ed)
   {
     /* these are the same formulas with a different value for a1 */
@@ -136,7 +136,7 @@ double hourly_fine_fuel_moisture(const double temp,
     const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
     const double kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp);
     m += (mo - m) * pow(10, -kd_or_kw * time);
-    /* printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m); */
+    
   }
   return m;
 }
@@ -221,7 +221,8 @@ double hourly_grass_fuel_moisture(double temp,
                                   double ws,
                                   double rain,
                                   double solrad,
-                                  double lastmc)
+                                  double lastmc,
+                                  double load)
 {
   /* MARK II of the model (2016) wth new solar rad model specific to grass
 
@@ -250,7 +251,7 @@ double hourly_grass_fuel_moisture(double temp,
     /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/ /* old routine*/
     /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
     /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
-    mo += rain / 0.3 * 100.0;
+    mo += rain / load * 100.0;
     if (mo > 250.0)
     {
       mo = 250.0;
@@ -262,7 +263,7 @@ double hourly_grass_fuel_moisture(double temp,
   const double rhf = tf > temp
                          ? (rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0)) / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0))))
                          : rh;
-  /* printf("%.1f,%.1f,%.1f,%.1f,%.8f,%.8f\n", temp, rh, ws, rain, tf, rhf); */
+  
   /* duplicated in both formulas, so calculate once */
   const double e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
   /*GRASS EMC*/
@@ -507,11 +508,11 @@ double grass_spread_index(double ws, double mc, double cur, bool standing)
   double ros = 0;
   if (standing){
     ros = standing_grass_spread_ROS(ws,mc,cur);
-    printf("\t\t\t\tstanding\n");
+    
   }
   else{
     ros = matted_grass_spread_ROS(ws,mc,cur);
-    printf("\t\t\t\tmatted\n");
+    
   }
 
   return 1.11 * ros;
@@ -627,13 +628,13 @@ double duff_moisture_code(double last_dmc,
 
   double rk = 0.0;
   if(temp >= 0.0){
-    rk = 2.2*temp*(100.0-rh)*0.0001;
+    rk = 2.22*temp*(100.0-rh)*0.0001;
   }
 
   double invtau = rk/43.43;
 
   double mr;
-  if(rain_total < 1.5){ //is the total rain in this 'event' above the threshold 
+  if(rain_total <= 1.5){ //is the total rain in this 'event' above the threshold 
     mr = last_mc_dmc;
   }
   else{
@@ -668,7 +669,7 @@ double duff_moisture_code(double last_dmc,
 
   bool is_daytime = false;
   //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-  if(((hour >= sunrise) && (hour <= sunset)) || (((hour+24) >= sunrise) && ((hour+24) <= sunset) && (hour < 6))){
+  if((((double)hour >= sunrise) && ((double)hour <= sunset)) || (((double)(hour+24) >= sunrise) && ((double)(hour+24) <= sunset) && (hour < 6))){
     is_daytime = true;
   }
   double mc_dmc;

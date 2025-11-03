@@ -119,7 +119,8 @@ double hourly_grass_fuel_moisture(double temp,
                                   double ws,
                                   double rain,
                                   double solrad,
-                                  double lastmc);
+                                  double lastmc,
+                                  double load);
 
 double Pign(double mc, double wind2m, double Cint, double Cmc, double Cws);
 
