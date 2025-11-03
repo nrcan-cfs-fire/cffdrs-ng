@@ -34,13 +34,17 @@ HOURLY_K_DC <- 0.015
 DMC_OFFSET_TEMP <- 0.0
 DC_OFFSET_TEMP <- 0.0
 
-# Grassland fuel Load (kg/m^2)
+# Grassland fuel load (grass_fuel_load, kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD <- 0.35
 
 # Transition from matted to standing grass in a calendar year (default July 1st)
-GRASS_TRANSITION <- TRUE  # FALSE for GFMC to always be standing
+GRASS_TRANSITION <- TRUE  # default TRUE, FALSE for GFMC to always be standing
 MON_STANDING <- 7
 DAY_STANDING <- 1
+
+# For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
+# If TRUE, every station's data needs to be sequential (one continuous run)
+CONTINUOUS_MULTIYEAR <- FALSE  # default FALSE, TRUE to not split by year
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
@@ -618,7 +622,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
   mcgfmc_standing_old,
   prec_cumulative,
   canopy_drying) {
-  if (length(na.omit(unique(w$yr))) != 1) {
+  if (!CONTINUOUS_MULTIYEAR && length(na.omit(unique(w$yr))) != 1) {
     # only a warning for cases where data extends between years (e.g. southern hemisphere)
     warning("_stnHFWI() function received more than one year")
   }
@@ -901,17 +905,24 @@ hFWI <- function(
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
 
-  # loop over every station year
+  # loop over every station year if not continuous multiyear data
   results <- NULL
   for (stn in unique(wx$id)) {
     by_stn <- wx[id == stn]
-    # splitting on "yr" makes it split in the middle of southern hemisphere fire season
-    for (y in unique(by_stn$yr)) {
+    split <- unique(by_stn$yr)
+    if (CONTINUOUS_MULTIYEAR) {
+      split <- 1  # if continuous multiyear data, reduce loop over years to 1
+    }
+    for (y in split) {
       by_y <- by_stn[yr == y, ]
-      if (!silent) {
-        print(paste0("Running ", stn, " for ", y))
+      if (CONTINUOUS_MULTIYEAR) {
+        by_y <- copy(by_stn)
       }
-      # FIX: convert this to not need to do individual stations
+      if (!silent && !CONTINUOUS_MULTIYEAR) {
+        print(paste0("Running ", stn, " for ", y))
+      } else if (!silent && CONTINUOUS_MULTIYEAR) {
+        print(paste0("Running ", stn))
+      }
       w <- get_sunlight(by_y, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,

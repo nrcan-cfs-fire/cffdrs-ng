@@ -40,13 +40,17 @@ HOURLY_K_DC = 0.015
 DMC_OFFSET_TEMP = 0.0
 DC_OFFSET_TEMP = 0.0
 
-# Grassland Fuel Load (kg/m^2)
+# Grassland fuel load (grass_fuel_load, kg/m^2)
 DEFAULT_GRASS_FUEL_LOAD = 0.35
 
 # Transition from matted to standing grass in a calendar year (default July 1st)
-GRASS_TRANSITION = True  # False for GFMC to always be standing
+GRASS_TRANSITION = True  # default True, False for GFMC to always be standing
 MON_STANDING = 7
 DAY_STANDING = 1
+
+# For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
+# If True, every station's data needs to be sequential (one continuous run)
+CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
 
 ##
 # Convert to fine fuel moisture content (%)
@@ -579,9 +583,8 @@ def _stnHFWI(
     mcgfmc_standing_old,
     prec_cumulative,
     canopy_drying):
-    if len(w["yr"].unique()) != 1:
-        # only a warning in case data extends between years (e.g. southern hemisphere)
-        logger.warning("_stnHFWI() function received more than one year")
+    if not CONTINUOUS_MULTIYEAR and len(w["yr"].unique()) != 1:
+        logger.warning("WARNING: _stnHFWI() function received more than one year")
     if not util.is_sequential_hours(w):
         raise RuntimeError("Expected hourly weather input to be sequential")
     if len(w["id"].unique()) != 1:
@@ -830,12 +833,17 @@ def hFWI(
     if not (dc_old >= 0):
         raise ValueError("dc_old must be >= 0")
     
-    # loop over every station year
+    # loop over every station year if not continuous multiyear data
     results = None
-    # splitting on "yr" makes it split in the middle of southern hemisphere fire season
-    for idx, by_year in wx.groupby(["id", "yr"], sort = False):
-        if not silent:
+    split = ["id", "yr"]
+    if CONTINUOUS_MULTIYEAR:
+        split = ["id"]
+    
+    for idx, by_year in wx.groupby(split, sort = False):
+        if not silent and not CONTINUOUS_MULTIYEAR:
             print("Running " + str(idx[0]) + " for " + str(idx[1]))
+        elif not silent and CONTINUOUS_MULTIYEAR:
+            print("Running station " + str(idx[0]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index(drop = True)
         w = util.get_sunlight(w, get_solrad = needs_solrad)

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 - Option when running `hFWI()` to have a transition from matted to standing grassland fuel (default, for regions with winter snowfall), or stick with standing instead (*Python* and *R*)
+- Option when running `hFWI()` to not split by year (for regions with seasonal data that includes Dec 31-Jan 1) and run each station's data as one continuous block (*Python* and *R*)
 - Standard `hFWI()` and `generate_daily_summaries()` output data (.csv files) using PRF 2007 hourly weather data
 
 ### Changed
@@ -22,6 +23,19 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 - `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)
+
+## 2025-10-31 🎃
+
+### Changed
+- Updated **NG_FWI** and **daily_summaries** output column order (*C*)
+- Updated **NG_FWI** and **daily_summaries** to round outputs to 4 decimal places (*C*)
+
+### Fixed
+- GFMC, DMC, and DC calculations to match other versions (*C*)
+- Unallocated memory access in **daily_summaries** if a day does not have enough hours (*C*)
+
+### Removed
+- Some print statements for debugging (*C*)
 
 ## 2025-10-20
 
