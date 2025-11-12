@@ -921,7 +921,7 @@ hFWI <- function(
       if (!silent && !CONTINUOUS_MULTIYEAR) {
         print(paste0("Running ", stn, " for ", y))
       } else if (!silent && CONTINUOUS_MULTIYEAR) {
-        print(paste0("Running ", stn))
+        print(paste0("Running station ", stn))
       }
       w <- get_sunlight(by_y, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,

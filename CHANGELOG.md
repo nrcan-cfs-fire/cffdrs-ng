@@ -21,8 +21,13 @@ All notable changes to this project will be documented in this file. The format 
 
 - Reorganized **NG_FWI** header parameters (*Python* and *R*)
 
+### Removed
+- Unused `dmc_before_rain` and `dc_before_rain` arguments for **NG_FWI** (*C*)
+- Requirement that the `timezone` argument be between -2 and -9 (*C*)
+
 ### Fixed
 - `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)
+- `grass_fuel_load` actually uses the default 0.35 kg/m^2 if not provided (*C*)
 
 ## 2025-10-31 🎃
 

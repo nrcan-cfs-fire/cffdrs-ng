@@ -80,6 +80,7 @@ def get_sunlight(df, get_solrad = False):
     cols_req = ["lat", "long", "timezone", "timestamp"]
     if get_solrad:
         cols_req.append("temp")
+        cols_req.append("rh")
     for n in cols_req:
         if n not in df.columns:
             raise RuntimeError(f'Expected column "{n}" not found')

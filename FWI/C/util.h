@@ -187,11 +187,11 @@ void check_weather(double temp, double rh, double wind, double rain);
  * @param rh              Relative humidity (percent, 0-100)
  * @param wind            Wind speed (km/h)
  * @param rain            Rain (mm)
- * @param solrad          Solar radiation (kW/m^2)
- * @param percent_cured   Grass curing (percent, 0-100)
  * @param grass_fuel_load Grass fuel load ((kg/m^2))
+ * @param percent_cured   Grass curing (percent, 0-100)
+ * @param solrad          Solar radiation (kW/m^2)
  */
-void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load, struct flags *f);
+void check_inputs(double temp, double rh, double wind, double rain, double grass_fuel_load, double percent_cured, double solrad, struct flags *f);
 double seasonal_curing(int julian_date);
 
 /* C90 max() also causing problems */

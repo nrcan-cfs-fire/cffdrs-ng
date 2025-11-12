@@ -13,8 +13,15 @@
 int main(int argc, char *argv[])
 {
   /*  CSV headers */
-  static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
-  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load,timezone,sunrise,sunset,sunlight_hours,mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,prec_cumulative,canopy_drying";
+  static const char *header = "lat,long,yr,mon,day,hr,"
+    "temp,rh,ws,prec,"
+    "grass_fuel_load,percent_cured,solrad";
+  static const char *header_out = "lat,long,timezone,yr,mon,day,hr,"
+    "temp,rh,ws,prec,"
+    "grass_fuel_load,percent_cured,solrad,sunrise,sunset,sunlight_hours,"
+    "mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,"
+    "mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,"
+    "prec_cumulative,canopy_drying";
   if (14 != argc)
   {
     printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <Starting mcFFMC> <starting mc GFMC matted> <starting mc GFMC standing> <starting DMC before rain> <starting DC before rain> <starting cumulative precipitation> <starting canopy drying> <input file> <output file>\n\n", argv[0]);
@@ -40,12 +47,7 @@ int main(int argc, char *argv[])
     printf("\n\n ***** FILE  %s  does not exist\n", argv[12]);
     exit(1);
   }
-  int TZadjust = atoi(argv[1]);
-  if (TZadjust < -9 || TZadjust > -2)
-  {
-    printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n");
-    exit(1);
-  }
+  double TZadjust = atof(argv[1]);
   double ffmc_old;
   if (*argv[2] == 'n'){
     ffmc_old = -1;
@@ -169,7 +171,7 @@ int main(int argc, char *argv[])
   double mcgfmc_standing = mcgfmc_standing_old;
   double mcgfmc_matted = mcgfmc_matted_old;
   /* check that the header matches what is expected */
-  struct flags flag_holder = {false,false};
+  struct flags flag_holder = {false,false}; // corresponds to {solrad, percent_cured}
   check_header(inp, header, &flag_holder);
   struct row cur;
   int err = read_row_inputs(inp, &cur, &flag_holder);
@@ -183,6 +185,7 @@ int main(int argc, char *argv[])
   struct rain_intercept canopy = {0.0, prec_cumulative_old, canopy_drying_old};
   struct double_24hr solrad_24hr;
   FILE *out = fopen(argv[13], "w");
+  printf("Saving outputs to file >>> %s   \n", argv[13]);
   fprintf(out, "%s\n", header_out);
 
   while (err > 0)
@@ -272,39 +275,18 @@ int main(int argc, char *argv[])
     
     double sunlight_hours = sunset-sunrise;
     save_csv(out,
-             "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
-             cur.lat,
-             cur.lon,
-             cur.year,
-             cur.mon,
-             cur.day,
-             cur.hour,
-             cur.temp,
-             cur.rh,
-             cur.ws,
-             cur.rain,
-             cur.solrad,
-             cur.percent_cured,
-             cur.grass_fuel_load,
-             TZadjust,
-             cur.sunrise,
-             cur.sunset,
-             sunlight_hours,
-             mcffmc,
-             ffmc,
-             dmc,
-             dc,
-             isi,
-             bui,
-             fwi,
-             dsr,
-             mcgfmc_matted,
-             mcgfmc_standing,
-             gfmc,
-             gsi,
-             gfwi,
-             canopy.rain_total,
-             canopy.drying_since_intercept);
+      "%.4f,%.4f,%.2f,%4d,%02d,%02d,%02d,"
+      "%.1f,%.0f,%.1f,%.2f,"
+      "%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%.4f\n",
+      cur.lat, cur.lon, TZadjust, cur.year, cur.mon, cur.day, cur.hour,
+      cur.temp, cur.rh, cur.ws, cur.rain,
+      cur.grass_fuel_load, cur.percent_cured, cur.solrad, cur.sunrise, cur.sunset, sunlight_hours,
+      mcffmc, ffmc, dmc, dc, isi, bui, fwi, dsr,
+      mcgfmc_matted, mcgfmc_standing, gfmc, gsi, gfwi,
+      canopy.rain_total, canopy.drying_since_intercept);
     /*     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
                cur.lat,
                cur.lon,
@@ -350,7 +332,6 @@ int main(int argc, char *argv[])
 
   
 
-  /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
 

@@ -77,7 +77,7 @@ get_sunlight <- function(dt, get_solrad = FALSE) {
   # required columns
   cols_req <- c("lat", "long", "timezone", "timestamp")
   if (get_solrad) {
-    cols_req <- c(cols_req, "temp")
+    cols_req <- c(cols_req, "temp", "rh")
   }
   for (n in cols_req) {
     stopifnot(n %in% colnames(dt))

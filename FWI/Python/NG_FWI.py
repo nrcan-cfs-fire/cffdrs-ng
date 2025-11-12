@@ -837,7 +837,7 @@ def hFWI(
     results = None
     split = ["id", "yr"]
     if CONTINUOUS_MULTIYEAR:
-        split = ["id"]
+        split = ["id"]  # if continuous multiyear data, only split by ID
     
     for idx, by_year in wx.groupby(split, sort = False):
         if not silent and not CONTINUOUS_MULTIYEAR:

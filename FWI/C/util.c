@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#define NDEBUG
 
 
 
@@ -198,52 +199,39 @@ int julian(int mon, int day)
   return month[mon - 1] + day;
 }
 
-void check_header(FILE *input, const char *header, struct flags *f)
-{
+void check_header(FILE *input, const char *header, struct flags *f) {
 
   char in_buffer[120];
-
   int in_buffer_len = 0;
-
-  
 
   char intake[1];
   int err = fscanf(input, "%c", &intake[0]);
   
-  
-  while(intake[0] != '\n'){
-    if (0 == err)
-    {
-      
+  // copy row of input into in_buffer
+  while (intake[0] != '\n') {
+    if (0 == err) {
       exit(1);
     }
     in_buffer[in_buffer_len] = intake[0];
     
     in_buffer_len++;
-    
-
-
     err = fscanf(input, "%c", &intake[0]);
-    if(in_buffer_len==75){
-      
-      intake[0] = '\n';
-    }
   }
-  
-  if(in_buffer_len > strlen(header)){
-    printf("Header to long\n");
+  in_buffer[in_buffer_len] = '\0';
+
+  if (in_buffer_len > strlen(header)) {
+    printf("Error: Input file header too long, max possible is:\n%s\n", header);
     exit(1);
   }
 
-  static const char *s_rem = "solrad,";
-  static const char *p_rem = "percent_cured,";
+  static const char *s_rem = "solrad";
+  static const char *p_rem = "percent_cured";
 
   int s_start = -1;
   int s_end = -1;
 
   int p_start = -1;
   int p_end = -1;
-
 
   int s_buffer_len = 0;
   int p_buffer_len = 0;
@@ -253,228 +241,135 @@ void check_header(FILE *input, const char *header, struct flags *f)
   char p_buffer[120];
   char sp_buffer[120];
 
-  
-  //find solrad location
+  // find solrad location
   int pos = 0;
-  for(int i =0; i < in_buffer_len; i++){
-    if(pos < strlen(s_rem) && in_buffer[i] == s_rem[pos]){
-      pos++;
-      if(s_start == -1){
+  for (int i = 0; i < in_buffer_len; i++) {
+    if (in_buffer[i] == s_rem[pos]) {  // matching
+      if (s_start == -1) {
         s_start = i;
       }
-    }
-    else{
-      if(pos >= strlen(s_rem)){
-        s_end = i-1;
+      if (pos + 1 == strlen(s_rem)) {  // matched last character
+        s_end = i;
+        break;
       }
-      else{
-        s_start = -1;
-        pos = 0;
-      }
+      pos++;
+    } else {  // not a match, reset
+      s_start = -1;
+      pos = 0;
     }
   }
   
-  //find percent_cured location
+  // find percent_cured location
   pos = 0;
-  for(int i =0; i < in_buffer_len; i++){
-    if(pos < strlen(p_rem) && in_buffer[i] == p_rem[pos]){
-      pos++;
-      if(p_start == -1){
+  for (int i = 0; i < in_buffer_len; i++) {
+    if (in_buffer[i] == p_rem[pos]) {
+      if (p_start == -1) {
         p_start = i;
       }
-    }
-    else{
-      if(pos >= strlen(p_rem)){
-        p_end = i-1;
+      if (pos + 1 == strlen(p_rem)) {
+        p_end = i;
+        break;
       }
-      else{
-        p_start = -1;
-        pos = 0;
-      }
+      pos++;
+    } else {
+      p_start = -1;
+      pos = 0;
     }
   }
   
-  //produced header lists with removed columns
-  for(int i=0; i<in_buffer_len; i++){
-    
-    if(i < s_start || i > s_end){
+  // produce header strings with removed columns (and PRECEDING comma)
+  for (int i = 0; i < in_buffer_len; i++) {
+    if (i < s_start - 1 || i > s_end) {
       s_buffer[s_buffer_len] = in_buffer[i];
       s_buffer_len++;
     }
   }
-  for(int i=0; i<in_buffer_len; i++){
-    if(i < p_start || i > p_end){
+  s_buffer[s_buffer_len] = '\0';
+
+  for (int i = 0; i < in_buffer_len; i++) {
+    if (i < p_start - 1 || i > p_end) {
       p_buffer[p_buffer_len] = in_buffer[i];
       p_buffer_len++;
     }
   }
-  for(int i=0; i<in_buffer_len; i++){
-    if((i < s_start || i > s_end) && (i < p_start || i > p_end)){
+  p_buffer[p_buffer_len] = '\0';
+
+  for (int i = 0; i < in_buffer_len; i++) {
+    if ((i < s_start - 1 || i > s_end) && (i < p_start - 1 || i > p_end)) {
       sp_buffer[sp_buffer_len] = in_buffer[i];
       sp_buffer_len++;
     }
   }
+  sp_buffer[sp_buffer_len] = '\0';
   
-  //check if anny match
+  // check if header or any removed column strings matches length of in_buffer
   bool base_match = true;
   bool s_match = true;
   bool p_match = true;
   bool sp_match = true;
 
-  if(in_buffer_len != strlen(header)){
+  if (in_buffer_len != strlen(header)) {
     base_match = false;
   }
-  if(in_buffer_len != s_buffer_len){
+  if (in_buffer_len != s_buffer_len) {
     s_match = false;
   }
-  if(in_buffer_len != p_buffer_len){
+  if (in_buffer_len != p_buffer_len) {
     p_match = false;
   }
-  if(in_buffer_len != sp_buffer_len){
+  if (in_buffer_len != sp_buffer_len) {
     sp_match = false;
   }
 
-  if(base_match){
-    for(int i=0; i < in_buffer_len; i++){
-      if(in_buffer[i] != header[i]){
+  // check that order also matches (order important for read_row_inputs)
+  if (base_match) {
+    for (int i = 0; i < in_buffer_len; i++) {
+      if (in_buffer[i] != header[i]) {
         base_match = false;
         break;
       }
     }
   }
-  if(s_match){
-    for(int i=0; i < in_buffer_len; i++){
-      if(in_buffer[i] != s_buffer[i]){
+  if (s_match) {
+    for (int i = 0; i < in_buffer_len; i++) {
+      if (in_buffer[i] != s_buffer[i]) {
         s_match = false;
         break;
       }
     }
   }
-  if(p_match){
-    for(int i=0; i < in_buffer_len; i++){
-      if(in_buffer[i] != p_buffer[i]){
+  if (p_match) {
+    for (int i = 0; i < in_buffer_len; i++) {
+      if (in_buffer[i] != p_buffer[i]) {
         p_match = false;
         break;
       }
     }
   }
-  if(sp_match){
-    for(int i=0; i < in_buffer_len; i++){
-      if(in_buffer[i] != sp_buffer[i]){
+  if (sp_match) {
+    for (int i = 0; i < in_buffer_len; i++) {
+      if (in_buffer[i] != sp_buffer[i]) {
         sp_match = false;
         break;
       }
     }
   }
 
-  if(!base_match && !s_match && !p_match && !sp_match){
-      printf("Header size doesn't match\n");
-      
+  if (!base_match && !s_match && !p_match && !sp_match) {
+      printf("Error: Provided input columns needs to be in this order\n%s\n", header);
       exit(1);
   }
 
-  if(s_match){
+  if (s_match) {
     f->solrad_flag = true;
   }
-  if(p_match){
+  if (p_match) {
     f->percent_cured_flag = true;
   }
-  if(sp_match){
+  if (sp_match) {
     f->percent_cured_flag = true;
     f->solrad_flag = true;
   }
-
-
-
-  
-
-
-  
-
-//  ###################################################################################################################################################################################################
-
-  /* printf("Checking header matches:\n\t%s\n", header); */
-  /* check that the header matches what is expected */
-//  char a[1];
-//  char buffer[120];
-//  int buffer_len = 0;
-//  const int n = strlen(header);
-//  int i;
-//  int err = 1; 
-//  bool skip_read_flag = false;
-//  bool halt_buffer_intake = false;
-  /* do this one character at a time because unsure how long line would be if we used %s */
-//  while (i < n )
-//  {
-//    if(!skip_read_flag){
-//      err = fscanf(input, "%c", a);
-//      i++;
-//    }
-//    if(skip_read_flag){
-//      skip_read_flag = false;
-//    }
-//    if (0 == err)
-//    {
-//      printf("Error reading file\n");
-//      exit(1);
-//    }
-    /* need a newline at end or else it's not really a match */
-//    if(a[0]=='\n'){
-//      break;
-//    }
-
-//    if (a[0] != header[i] && !halt_buffer_intake)
-//    {
-//      printf("%d %d\n", buffer_len, i);
-//      skip_read_flag = true;
-//      buffer[buffer_len] = header[i];
-//      buffer_len +=1;
-      //printf("Expected columns to be '%s'\n", header);
-      //exit(1);
-//    }
-//    else if(a[0] != header[i] && halt_buffer_intake){
-//      skip_read_flag = true;
-//      err = 0;
-//    }
-//    else if(buffer_len > 0){
-//      halt_buffer_intake = true;
-//    }
-//  }
-
-//  if(buffer_len > 0){
-//    char buffer_2[buffer_len];
-//    int bufffer_2_len = 0;
-
-    //solrad check
-//    char to_check[] = {'s','o','l','r','a','d',','};
-//    int spot = 0;
-//    for(i=0; i< (int)(sizeof(to_check)/sizeof(char)) +1;i++){
-//      if (spot >= buffer_len){
-//        break;
-//      }
-//      if(to_check[i] != buffer[spot]){
-//        buffer_2[bufffer_2_len] = buffer[spot];
-//        bufffer_2_len++;
-//        spot++;
-//      }
-//    }
-//    if(bufffer_2_len == buffer_len){
-      //solrad is missing
-//      f->solrad_flag = true;
-//    }
-
-    //percent cured check
-//    char to_check_2[] = {'p','e','r','c','e','n','t','_','c','u','r','e','d',','};
-//    spot = 0;
-//    for(i=0; i < (int)(sizeof(to_check_2)/sizeof(char))+1; i++){
-//      if(sizeof(buffer_2)==0 || to_check_2[i] != buffer_2[spot]){
-        //percent cured is missing
-//        f->percent_cured_flag = true;
-//        break;
-//      }
-//      spot++;
-//    }
-//  }
 }
 
 void check_header_legacy(FILE *input, const char *header)
@@ -521,7 +416,7 @@ void check_weather(double temp, double rh, double wind, double rain)
     exit(1);
   }
 }
-void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load, struct flags *f)
+void check_inputs(double temp, double rh, double wind, double rain, double grass_fuel_load, double percent_cured, double solrad, struct flags *f)
 {
   check_weather(temp, rh, wind, rain);
   /* just do basic checks, but use this so we can expand checks if desired */
@@ -605,6 +500,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       a,
       &r->grass_fuel_load);
       r->percent_cured = seasonal_curing(julian(r->mon,r->day));
+      // solrad will be calculated later in NG_FWI_main.c
   }
   else if(f->percent_cured_flag && !f->solrad_flag){
     
@@ -630,9 +526,9 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       a,
       &r->rain,
       a,
-      &r->solrad,
+      &r->grass_fuel_load,
       a,
-      &r->grass_fuel_load);
+      &r->solrad);
       r->percent_cured = seasonal_curing(julian(r->mon,r->day));
   }
   else if(!f->percent_cured_flag && f->solrad_flag){
@@ -659,9 +555,9 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       a,
       &r->rain,
       a,
-      &r->percent_cured,
+      &r->grass_fuel_load,
       a,
-      &r->grass_fuel_load);
+      &r->percent_cured);  // solrad will be calculated later in NG_FWI_main.c
   }
   else{
     
@@ -687,17 +583,17 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f)
       a,
       &r->rain,
       a,
-      &r->solrad,
+      &r->grass_fuel_load,
       a,
       &r->percent_cured,
       a,
-      &r->grass_fuel_load);
+      &r->solrad);
   }
   
   
   if (err > 0)
   {
-    check_inputs(r->temp, r->rh, r->ws, r->rain, r->solrad, r->percent_cured, r->grass_fuel_load, f);
+    check_inputs(r->temp, r->rh, r->ws, r->rain, r->grass_fuel_load, r->percent_cured, r->solrad, f);
   }
   return err;
 }
