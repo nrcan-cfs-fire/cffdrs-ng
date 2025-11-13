@@ -199,177 +199,57 @@ int julian(int mon, int day)
   return month[mon - 1] + day;
 }
 
-void check_header(FILE *input, const char *header, struct flags *f) {
+void check_header(FILE *input, const char *header_req, struct flags *f) {
+
+  char header_full[120];
+
+  // add optional parameters for a full header
+  strcpy(header_full, header_req);
+  strcat(header_full, ",percent_cured,solrad");
 
   char in_buffer[120];
-  int in_buffer_len = 0;
+  int in_buffer_len;
 
-  char intake[1];
-  int err = fscanf(input, "%c", &intake[0]);
-  
-  // copy row of input into in_buffer
-  while (intake[0] != '\n') {
-    if (0 == err) {
-      exit(1);
-    }
-    in_buffer[in_buffer_len] = intake[0];
-    
-    in_buffer_len++;
-    err = fscanf(input, "%c", &intake[0]);
-  }
-  in_buffer[in_buffer_len] = '\0';
+  // read first line of file
+  fscanf(input, "%s", in_buffer);
+  in_buffer_len = strlen(in_buffer);
 
-  if (in_buffer_len > strlen(header)) {
-    printf("Error: Input file header too long, max possible is:\n%s\n", header);
+  if (strncmp(header_req, in_buffer, strlen(header_req)) != 0) {
+    printf("Error: Missing required columns or didn't start in this order\n%s\n",
+      header_req);
     exit(1);
   }
 
-  static const char *s_rem = "solrad";
-  static const char *p_rem = "percent_cured";
-
-  int s_start = -1;
-  int s_end = -1;
-
-  int p_start = -1;
-  int p_end = -1;
-
-  int s_buffer_len = 0;
-  int p_buffer_len = 0;
-  int sp_buffer_len = 0;
-
-  char s_buffer[120];
-  char p_buffer[120];
-  char sp_buffer[120];
-
-  // find solrad location
-  int pos = 0;
-  for (int i = 0; i < in_buffer_len; i++) {
-    if (in_buffer[i] == s_rem[pos]) {  // matching
-      if (s_start == -1) {
-        s_start = i;
-      }
-      if (pos + 1 == strlen(s_rem)) {  // matched last character
-        s_end = i;
-        break;
-      }
-      pos++;
-    } else {  // not a match, reset
-      s_start = -1;
-      pos = 0;
-    }
-  }
-  
-  // find percent_cured location
-  pos = 0;
-  for (int i = 0; i < in_buffer_len; i++) {
-    if (in_buffer[i] == p_rem[pos]) {
-      if (p_start == -1) {
-        p_start = i;
-      }
-      if (pos + 1 == strlen(p_rem)) {
-        p_end = i;
-        break;
-      }
-      pos++;
-    } else {
-      p_start = -1;
-      pos = 0;
-    }
-  }
-  
-  // produce header strings with removed columns (and PRECEDING comma)
-  for (int i = 0; i < in_buffer_len; i++) {
-    if (i < s_start - 1 || i > s_end) {
-      s_buffer[s_buffer_len] = in_buffer[i];
-      s_buffer_len++;
-    }
-  }
-  s_buffer[s_buffer_len] = '\0';
-
-  for (int i = 0; i < in_buffer_len; i++) {
-    if (i < p_start - 1 || i > p_end) {
-      p_buffer[p_buffer_len] = in_buffer[i];
-      p_buffer_len++;
-    }
-  }
-  p_buffer[p_buffer_len] = '\0';
-
-  for (int i = 0; i < in_buffer_len; i++) {
-    if ((i < s_start - 1 || i > s_end) && (i < p_start - 1 || i > p_end)) {
-      sp_buffer[sp_buffer_len] = in_buffer[i];
-      sp_buffer_len++;
-    }
-  }
-  sp_buffer[sp_buffer_len] = '\0';
-  
-  // check if header or any removed column strings matches length of in_buffer
-  bool base_match = true;
-  bool s_match = true;
-  bool p_match = true;
-  bool sp_match = true;
-
-  if (in_buffer_len != strlen(header)) {
-    base_match = false;
-  }
-  if (in_buffer_len != s_buffer_len) {
-    s_match = false;
-  }
-  if (in_buffer_len != p_buffer_len) {
-    p_match = false;
-  }
-  if (in_buffer_len != sp_buffer_len) {
-    sp_match = false;
+  if (in_buffer_len > strlen(header_full)) {
+    printf("Error: Input file header too long. Max possible columns are\n%s\n",
+      header_full);
+    exit(1);
   }
 
-  // check that order also matches (order important for read_row_inputs)
-  if (base_match) {
-    for (int i = 0; i < in_buffer_len; i++) {
-      if (in_buffer[i] != header[i]) {
-        base_match = false;
-        break;
-      }
-    }
-  }
-  if (s_match) {
-    for (int i = 0; i < in_buffer_len; i++) {
-      if (in_buffer[i] != s_buffer[i]) {
-        s_match = false;
-        break;
-      }
-    }
-  }
-  if (p_match) {
-    for (int i = 0; i < in_buffer_len; i++) {
-      if (in_buffer[i] != p_buffer[i]) {
-        p_match = false;
-        break;
-      }
-    }
-  }
-  if (sp_match) {
-    for (int i = 0; i < in_buffer_len; i++) {
-      if (in_buffer[i] != sp_buffer[i]) {
-        sp_match = false;
-        break;
-      }
-    }
-  }
+  // create all combinations of optional columns
+  char header_no_s[120];
+  strcpy(header_no_s, header_req);
+  strcat(header_no_s, ",percent_cured");
 
-  if (!base_match && !s_match && !p_match && !sp_match) {
-      printf("Error: Provided input columns needs to be in this order\n%s\n", header);
-      exit(1);
-  }
+  char header_no_p[120];
+  strcpy(header_no_p, header_req);
+  strcat(header_no_p, ",solrad");
 
-  if (s_match) {
-    f->solrad_flag = true;
-  }
-  if (p_match) {
+  // check if in_buffer matches any combination of optional headers
+  if (strcmp(header_full, in_buffer) == 0) {  // match
+    // leave flags to default false (meaning no need to calculate)
+  } else if (strcmp(header_no_p, in_buffer) == 0) {
     f->percent_cured_flag = true;
-  }
-  if (sp_match) {
+  } else if (strcmp(header_no_s, in_buffer) == 0) {
+    f->solrad_flag = true;
+  } else if (strcmp(header_req, in_buffer) == 0) {
     f->percent_cured_flag = true;
     f->solrad_flag = true;
+  } else {
+    printf("Error: Optional columns need to be ordered\n%s\n", header_full);
+    exit(1);
   }
+
 }
 
 void check_header_legacy(FILE *input, const char *header)

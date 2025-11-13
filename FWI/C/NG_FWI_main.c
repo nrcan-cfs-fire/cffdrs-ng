@@ -13,9 +13,8 @@
 int main(int argc, char *argv[])
 {
   /*  CSV headers */
-  static const char *header = "lat,long,yr,mon,day,hr,"
-    "temp,rh,ws,prec,"
-    "grass_fuel_load,percent_cured,solrad";
+  static const char *header_req = "lat,long,yr,mon,day,hr,"
+    "temp,rh,ws,prec,grass_fuel_load";  // optional percent_cured and/or solrad;
   static const char *header_out = "lat,long,timezone,yr,mon,day,hr,"
     "temp,rh,ws,prec,"
     "grass_fuel_load,percent_cured,solrad,sunrise,sunset,sunlight_hours,"
@@ -30,7 +29,7 @@ int main(int argc, char *argv[])
     printf("One of <starting FFMC> and <Starting mcFFMC> needs to be \"n\"\n");
     printf("If <starting mc GFMC matted> or <starting mc GFMC standing> are set to \"n\" they will be set according to <starting FFMC> and <Starting mcFFMC>\n");
     printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-    printf("%s\n\n", header);
+    printf("%s\n\n", header_req);
     exit(1);
   }
 
@@ -172,7 +171,7 @@ int main(int argc, char *argv[])
   double mcgfmc_matted = mcgfmc_matted_old;
   /* check that the header matches what is expected */
   struct flags flag_holder = {false,false}; // corresponds to {solrad, percent_cured}
-  check_header(inp, header, &flag_holder);
+  check_header(inp, header_req, &flag_holder);
   struct row cur;
   int err = read_row_inputs(inp, &cur, &flag_holder);
   struct row old = {0};
