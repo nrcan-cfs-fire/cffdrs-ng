@@ -7,9 +7,6 @@
 
 
 
-
-
-
 int main(int argc, char *argv[])
 {
   /*  CSV headers */
@@ -173,37 +170,33 @@ int main(int argc, char *argv[])
   struct flags flag_holder = {false,false}; // corresponds to {solrad, percent_cured}
   check_header(inp, header_req, &flag_holder);
   struct row cur;
+  cur.timezone = TZadjust;
   int err = read_row_inputs(inp, &cur, &flag_holder);
   struct row old = {0};
   double dmc = dmc_old;
   double dmc_before_rain = dmc_before_rain_old;
   double dc = dc_old;
   double dc_before_rain = dc_before_rain_old;
-  double sunrise;
-  double sunset;
   struct rain_intercept canopy = {0.0, prec_cumulative_old, canopy_drying_old};
-  struct double_24hr solrad_24hr;
+  bool standing;
+  // first year in data for transition btwn matted and standing (esp if southern hemisphere)
+  // does not account for fire seasons continuous across multiple years
+  struct tm DATE_GRASS_STANDING = {
+    .tm_year = cur.year - 1900,
+    .tm_mon = MON_STANDING - 1,
+    .tm_mday = DAY_STANDING,
+    .tm_isdst = 0};
   FILE *out = fopen(argv[13], "w");
   printf("Saving outputs to file >>> %s   \n", argv[13]);
   fprintf(out, "%s\n", header_out);
 
   while (err > 0)
   {
+    /* Only need to calculate sunrise/sunset once per day */
     if (cur.day != old.day || cur.mon != old.mon)
     {
-      /* Only need to calculate sunrise/sunset once per day */
-      sunrise_sunset(cur.lat, cur.lon, cur.mon, cur.day, TZadjust, &sunrise, &sunset); 
-      // check if solrad needs to be added
-      //if (flag_holder.solrad_flag){
-        //solar_radiation(cur.lat, cur.lon, cur.mon, cur.day, TZadjust, temp_range, &solrad_24hr);
-      //}
+      sunrise_sunset_julian(&cur);
     }
-    if(flag_holder.solrad_flag){
-      cur.solrad = single_hour_solrad_estimation(cur.lat, cur.lon, julian(cur.mon, cur.day), TZadjust, cur.hour, cur.rh, cur. temp); //solrad_24hr.hour[cur.hour];
-    }
-    cur.sunrise = sunrise;
-    cur.sunset = sunset;
-
 
     rain_since_intercept_reset(
         cur.temp,
@@ -259,20 +252,39 @@ int main(int argc, char *argv[])
     double fwi = fire_weather_index(isi, bui);
     double dsr = daily_severity_rating(fwi);
     
-    mcgfmc_matted = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc_matted, cur.grass_fuel_load);
-    mcgfmc_standing = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain*0.06, 0, mcgfmc_standing, cur.grass_fuel_load);
-    mcgfmc = mcgfmc_standing;
-    bool standing = true;
-    if(julian(cur.mon, cur.day) < DATE_GRASS){
+    mcgfmc_matted = hourly_grass_fuel_moisture(
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain,
+      cur.solrad,
+      mcgfmc_matted,
+      cur.grass_fuel_load);
+    
+    mcgfmc_standing = hourly_grass_fuel_moisture(
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain * 0.06,
+      0,  // no solar radiation felt when standing
+      mcgfmc_standing,
+      cur.grass_fuel_load);
+
+    if (GRASS_TRANSITION &&
+      difftime(mktime(&cur.timestamp), mktime(&DATE_GRASS_STANDING)) < 0) {
       standing = false;
       mcgfmc = mcgfmc_matted;
+    } else {
+      standing = true;
+      mcgfmc = mcgfmc_standing;
     }
 
     double gfmc = grass_moisture_code(mcgfmc, cur.percent_cured, cur.ws);
     double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured, standing);
     double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     
-    double sunlight_hours = sunset-sunrise;
+    double sunlight_hours = cur.sunset - cur.sunrise;
+
     save_csv(out,
       "%.4f,%.4f,%.2f,%4d,%02d,%02d,%02d,"
       "%.1f,%.0f,%.1f,%.2f,"

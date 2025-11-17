@@ -3,17 +3,22 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <time.h>
 
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.1415926535897932384626433
 #endif
+
+// Start of grassland fuels curing (default March 12th)
+static const int MON_CURING = 3;
+static const int DAY_CURING = 12;
 
 /**
  * A row from the input file for an hourly weather stream
  */
 struct row
 {
-  double lat, lon;
+  double lat, lon, timezone;
   int year, mon, day, hour;
   double temp, rh, ws, rain;
   /* Either need solar radiation to be included, or calculated */
@@ -24,6 +29,8 @@ struct row
   double percent_cured;
   /* grass fuel load (kg/m^2) */
   double grass_fuel_load;
+  // timestamp (including julian/yday)
+  struct tm timestamp;
 };
 
 /*
@@ -113,7 +120,7 @@ double findrh(double q, double temp);
 void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad);
 
 
-double single_hour_solrad_estimation(double lat, double lon, int jd, double timezone, int hour, double rh, double temp);
+double single_hour_solrad_estimation(struct row *r);
 
 
 
@@ -128,31 +135,32 @@ double single_hour_solrad_estimation(double lat, double lon, int jd, double time
  * @param[out] solrad       Hourly solar radiation (kW/m^2)
  */
 void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad);
+// /**
+//  * Find sunrise and sunset for a given date and location.
+//  *
+//  * @param lat               Latitude (degrees)
+//  * @param lon               Longitude (degrees)
+//  * @param mon               Month
+//  * @param day               Day of month
+//  * @param hour              Hour of day
+//  * @param timezone          Offset from GMT in hours
+//  * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
+//  * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
+//  */
+// void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset);
 /**
  * Find sunrise and sunset for a given date and location.
  *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param mon               Month
- * @param day               Day of month
- * @param hour              Hour of day
- * @param timezone          Offset from GMT in hours
- * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
- * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
+ * @param r             Structure of data row
  */
-void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset);
+void sunrise_sunset_julian(struct row *r);
 /**
- * Find sunrise and sunset for a given date and location.
- *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param jd                Day of year
- * @param hour              Hour of day
- * @param timezone          Offset from GMT in hours
- * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
- * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
+ * Find if a year is a leap year or not
+ * 
+ * @param yr    Year
+ * @return      Boolean whether year is a leap year or not
  */
-void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double *sunrise, double *sunset);
+bool isleap(int yr);
 /**
  * Find day of year. Does not properly deal with leap years.
  *
@@ -191,8 +199,19 @@ void check_weather(double temp, double rh, double wind, double rain);
  * @param percent_cured   Grass curing (percent, 0-100)
  * @param solrad          Solar radiation (kW/m^2)
  */
-void check_inputs(double temp, double rh, double wind, double rain, double grass_fuel_load, double percent_cured, double solrad, struct flags *f);
-double seasonal_curing(int julian_date);
+void check_inputs(double temp, double rh, double wind, double rain, double grass_fuel_load, double percent_cured, double solrad);
+
+/**
+* Set default percent_cured values based off annual variation in Boreal Plains region
+*
+* @param yr             Year
+* @param mon            Month of year
+* @param day            Day of month
+* @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
+* @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
+* @return               percent_cured [%], percent of grassland fuel that is cured
+*/
+double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day);
 
 /* C90 max() also causing problems */
 double _max(double x, double y);

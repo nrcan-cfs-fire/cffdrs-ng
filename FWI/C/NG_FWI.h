@@ -39,7 +39,11 @@ static const double FFMC_INTERCEPT = 0.5;
 static const double DMC_INTERCEPT = 1.5;
 static const double DC_INTERCEPT = 2.8;
 
-static const int DATE_GRASS = 181;
+// Transition from matted to standing grass in a calendar year (default July 1st)
+// static const int DATE_GRASS = 181;
+static const bool GRASS_TRANSITION = true;  // default True, False for GFMC to always be standing
+static const int MON_STANDING = 7;
+static const int DAY_STANDING = 1;
 
 /*
  * Fine Fuel Moisture Code (FFMC) from moisture %
