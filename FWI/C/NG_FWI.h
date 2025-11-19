@@ -78,6 +78,32 @@ double hourly_fine_fuel_moisture(const double temp,
                                  const double rain,
                                  const double lastmc);
 
+double duff_moisture_code(double last_dmc,
+                          double temp,
+                          double rh,
+                          double ws,
+                          double rain,
+                          int mon,
+                          int hour,
+                          double solrad,
+                          double sunrise,
+                          double sunset,
+                          double rain_total_prev,
+                          double rain_total);
+
+double drought_code(double last_dc,
+                    double temp,
+                    double rh,
+                    double ws,
+                    double rain,
+                    int mon,
+                    int hour,
+                    double solrad,
+                    double sunrise,
+                    double sunset,
+                    double rain_total_prev,
+                    double rain_total);
+
 /**
  * Calculate Initial Spread Index (ISI)
  *
@@ -154,47 +180,6 @@ double grass_spread_index(double ws, double mc, double cur, bool standing);
  * @return                  Grass Fire Weather Index
  */
 double grass_fire_weather_index(double gsi, double load);
-
-double dmc_wetting(double rain_total, double lastdmc);
-
-double dc_wetting(double rain_total, double lastdc);
-
-double dmc_wetting_between(double rain_total_previous, double rain_total, double lastdmc);
-
-double dc_wetting_between(double rain_total_previous, double rain_total, double lastdc);
-
-double dmc_drying_ratio(double temp, double rh);
-
-double duff_moisture_code(double last_dmc,
-                          double temp,
-                          double rh,
-                          double ws,
-                          double rain,
-                          int mon,
-                          int hour,
-                          double solrad,
-                          double sunrise,
-                          double sunset,
-                          double *dmc_before_rain,
-                          double rain_total_prev,
-                          double rain_total);
-
-double dc_drying_hourly(double temp);
-
-
-double drought_code(double last_dc,
-                    double temp,
-                    double rh,
-                    double ws,
-                    double rain,
-                    int mon,
-                    int hour,
-                    double solrad,
-                    double sunrise,
-                    double sunset,
-                    double *dc_before_rain,
-                    double rain_total_prev,
-                    double rain_total);
 
 /*
  * Calculate number of drying "units" this hour contributes

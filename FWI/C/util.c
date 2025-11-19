@@ -8,44 +8,6 @@
 #define NDEBUG
 
 
-
-double read_temp_range(char *file, const char *header){
-  FILE *inp = fopen(file, "r");
-  if (inp == NULL)
-  {
-    printf("\n\n ***** FILE  %s  does not exist\n", file);
-    exit(1);
-  }
-
-  double temp_min = 1000000.0;
-  double temp_max = -1000000.0;
-
-  struct flags flag_holder = {false,false};
-  check_header(inp, header, &flag_holder);
-  struct row cur;
-  int err = read_row_inputs(inp, &cur, &flag_holder);
-
-  while(err > 0){
-    if(temp_min > cur.temp){
-      temp_min = cur.temp;
-    }
-
-
-    if(temp_max < cur.temp){
-      temp_max = cur.temp;
-    }
-
-    err = read_row_inputs(inp, &cur, &flag_holder);
-  }
-
-  fclose(inp);
-  double temp_range = temp_max - temp_min;
-  
-  return temp_range;
-
-}
-
-
 /* abs() isn't working either */
 double _abs(double x)
 {
@@ -84,22 +46,16 @@ double findrh(double q, double temp)
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-/*
- * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
- */
-void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad)
-{
-  int jd = julian(mon, day);
-  solar_radiation_julian(lat, lon, jd, timezone, temp_range, solrad);
+bool is_leap(int yr) {
+  return (yr % 4 == 0 && yr % 100 != 0 || yr % 400 == 0);
 }
-
 
 double single_hour_solrad_estimation(struct row *r)
 {
   double dechour = 12.0;
   // .tm_yday is already 0-indexed (i.e. Jan 1st = 0)
   double fracyear = 2.0 * M_PI * (r->timestamp.tm_yday + (dechour - 12.0) / 24.0);
-  fracyear = isleap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
+  fracyear = is_leap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
   double eqtime = 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
@@ -116,10 +72,7 @@ double single_hour_solrad_estimation(struct row *r)
   double cos_zenith = cos(zenith);
   double vpd = 6.11 * (1.0 - r->rh / 100.0) *
     exp(17.29 * r->temp / (r->temp + 237.3));
-
-  // double a = 0.9211;
-  // double b = 0.2214;
-
+  
   double solrad = cos_zenith * 0.92 * (1.0 - exp(-0.22 * vpd));
   if (solrad < 1e-4) {
     solrad = 0.0;
@@ -127,69 +80,12 @@ double single_hour_solrad_estimation(struct row *r)
   return solrad;
 }
 
-void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad)
+void sunrise_sunset(struct row *r)
 {
-  /*
-    Completely disconnect from sunrise/sunset code so nothing changes there
-     if we change how solar radiation is calculated
-  */
-  double dechour = 12.0;
-  double fracyear = 2.0 * M_PI / 365.0 * ((float)(jd)-1.0 + ((float)(dechour)-12.0) / 24.0);
-  double eqtime = 229.18 * (0.000075 + 0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
-  double decl = 0.006918 - 0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) - 0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) - 0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
-  double timeoffset = eqtime + 4 * lon - 60 * timezone;
-  struct double_24hr cos_zenith;
-  double sum_24hr_solrad_ext = 0;
-  double sum_24hr_cos_zenith = 0;
-  /*
-    calculating solar radiation using Hargraeves model suggested at:
-    (https://github.com/derekvanderkampcfs/open_solar_model/tree/V1#conclusions)
-  */
-  for (int h = 0; h < 24; ++h)
-  {
-    double tst = (float)h * 60.0 + timeoffset;
-    double hourangle = tst / 4 - 180;
-    /* Extraterrestrial solar radiation in kW/m^2 */
-    cos_zenith.hour[h] = cos(_min(M_PI / 2,
-                                  acos(sin(lat * M_PI / 180) * sin(decl) + cos(lat * M_PI / 180) * cos(decl) * cos(hourangle * M_PI / 180))));
-    sum_24hr_cos_zenith += cos_zenith.hour[h];
-    double solrad_ext = 1.367 * cos_zenith.hour[h];
-    /* Daily total of Extra. Solar Rad in kJ/m^2/day */
-    sum_24hr_solrad_ext += (solrad_ext * 3600);
-  }
-  /* Daily surface Solar Rad in kJ/m^2/day */
-  double sum_24hr_solrad = 0.11 * sum_24hr_solrad_ext * (pow(temp_range, 0.59));
-  /* Hargreaves hourly surface solar rad in kW/m^2 */
-  for (int h = 0; h < 24; ++h)
-  {
-    solrad->hour[h] = _max(
-        0,
-        cos_zenith.hour[h] / sum_24hr_cos_zenith * sum_24hr_solrad / 3600);
-  }
-}
-
-
-// /*
-//  * Find sunrise and sunset for a given date and location.
-//  */
-// void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset)
-// {
-//   int jd = julian(mon, day);
-//   sunrise_sunset_julian(lat, lon, jd, timezone, sunrise, sunset);
-// }
-
-void sunrise_sunset_julian(struct row *r)
-{
-  /*
-  this routine approximately calcualtes sunrise and sunset and daylength
-  Really any routine like this could be used,  some are more precise than others.
-
-  bmw
-  */
   double dechour = 12.0;
   // .tm_yday is already 0-indexed (i.e. Jan 1st = 0)
   double fracyear = 2.0 * M_PI * (r->timestamp.tm_yday + (dechour - 12.0) / 24.0);
-  fracyear = isleap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
+  fracyear = is_leap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
   double eqtime = 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
@@ -199,22 +95,13 @@ void sunrise_sunset_julian(struct row *r)
     0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
   double timeoffset = eqtime + 4 * r->lon - 60 * r->timezone;
   double zenith = 90.833 * M_PI / 180.0;
-  /*
-   * FIX: is this some kind of approximation that can be wrong?
-   *       breaks with (67.1520291504819, -132.37538245496188)
-   */
   double x_tmp = cos(zenith) / (cos(r->lat * M_PI / 180.0) * cos(decl)) -
     tan(r->lat * M_PI / 180.0) * tan(decl);
-  /* HACK: keep in range */
   x_tmp = _max(-1.0, _min(1.0, x_tmp));
   double halfday = 180.0 * acos(x_tmp) / M_PI;
+
   r->sunrise = (720.0 - 4.0 * (r->lon + halfday) - eqtime) / 60.0 + r->timezone;
   r->sunset = (720.0 - 4.0 * (r->lon - halfday) - eqtime) / 60.0 + r->timezone;
-}
-
-
-bool isleap(int yr) {
-  return (yr % 4 == 0 && yr % 100 != 0 || yr % 400 == 0);
 }
 
 int julian(int mon, int day)

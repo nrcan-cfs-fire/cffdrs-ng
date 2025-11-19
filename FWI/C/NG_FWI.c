@@ -141,6 +141,159 @@ double hourly_fine_fuel_moisture(const double temp,
   return m;
 }
 
+double duff_moisture_code(double last_dmc,
+                          double temp,
+                          double rh,
+                          double ws,
+                          double rain,
+                          int mon,
+                          int hour,
+                          double solrad,
+                          double sunrise,
+                          double sunset,
+                          double rain_total_prev,
+                          double rain_total)
+{
+
+
+  //########################################## Mike's version ############################
+  double TIME_INCREMENT = 1.0;
+  double last_mc_dmc = dmc_to_mc_dmc(last_dmc);
+
+  double rk = 0.0;
+  if(temp >= 0.0){
+    rk = 2.22*temp*(100.0-rh)*0.0001;
+  }
+
+  double invtau = rk/43.43;
+
+  double mr;
+  if(rain_total <= 1.5){ //is the total rain in this 'event' above the threshold 
+    mr = last_mc_dmc;
+  }
+  else{
+    //this is a little awkward because the 1.5mm threshold was an approximation from original tables whch were based on 1/100 inch
+    //it really should be a rain day is   rain >0.05"   (not 0.06")     0.05"=1.27 as in the original tables
+    double rw;
+    if(rain_total_prev < 1.5){
+      rw = rain_total*0.92 - 1.27;
+    }
+    else{
+      rw = rain*0.92;
+    }
+
+
+    double b;
+    if(last_dmc <= 33.0){
+      b = 100.0/(0.5 + 0.3*last_dmc);
+    }
+    else if(last_dmc <= 65.0){
+      b = 14.0 - 1.3*log(last_dmc);
+    }
+    else{
+      b = 6.2*log(last_dmc) - 17.2;
+    }
+
+    mr = last_mc_dmc + 1000.0*rw/(48.77 + b*rw);
+  }
+
+  if(mr > 300.0){
+    mr = 300.0;
+  }
+
+  bool is_daytime = false;
+  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  if((((double)hour >= sunrise) && ((double)hour <= sunset)) || (((double)(hour+24) >= sunrise) && ((double)(hour+24) <= sunset) && (hour < 6))){
+    is_daytime = true;
+  }
+  double mc_dmc;
+  if(is_daytime){
+    mc_dmc = 20.0 + (mr-20.0)*exp(-1.0*TIME_INCREMENT*invtau);
+  }
+  else{
+    mc_dmc = mr; //no overnight drying
+  }
+
+  if(mc_dmc > 300.0){
+    mc_dmc = 300.0;
+  }
+
+
+  double new_dmc = mc_dmc_to_dmc(mc_dmc);
+  //if(new_dmc < 0.0){
+  //  new_dmc = 0.0;
+ // }
+  return new_dmc;
+}
+
+double drought_code(double last_dc,
+                    double temp,
+                    double rh,
+                    double ws,
+                    double rain,
+                    int mon,
+                    int hour,
+                    double solrad,
+                    double sunrise,
+                    double sunset,
+                    double rain_total_prev,
+                    double rain_total)
+{
+  //#################################################################################
+  // for now we are using Mike's method for calculating DC
+
+  double offset = 3.0;
+  double mult = 0.015;
+  double pe = 0.0;
+  double rw = 0.0;
+  double mr = 0.0;
+  double mcdc = 0.0;
+  
+  double last_mc_dc = 400*exp(-last_dc/400);
+  double TIME_INCREMENT = 1.0;
+  if (temp > 0.0){
+    pe = mult * temp + offset/16.0;
+  }
+  
+  double invtau = pe/400.0;
+  
+  if (rain_total_prev + rain <= 2.8){
+    mr = last_mc_dc;
+  }
+  else {
+    if (rain_total_prev <= 2.8){
+      rw = (rain_total_prev + rain)*0.83 - 1.27;
+    }
+    else {
+      rw = rain*0.83;
+    }
+    mr = last_mc_dc + 3.937*rw/2.0;
+  }
+  
+  if(mr > 400.0){
+    mr = 400.0;
+  }
+  
+  bool is_daytime = false;
+  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  if(((hour >= sunrise) && (hour <= sunset)) || (((hour + 24) >= sunrise) && ((hour + 24) <= sunset) && (hour < 6))){
+    is_daytime = true;
+  }
+  
+  if(is_daytime){
+    mcdc = 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau);
+  }
+  else{
+    mcdc = mr;
+  }
+  if (mcdc > 400.0){
+    mcdc = 400.0;
+  }
+  double dc = 400.0*log(400.0/mcdc);
+  
+  return dc;
+}
+
 /**
  * Calculate Initial Spread Index (ISI)
  *
@@ -533,298 +686,6 @@ double grass_fire_weather_index(double gsi, double load)
   return Fint > 100
              ? log(Fint / 60.0) / 0.14
              : Fint / 25.0;
-}
-
-double dmc_wetting(double rain_total, double lastdmc)
-{
-  /* compare floats by using tolerance */
-  if (rain_total <= DMC_INTERCEPT)
-  {
-    return 0.0;
-  }
-  const double b = lastdmc <= 33
-                       ? 100.0 / (0.5 + 0.3 * lastdmc)
-                       : (lastdmc <= 65
-                              ? 14.0 - 1.3 * log(lastdmc)
-                              : 6.2 * log(lastdmc) - 17.2);
-  const double rw = 0.92 * rain_total - 1.27;
-  const double wmi = 20 + 280 / exp(0.023 * lastdmc);
-  const double wmr = wmi + 1000 * rw / (48.77 + b * rw);
-  double dmc = 43.43 * (5.6348 - log(wmr - 20));
-  if (dmc <= 0.0)
-  {
-    dmc = 0.0;
-  }
-  /* total amount of wetting since lastdmc */
-  const double w = lastdmc - dmc;
-  return w;
-}
-
-double dc_wetting(double rain_total, double lastdc)
-{
-  /* compare floats by using tolerance */
-  if (rain_total <= DC_INTERCEPT)
-  {
-    return 0.0;
-  }
-  const double rw = 0.83 * rain_total - 1.27;
-  const double smi = 800 * exp(-lastdc / 400);
-  /* TOTAL change for the TOTAL 24 hour rain from FWI1970 model  */
-  return 400.0 * log(1.0 + 3.937 * rw / smi);
-}
-
-double dmc_wetting_between(double rain_total_previous, double rain_total, double lastdmc)
-{
-  if (rain_total_previous >= rain_total)
-  {
-    return 0.0;
-  }
-  /* wetting is calculated based on initial dmc when rain started and rain since */
-  const double current = dmc_wetting(rain_total, lastdmc);
-  /* recalculate instead of storing so we don't need to reset this too */
-  /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
-  const double previous = dmc_wetting(rain_total_previous, lastdmc);
-  return current - previous;
-}
-
-double dc_wetting_between(double rain_total_previous, double rain_total, double lastdc)
-{
-  if (rain_total_previous >= rain_total)
-  {
-    return 0.0;
-  }
-  /* wetting is calculated based on initial dc when rain started and rain since */
-  const double current = dc_wetting(rain_total, lastdc);
-  /* recalculate instead of storing so we don't need to reset this too */
-  /* NOTE: rain_total_previous != (rain_total - cur.rain) due to floating point math */
-  const double previous = dc_wetting(rain_total_previous, lastdc);
-  return current - previous;
-}
-
-double dmc_drying_ratio(double temp, double rh)
-{
-  return _max(0.0, HOURLY_K_DMC * (temp + DMC_OFFSET_TEMP) * (100.0 - rh) * 0.0001);
-}
-
-double duff_moisture_code(double last_dmc,
-                          double temp,
-                          double rh,
-                          double ws,
-                          double rain,
-                          int mon,
-                          int hour,
-                          double solrad,
-                          double sunrise,
-                          double sunset,
-                          double *dmc_before_rain,
-                          double rain_total_prev,
-                          double rain_total)
-{
-
-
-  //########################################## Mike's version ############################
-  double TIME_INCREMENT = 1.0;
-  double last_mc_dmc = dmc_to_mc_dmc(last_dmc);
-
-  double rk = 0.0;
-  if(temp >= 0.0){
-    rk = 2.22*temp*(100.0-rh)*0.0001;
-  }
-
-  double invtau = rk/43.43;
-
-  double mr;
-  if(rain_total <= 1.5){ //is the total rain in this 'event' above the threshold 
-    mr = last_mc_dmc;
-  }
-  else{
-    //this is a little awkward because the 1.5mm threshold was an approximation from original tables whch were based on 1/100 inch
-    //it really should be a rain day is   rain >0.05"   (not 0.06")     0.05"=1.27 as in the original tables
-    double rw;
-    if(rain_total_prev < 1.5){
-      rw = rain_total*0.92 - 1.27;
-    }
-    else{
-      rw = rain*0.92;
-    }
-
-
-    double b;
-    if(last_dmc <= 33.0){
-      b = 100.0/(0.5 + 0.3*last_dmc);
-    }
-    else if(last_dmc <= 65.0){
-      b = 14.0 - 1.3*log(last_dmc);
-    }
-    else{
-      b = 6.2*log(last_dmc) - 17.2;
-    }
-
-    mr = last_mc_dmc + 1000.0*rw/(48.77 + b*rw);
-  }
-
-  if(mr > 300.0){
-    mr = 300.0;
-  }
-
-  bool is_daytime = false;
-  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-  if((((double)hour >= sunrise) && ((double)hour <= sunset)) || (((double)(hour+24) >= sunrise) && ((double)(hour+24) <= sunset) && (hour < 6))){
-    is_daytime = true;
-  }
-  double mc_dmc;
-  if(is_daytime){
-    mc_dmc = 20.0 + (mr-20.0)*exp(-1.0*TIME_INCREMENT*invtau);
-  }
-  else{
-    mc_dmc = mr; //no overnight drying
-  }
-
-  if(mc_dmc > 300.0){
-    mc_dmc = 300.0;
-  }
-
-
-  double new_dmc = mc_dmc_to_dmc(mc_dmc);
-  //if(new_dmc < 0.0){
-  //  new_dmc = 0.0;
- // }
-  return new_dmc;
-
-  //######################################################################################
-
-
-  /* printf("%.1f,%.1f,%.1f,%.1f,%d,%d\n", temp, rh, ws, rain, mon, hour); */
-  //if (0 == rain_total)
-  //{
-  //  *dmc_before_rain = last_dmc;
-  //}
-  /* apply wetting since last period */
-  //double dmc_wetting_hourly = dmc_wetting_between(
-  //    rain_total_prev,
-  //    rain_total,
-  //    *dmc_before_rain);
-  /* at most apply same wetting as current value (don't go below 0) */
-  //double dmc = _max(0.0, last_dmc - dmc_wetting_hourly);
-  //double sunrise_start = round(sunrise + OFFSET_SUNRISE);
-  //double sunset_start = round(sunset + OFFSET_SUNSET);
-  //double dmc_hourly = (((hour >= sunrise_start) && (hour < sunset_start))
-  //                         ? (dmc_drying_ratio(temp, rh))
-  //                         : 0.0);
-  //dmc = dmc + dmc_hourly;
-  /* printf("%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
-         *dmc_before_rain,
-         last_dmc,
-         dmc,
-         dmc_daily,
-         df,
-         dmc_hourly,
-         dmc_wetting_hourly); */
-  //return dmc;
-}
-
-double dc_drying_hourly(double temp)
-{
-  return _max(0.0, HOURLY_K_DC * (temp + DC_OFFSET_TEMP));
-}
-
-
-double drought_code(double last_dc,
-                    double temp,
-                    double rh,
-                    double ws,
-                    double rain,
-                    int mon,
-                    int hour,
-                    double solrad,
-                    double sunrise,
-                    double sunset,
-                    double *dc_before_rain,
-                    double rain_total_prev,
-                    double rain_total)
-{
-  //#################################################################################
-  // for now we are using Mike's method for calculating DC
-  if (0.0 == rain_total){
-    *dc_before_rain = last_dc;
-  }
-
-  double offset = 3.0;
-  double mult = 0.015;
-  double pe = 0.0;
-  double rw = 0.0;
-  double mr = 0.0;
-  double mcdc = 0.0;
-  
-  double last_mc_dc = 400*exp(-last_dc/400);
-  double TIME_INCREMENT = 1.0;
-  if (temp > 0.0){
-    pe = mult * temp + offset/16.0;
-  }
-  
-  double invtau = pe/400.0;
-  
-  if (rain_total_prev + rain <= 2.8){
-    mr = last_mc_dc;
-  }
-  else {
-    if (rain_total_prev <= 2.8){
-      rw = (rain_total_prev + rain)*0.83 - 1.27;
-    }
-    else {
-      rw = rain*0.83;
-    }
-    mr = last_mc_dc + 3.937*rw/2.0;
-  }
-  
-  if(mr > 400.0){
-    mr = 400.0;
-  }
-  
-  bool is_daytime = false;
-  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-  if(((hour >= sunrise) && (hour <= sunset)) || (((hour + 24) >= sunrise) && ((hour + 24) <= sunset) && (hour < 6))){
-    is_daytime = true;
-  }
-  
-  if(is_daytime){
-    mcdc = 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau);
-  }
-  else{
-    mcdc = mr;
-  }
-  if (mcdc > 400.0){
-    mcdc = 400.0;
-  }
-  double dc = 400.0*log(400.0/mcdc);
-  
-  return dc;
-  
-  //###################################################################################
-  
- 
- // if (0 == rain_total)
-  //{
-    //*dc_before_rain = last_dc;
-  //}
-  /* apply wetting since last period */
-  //double dc_wetting_hourly = dc_wetting_between(rain_total_prev, rain_total, *dc_before_rain);
-  /* at most apply same wetting as current value (don't go below 0) */
-  //double dc = _max(0.0, last_dc - dc_wetting_hourly);
-  //double dc_hourly = dc_drying_hourly(temp);
-  /*   double drying = HOURLY_K_DC * (temp + DC_OFFSET_TEMP);
-    //printf("temp=%0.2f, HOURLY_K_DC=%0.3f, DC_OFFSET_TEMP=%0.2f, drying=%0.2f, _max=%0.2f, last_dc=%0.2f, dc_wetting_hourly=%0.2f, dc=%0.2f, dc_hourly=%0.2f\n",
-      //     temp,
-        //   HOURLY_K_DC,
-          // DC_OFFSET_TEMP,
-           //drying,
-          // _max(0.0, drying),
-          // last_dc,
-           //dc_wetting_hourly,
-           //dc,
-           //dc_hourly); */
-  //dc = dc + dc_hourly;
-  //return dc;
 }
 
 /*
