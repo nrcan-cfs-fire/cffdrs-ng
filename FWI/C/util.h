@@ -9,6 +9,9 @@
 #define M_PI 3.1415926535897932384626433
 #endif
 
+/* Fuel Load (kg/m^2) */
+static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
+
 // Start of grassland fuels curing (default March 12th)
 static const int MON_CURING = 3;
 static const int DAY_CURING = 12;
@@ -58,8 +61,7 @@ struct row_minmax
 };
 
 struct flags{
-  bool solrad_flag;
-  bool percent_cured_flag;
+  bool grass_fuel_load_flag, percent_cured_flag, solrad_flag;
 };
 
 ////// Function Declarations
@@ -140,11 +142,11 @@ void sunrise_sunset(double lat, double lon, double timezone, struct tm timestamp
   double *suntime);
 
 /**
- * Check that the file stream matches the given string and exit if not
+ * Custom check that the file stream matches the given string and exit if not
  *
  * @param input       Input file to check for string
  * @param header      String to match
- * @param f           flags structure to store if [percent_cured, solrad] missing
+ * @param f           flags struct for missing [grass_fuel_load, percent_cured, solrad]
  */
 void check_header_FWI(FILE *input, const char *header, struct flags *f);
 
@@ -181,11 +183,6 @@ void check_inputs(double temp, double rh, double wind, double rain,
   double grass_fuel_load, double percent_cured, double solrad);
 
 /**
- * Read a row from an hourly weather stream file
- */
-int read_row(FILE *inp, struct row *r);
-
-/**
  * Read a row from an hourly fwi inputs stream file
  */
 int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
@@ -203,4 +200,5 @@ int read_row_minmax(FILE *inp, struct row_minmax *r);
 int save_rounded(FILE *file, const char *fmt, const double value);
 
 void save_csv(FILE *file, const char *fmt_all, ...);
+
 #endif

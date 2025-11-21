@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
   
   /*  CSV headers */
   static const char *header_req = "lat,long,yr,mon,day,hr,"
-    "temp,rh,ws,prec,grass_fuel_load";  // optional percent_cured and/or solrad;
+    "temp,rh,ws,prec";  // optional grass_fuel_load, percent_cured, and/or solrad;
   static const char *header_out = "lat,long,timezone,yr,mon,day,hr,"
     "temp,rh,ws,prec,"
     "grass_fuel_load,percent_cured,solrad,sunrise,sunset,sunlight_hours,"
@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
       ffmc_old = atof(argv[4]);
     }
   } else {
-    ffmc_old = 85.0;
+    ffmc_old = FFMC_DEFAULT;
   }
   if (argc > 5) {
     if (*argv[5] == 'n') {
@@ -76,12 +76,12 @@ int main(int argc, char *argv[])
   if (argc > 6) {
     dmc_old = atof(argv[6]);
   } else {
-    dmc_old = 6.0;
+    dmc_old = DMC_DEFAULT;
   }
   if (argc > 7) {
     dc_old = atof(argv[7]);
   } else {
-    dc_old = 15.0;
+    dc_old = DC_DEFAULT;
   }
   if (argc > 8) {
     mcgfmc_matted_old = atof(argv[8]);
@@ -166,7 +166,8 @@ int main(int argc, char *argv[])
   mcgfmc_matted = mcgfmc_matted_old;
 
   // initialize input header and data
-  struct flags flag_holder = {false, false}; // {solrad, percent_cured};
+  struct flags flag_holder = 
+    {false, false, false}; // {grass_fuel_load, percent_cured, solrad};
   struct row cur, old;
   struct rain_intercept canopy = {0.0, prec_cumulative, canopy_drying};
   int err;

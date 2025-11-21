@@ -135,7 +135,7 @@ double duff_moisture_code(double last_dmc,
   double invtau = rk/43.43;
 
   double mr;
-  if(rain_total <= 1.5){ //is the total rain in this 'event' above the threshold 
+  if(rain_total <= DMC_INTERCEPT){ //is the total rain in this 'event' above the threshold 
     mr = last_mc_dmc;
   }
   else{
@@ -224,7 +224,7 @@ double drought_code(double last_dc,
   
   double invtau = pe/400.0;
   
-  if (rain_total_prev + rain <= 2.8){
+  if (rain_total_prev + rain <= DC_INTERCEPT){
     mr = last_mc_dc;
   }
   else {

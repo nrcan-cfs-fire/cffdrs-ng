@@ -8,19 +8,6 @@
 #define NDEBUG
 
 
-/* abs() isn't working either */
-double _abs(double x)
-{
-  /* work around negative 0 as well */
-  return (0 == x) ? 0.0 : ((x < 0) ? -x : x);
-}
-
-/* copysign() doesn't seem to work for some reason */
-double _copysign(double x, double y)
-{
-  /* >=0 to account for negative zero */
-  return _abs(x) * ((y >= 0) ? 1 : -1);
-}
 
 double _max(double x, double y)
 {
@@ -206,7 +193,7 @@ void check_header_FWI(FILE *input, const char *header_req, struct flags *f) {
 
   // add optional parameters for a full header
   strcpy(header_full, header_req);
-  strcat(header_full, ",percent_cured,solrad");
+  strcat(header_full, ",grass_fuel_load,percent_cured,solrad");
 
   char in_buffer[200];  // limit input header to 200 characters
   int in_buffer_len;
@@ -216,7 +203,7 @@ void check_header_FWI(FILE *input, const char *header_req, struct flags *f) {
   in_buffer_len = strlen(in_buffer);
 
   if (in_buffer_len == 200) {  // limit input header to 200 characters
-    puts("Input header has more than 200 characters, remove columns or increase limit");
+    puts("Input header has 200 or more characters, remove columns or increase limit");
     exit(1);
   }
 
@@ -232,23 +219,51 @@ void check_header_FWI(FILE *input, const char *header_req, struct flags *f) {
     exit(1);
   }
 
-  // create all combinations of optional columns
+  // create all combinations of optional grass_fuel_load, percent_cured, solrad columns
   char header_no_s[200];
   strcpy(header_no_s, header_req);
-  strcat(header_no_s, ",percent_cured");
+  strcat(header_no_s, ",grass_fuel_load,percent_cured");
 
   char header_no_p[200];
   strcpy(header_no_p, header_req);
-  strcat(header_no_p, ",solrad");
+  strcat(header_no_p, ",grass_fuel_load,solrad");
+
+  char header_no_g[200];
+  strcpy(header_no_g, header_req);
+  strcat(header_no_g, ",percent_cured,solrad");
+
+  char header_no_ps[200];
+  strcpy(header_no_ps, header_req);
+  strcat(header_no_ps, ",grass_fuel_load");
+
+  char header_no_gs[200];
+  strcpy(header_no_gs, header_req);
+  strcat(header_no_gs, ",percent_cured");
+
+  char header_no_gp[200];
+  strcpy(header_no_gp, header_req);
+  strcat(header_no_gp, ",solrad");
 
   // check if in_buffer matches any combination of optional headers
   if (strcmp(header_full, in_buffer) == 0) {  // match
     // leave flags to default false (meaning no need to calculate)
-  } else if (strcmp(header_no_p, in_buffer) == 0) {
-    f->percent_cured_flag = true;
   } else if (strcmp(header_no_s, in_buffer) == 0) {
     f->solrad_flag = true;
+  } else if (strcmp(header_no_p, in_buffer) == 0) {
+    f->percent_cured_flag = true;
+  } else if (strcmp(header_no_g, in_buffer) == 0) {
+    f->grass_fuel_load_flag = true;
+  } else if (strcmp(header_no_ps, in_buffer) == 0) {
+    f->percent_cured_flag = true;
+    f->solrad_flag = true;
+  } else if (strcmp(header_no_gs, in_buffer) == 0) {
+    f->grass_fuel_load_flag = true;
+    f->solrad_flag = true;
+  } else if (strcmp(header_no_gp, in_buffer) == 0) {
+    f->grass_fuel_load_flag = true;
+    f->percent_cured_flag = true;
   } else if (strcmp(header_req, in_buffer) == 0) {
+    f->grass_fuel_load_flag = true;
     f->percent_cured_flag = true;
     f->solrad_flag = true;
   } else {
@@ -324,38 +339,6 @@ double temp, rh, wind, rain, grass_fuel_load, percent_cured, solrad;
   }
 }
 
-int read_row(FILE *inp, struct row *r)
-{ 
-  /* this is declared as an array just to make it a pointer ...for reading commas easily*/
-  char a[1];
-  int err = fscanf(inp,
-                   "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf",
-                   &r->lat,
-                   a,
-                   &r->lon,
-                   a,
-                   &r->year,
-                   a,
-                   &r->mon,
-                   a,
-                   &r->day,
-                   a,
-                   &r->hour,
-                   a,
-                   &r->temp,
-                   a,
-                   &r->rh,
-                   a,
-                   &r->ws,
-                   a,
-                   &r->rain);
-  if (err > 0)
-  {
-    check_weather(r->temp, r->rh, r->ws, r->rain);
-  }
-  return err;
-}
-
 int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
   char line[500];  // limit a row of data to 500 characters
   int err;
@@ -364,7 +347,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
   err = fscanf(inp, "%500s", line);  // limit a row of data to 500 characters
   
   if (strlen(line) == 500) {  // limit a row of data to 500 characters
-    puts("Input data line has more than 500 characters, remove columns or increase limit");
+    puts("Input data line has 500 or more characters, remove columns or increase limit");
     exit(1);
   }
 
@@ -383,7 +366,6 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
   r->rh = atof(strtok(NULL, ","));
   r->ws = atof(strtok(NULL, ","));
   r->rain = atof(strtok(NULL, ","));
-  r->grass_fuel_load = atof(strtok(NULL, ","));
 
   // make timestamp and calculate julian (yday)
   struct tm ts = {
@@ -398,7 +380,13 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
   r->timestamp = ts;
 
   // optional inputs provided or calculated
-  if (f->percent_cured_flag) {  // true means not provided, needs to be calculated
+  if (f->grass_fuel_load_flag) {  // true means not provided, needs to be calculated
+    r->grass_fuel_load = DEFAULT_GRASS_FUEL_LOAD;
+  } else {
+    r->grass_fuel_load = atof(strtok(NULL, ","));
+  }
+  
+  if (f->percent_cured_flag) {
     r->percent_cured = seasonal_curing(r->year, r->mon, r->day,
       MON_CURING, DAY_CURING);
   } else {

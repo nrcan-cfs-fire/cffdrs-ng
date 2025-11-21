@@ -17,22 +17,17 @@ static const double DMC_OFFSET_TEMP = 0.0;
 static const double DC_OFFSET_TEMP = 0.0;
 
 static const double DC_DAILY_CONST = 0.36;
-static const double DC_HOURLY_CONST =   0.36/3.397; //DC_DAILY_CONST / DAILY_K_DC_DRYING;
+static const double DC_HOURLY_CONST = 0.36 / 3.397;  // DC_DAILY_CONST / DAILY_K_DC_DRYING;
 
 static const double OFFSET_SUNRISE = 0.0; //2.5;
 static const double OFFSET_SUNSET = 0.0; //0.5;
 
-/* Fuel Load (kg/m^2) */
-static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
+/* Default grass fuel load and percent_cured start date set and used in util */
 
 /* default startup values */
 static const double FFMC_DEFAULT = 85;
 static const double DMC_DEFAULT = 6;
 static const double DC_DEFAULT = 15;
-
-/* FIX: figure out what this should be */
-static const double DEFAULT_LATITUDE = 55.0;
-static const double DEFAULT_LONGITUDE = -120.0;
 
 static const double MPCT_TO_MC = 250.0 * 59.5 / 101.0;
 static const double FFMC_INTERCEPT = 0.5;
@@ -40,7 +35,6 @@ static const double DMC_INTERCEPT = 1.5;
 static const double DC_INTERCEPT = 2.8;
 
 // Transition from matted to standing grass in a calendar year (default July 1st)
-// static const int DATE_GRASS = 181;
 static const bool GRASS_TRANSITION = true;  // default True, False for GFMC to always be standing
 static const int MON_STANDING = 7;
 static const int DAY_STANDING = 1;
