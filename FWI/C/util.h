@@ -13,6 +13,8 @@
 static const int MON_CURING = 3;
 static const int DAY_CURING = 12;
 
+////// Structure Declarations
+
 /**
  * A row from the input file for an hourly weather stream
  */
@@ -48,9 +50,11 @@ struct row_daily
  */
 struct row_minmax
 {
-  double lat, lon;
+  double lat, lon, timezone;
   int year, mon, day;
   double temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain;
+  double sunrise, sunset;
+  struct tm date;
 };
 
 struct flags{
@@ -58,25 +62,13 @@ struct flags{
   bool percent_cured_flag;
 };
 
-/**
- * Read a row from an hourly weather stream file
- */
-int read_row(FILE *inp, struct row *r);
+////// Function Declarations
 
-/**
- * Read a row from an hourly fwi inputs stream file
- */
-int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
+/* C90 max() also causing problems */
+double _max(double x, double y);
 
-/**
- * Read a row from a daily weather stream file
- */
-int read_row_daily(FILE *inp, struct row_daily *r);
-
-/**
- * Read a row from a min/max weather stream file
- */
-int read_row_minmax(FILE *inp, struct row_minmax *r);
+/* C90 min() also causing problems */
+double _min(double x, double y);
 
 /**
  * Find specific humidity
@@ -95,6 +87,18 @@ double findQ(double temp, double rh);
  * @return            Relative humidity (percent, 0-100)
  */
 double findrh(double q, double temp);
+
+/**
+* Set default percent_cured values based off annual variation in Boreal Plains region
+*
+* @param yr             Year
+* @param mon            Month of year
+* @param day            Day of month
+* @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
+* @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
+* @return               percent_cured [%], percent of grassland fuel that is cured
+*/
+double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day);
 
 /**
  * Find if a year is a leap year or not
@@ -126,11 +130,23 @@ double single_hour_solrad_estimation(struct row *r);
 /**
  * Find sunrise and sunset for a given date and location.
  *
- * @param r             Structure of data row (required columns:
- *                        lat, lon, timezone, yr, timestamp)
- * @return              Updates .sunrise and .sunset members of input structure
+ * @param lat           Latitude (DD)
+ * @param lon           Longitude (DD)
+ * @param timezone      UTC offset
+ * @param timestamp     tm structure for year and yday (julian)
+ * @param suntime       double array to put [sunrise, sunset] outputs
  */
-void sunrise_sunset(struct row *r);
+void sunrise_sunset(double lat, double lon, double timezone, struct tm timestamp,
+  double *suntime);
+
+/**
+ * Check that the file stream matches the given string and exit if not
+ *
+ * @param input       Input file to check for string
+ * @param header      String to match
+ * @param f           flags structure to store if [percent_cured, solrad] missing
+ */
+void check_header_FWI(FILE *input, const char *header, struct flags *f);
 
 /**
  * Check that the file stream matches the given string and exit if not
@@ -138,9 +154,7 @@ void sunrise_sunset(struct row *r);
  * @param input       Input file to check for string
  * @param header      String to match
  */
-void check_header(FILE *input, const char *header, struct flags *f);
-
-void check_header_legacy(FILE *input, const char *header);
+void check_header_match(FILE *input, const char *header);
 
 /**
  * Check that weather parameters are valid
@@ -163,28 +177,30 @@ void check_weather(double temp, double rh, double wind, double rain);
  * @param percent_cured   Grass curing (percent, 0-100)
  * @param solrad          Solar radiation (kW/m^2)
  */
-void check_inputs(double temp, double rh, double wind, double rain, double grass_fuel_load, double percent_cured, double solrad);
+void check_inputs(double temp, double rh, double wind, double rain,
+  double grass_fuel_load, double percent_cured, double solrad);
 
 /**
-* Set default percent_cured values based off annual variation in Boreal Plains region
-*
-* @param yr             Year
-* @param mon            Month of year
-* @param day            Day of month
-* @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
-* @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
-* @return               percent_cured [%], percent of grassland fuel that is cured
-*/
-double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day);
+ * Read a row from an hourly weather stream file
+ */
+int read_row(FILE *inp, struct row *r);
 
-/* C90 max() also causing problems */
-double _max(double x, double y);
+/**
+ * Read a row from an hourly fwi inputs stream file
+ */
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
 
-/* C90 min() also causing problems */
-double _min(double x, double y);
+/**
+ * Read a row from a daily weather stream file
+ */
+int read_row_daily(FILE *inp, struct row_daily *r);
+
+/**
+ * Read a row from a min/max weather stream file
+ */
+int read_row_minmax(FILE *inp, struct row_minmax *r);
+
+int save_rounded(FILE *file, const char *fmt, const double value);
 
 void save_csv(FILE *file, const char *fmt_all, ...);
-
-/* HACK: format and then output to prevent -0.0 */
-int save_rounded(FILE *file, const char *fmt, const double value);
 #endif

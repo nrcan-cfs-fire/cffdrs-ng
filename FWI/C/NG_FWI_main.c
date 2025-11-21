@@ -8,7 +8,7 @@
 
 int main(int argc, char *argv[])
 {
-  if (argc < 3) {
+  if (argc < 4) {
     printf("\n########\nhelp/usage:\n"
       "%s input output timezone\n"
       "[ffmc_old] [mcffmc_old] [dmc_old] [dc_old] [mcgfmc_matted_old] [mcgfmc_standing_old]\n"
@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
   int err;
   bool standing;
 
-  check_header(inp, header_req, &flag_holder);
+  check_header_FWI(inp, header_req, &flag_holder);
   cur.timezone = TZadjust;  // assign timezone before possibly calculating solrad
   err = read_row_inputs(inp, &cur, &flag_holder);
   old.day = -1;  // ensure initial sunrise and sunset calculation
@@ -203,7 +203,10 @@ int main(int argc, char *argv[])
     /* Only need to calculate sunrise/sunset once per day */
     if (cur.day != old.day || cur.mon != old.mon)
     {
-      sunrise_sunset(&cur);
+      double suntime[2];
+      sunrise_sunset(cur.lat, cur.lon, cur.timezone, cur.timestamp, suntime);
+      cur.sunrise = suntime[0];
+      cur.sunset = suntime[1];
     }
 
     rain_since_intercept_reset(

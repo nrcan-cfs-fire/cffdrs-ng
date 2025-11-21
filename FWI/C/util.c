@@ -46,6 +46,82 @@ double findrh(double q, double temp)
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
+/* this is a simple piecewise tabular summary (10day) if DKT's NDVI based cure state analysis (smoothed)
+It is from central canada Boreal Plains
+
+It will be a DEFAULT greenness given NO other information ....Users should be encouraged to make ...
+these local observations each year themselves as such obs will be far superior to this average
+*/
+double seasonal_curing(yr, mon, day, start_mon, start_day)
+int yr, mon, day, start_mon, start_day;
+{
+  static double PERCENT_CURED[] = {
+    96.0,  // "winter" cured value
+    95.0,
+    93.0,
+    92.0,
+    90.5,
+    88.4,
+    84.4,
+    78.1,
+    68.7,
+    50.3,
+    32.9,
+    23.0,
+    22.0,
+    21.0,
+    20.0,
+    25.7,
+    35.0,
+    43.0,
+    49.8,
+    60.0,
+    68.0,
+    72.0,
+    75.0,
+    78.9,
+    86.0,
+    96.0  // "winter" cured value for rest of year
+  };
+  /* these are data from DanT's 10 day average of curing for Boreal Plains ...they have been smoothed however
+  and the winter has been added at the max curing observed
+  the DATE array values is the first julian date (doy) in the 10 day window....its unnedded the way i did this now
+  A date past the end of year has been added to make the array search easier.
+  */
+
+  // find previous green up start date (year - 1 or year)
+  struct tm date = {
+    .tm_year = yr - 1900,
+    .tm_mon = mon - 1,
+    .tm_mday = day,
+    .tm_isdst = 0};
+  struct tm greenup = {
+    .tm_year = yr - 1900,
+    .tm_mon = start_mon - 1,
+    .tm_mday = start_day,
+    .tm_isdst = 0};
+  
+  int shift = difftime(mktime(&date), mktime(&greenup)) / 86400;  // 86400s / day
+  if (shift < 0) {
+    greenup.tm_year = yr - 1 - 1900;
+    shift = difftime(mktime(&date), mktime(&greenup)) / 86400;
+  }
+
+  int days_in = shift + 1;  // start date is first non-winter value (not 0th)
+
+  // check if date is in green phase or winter (cured) phase
+  if (days_in < (sizeof(PERCENT_CURED) / sizeof(PERCENT_CURED[0]) - 1) * 10) {
+    // linear interpolation between every 10-day value
+    double per_cur0 = PERCENT_CURED[days_in / 10];
+    double per_cur1 = PERCENT_CURED[days_in / 10 + 1];
+    double period_frac = (days_in % 10) / 10.0;
+    double result = per_cur0 + (per_cur1 - per_cur0) * period_frac;
+    return result;
+  } else {
+    return PERCENT_CURED[0];
+  }
+}
+
 bool is_leap(int yr) {
   return (yr % 4 == 0 && yr % 100 != 0 || yr % 400 == 0);
 }
@@ -97,12 +173,15 @@ double single_hour_solrad_estimation(struct row *r)
   return solrad;
 }
 
-void sunrise_sunset(struct row *r)
+void sunrise_sunset(lat, lon, timezone, date, suntime)
+double lat, lon, timezone;
+struct tm date;
+double *suntime;
 {
   double dechour = 12.0;
   // .tm_yday is already 0-indexed (i.e. Jan 1st = 0)
-  double fracyear = 2.0 * M_PI * (r->timestamp.tm_yday + (dechour - 12.0) / 24.0);
-  fracyear = is_leap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
+  double fracyear = 2.0 * M_PI * (date.tm_yday + (dechour - 12.0) / 24.0);
+  fracyear = is_leap(date.tm_year) ? (fracyear / 366.0) : (fracyear / 365.0);
   double eqtime = 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
@@ -110,18 +189,18 @@ void sunrise_sunset(struct row *r)
     0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
     0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
     0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear);
-  double timeoffset = eqtime + 4 * r->lon - 60 * r->timezone;
+  double timeoffset = eqtime + 4 * lon - 60 * timezone;
   double zenith = 90.833 * M_PI / 180.0;
-  double x_tmp = cos(zenith) / (cos(r->lat * M_PI / 180.0) * cos(decl)) -
-    tan(r->lat * M_PI / 180.0) * tan(decl);
+  double x_tmp = cos(zenith) / (cos(lat * M_PI / 180.0) * cos(decl)) -
+    tan(lat * M_PI / 180.0) * tan(decl);
   x_tmp = _max(-1.0, _min(1.0, x_tmp));
   double halfday = 180.0 * acos(x_tmp) / M_PI;
 
-  r->sunrise = (720.0 - 4.0 * (r->lon + halfday) - eqtime) / 60.0 + r->timezone;
-  r->sunset = (720.0 - 4.0 * (r->lon - halfday) - eqtime) / 60.0 + r->timezone;
+  suntime[0] = (720.0 - 4.0 * (lon + halfday) - eqtime) / 60.0 + timezone;
+  suntime[1] = (720.0 - 4.0 * (lon - halfday) - eqtime) / 60.0 + timezone;
 }
 
-void check_header(FILE *input, const char *header_req, struct flags *f) {
+void check_header_FWI(FILE *input, const char *header_req, struct flags *f) {
 
   char header_full[200];
 
@@ -179,10 +258,9 @@ void check_header(FILE *input, const char *header_req, struct flags *f) {
 
 }
 
-void check_header_legacy(FILE *input, const char *header)
+void check_header_match(FILE *input, const char *header)
 {
-  /* printf("Checking header matches:\n\t%s\n", header); */
-  /* check that the header matches what is expected */
+  /* check that the first line in input matches header */
   char a[1];
   const int n = strlen(header);
   int i;
@@ -374,133 +452,33 @@ int read_row_minmax(FILE *inp, struct row_minmax *r)
   /* this is declared as an array just to make it a pointer ...for reading commas easily*/
   char a[1];
   int err = fscanf(inp,
-                   "%lf%c%lf%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf",
-                   &r->lat,
-                   a,
-                   &r->lon,
-                   a,
-                   &r->year,
-                   a,
-                   &r->mon,
-                   a,
-                   &r->day,
-                   a,
-                   &r->temp_min,
-                   a,
-                   &r->temp_max,
-                   a,
-                   &r->rh_min,
-                   a,
-                   &r->rh_max,
-                   a,
-                   &r->ws_min,
-                   a,
-                   &r->ws_max,
-                   a,
-                   &r->rain);
+    "%lf%c%lf%c"
+    "%d%c%d%c%d%c"
+    "%lf%c%lf%c"
+    "%lf%c%lf%c"
+    "%lf%c%lf%c%lf",
+    &r->lat, a, &r->lon, a,
+    &r->year, a, &r->mon, a, &r->day, a,
+    &r->temp_min, a, &r->temp_max, a,
+    &r->rh_min, a, &r->rh_max, a,
+    &r->ws_min, a, &r->ws_max, a, &r->rain);
   if (err > 0)
   {
     check_weather(r->temp_min, r->rh_min, r->ws_min, r->rain);
     check_weather(r->temp_max, r->rh_max, r->ws_max, r->rain);
   }
+
+  struct tm date = {
+    .tm_year = r->year - 1900,  // years since 1900
+    .tm_mon = r->mon - 1,  // 0-indexed month (i.e. Jan = 0)
+    .tm_mday = r->day,
+    .tm_isdst = 0  // modify command line timezone input only for daylight time data
+  };
+  mktime(&date);
+  r->date = date;
+
   return err;
 }
-
-/* this is a simple piecewise tabular summary (10day) if DKT's NDVI based cure state analysis (smoothed)
-It is from central canada Boreal Plains
-
-It will be a DEFAULT greenness given NO other information ....Users should be encouraged to make ...
-these local observations each year themselves as such obs will be far superior to this average
-*/
-double seasonal_curing(yr, mon, day, start_mon, start_day)
-int yr, mon, day, start_mon, start_day;
-{
-  static double PERCENT_CURED[] = {
-    96.0,  // "winter" cured value
-    95.0,
-    93.0,
-    92.0,
-    90.5,
-    88.4,
-    84.4,
-    78.1,
-    68.7,
-    50.3,
-    32.9,
-    23.0,
-    22.0,
-    21.0,
-    20.0,
-    25.7,
-    35.0,
-    43.0,
-    49.8,
-    60.0,
-    68.0,
-    72.0,
-    75.0,
-    78.9,
-    86.0,
-    96.0  // "winter" cured value for rest of year
-  };
-  /* these are data from DanT's 10 day average of curing for Boreal Plains ...they have been smoothed however
-  and the winter has been added at the max curing observed
-  the DATE array values is the first julian date (doy) in the 10 day window....its unnedded the way i did this now
-  A date past the end of year has been added to make the array search easier.
-  */
-
-  // find previous green up start date (year - 1 or year)
-  struct tm date = {
-    .tm_year = yr - 1900,
-    .tm_mon = mon - 1,
-    .tm_mday = day,
-    .tm_isdst = 0};
-  struct tm greenup = {
-    .tm_year = yr - 1900,
-    .tm_mon = start_mon - 1,
-    .tm_mday = start_day,
-    .tm_isdst = 0};
-  
-  int shift = difftime(mktime(&date), mktime(&greenup)) / 86400;  // 86400s / day
-  if (shift < 0) {
-    greenup.tm_year = yr - 1 - 1900;
-    shift = difftime(mktime(&date), mktime(&greenup)) / 86400;
-  }
-
-  int days_in = shift + 1;  // start date is first non-winter value (not 0th)
-
-  // check if date is in green phase or winter (cured) phase
-  if (days_in < (sizeof(PERCENT_CURED) / sizeof(PERCENT_CURED[0]) - 1) * 10) {
-    // linear interpolation between every 10-day value
-    double per_cur0 = PERCENT_CURED[days_in / 10];
-    double per_cur1 = PERCENT_CURED[days_in / 10 + 1];
-    double period_frac = (days_in % 10) / 10.0;
-    double result = per_cur0 + (per_cur1 - per_cur0) * period_frac;
-    return result;
-  } else {
-    return PERCENT_CURED[0];
-  }
-}
-
-// // HACK: use sprintf and then copy so we can replace -0.0 without screwing things up with bad rounding
-// int _fprintf(FILE *__restrict __stream, const char *__restrict __fmt, ...)
-// {
-//   char buffer[4096];
-//   va_list args;
-//   va_start(args, __fmt);
-//   const size_t len = vsnprintf(
-//       buffer,
-//       sizeof(buffer),
-//       __fmt,
-//       args);
-//   if (len >= sizeof(buffer))
-//   {
-//     printf("**** ERROR: could not write because buffer is too small for %s:\n\t", buffer);
-//     exit(-1);
-//   }
-//   va_end(args);
-//   // now replace -0.0 anywhere
-// }
 
 int save_rounded(FILE *file, const char *fmt, const double value)
 {
@@ -532,7 +510,7 @@ int save_rounded(FILE *file, const char *fmt, const double value)
   return len;
 }
 
-// HACK: act like other languages for printing based on columns so results are the same
+// act like other languages for printing based on columns so results are the same
 void save_csv(FILE *file, const char *fmt_all, ...)
 {
   char *buffer = (char *)malloc(sizeof(char) * (strlen(fmt_all) + 1));

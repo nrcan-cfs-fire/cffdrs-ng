@@ -32,17 +32,22 @@ void temp_min_max(double temp_noon, double rh_noon, double *temp_min, double *te
 
 int main(int argc, char *argv[])
 {
-  /*  CSV headers */
-  static const char *header = "lat,long,yr,mon,day,temp,rh,ws,prec";
-  static const char *header_out = "lat,long,yr,mon,day,temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
   if (argc != 3)
   {
-    printf("Command line:   %s <input file> <output file>\n\n", argv[0]);
-    printf("INPUT FILE format must be DAILY weather data, comma seperated and take the form\n");
-    printf("%s\n\n", header);
-    printf("All times should be local standard time\n");
+    printf("\n########\nhelp/usage:\n%s input output\n\n", argv[0]);
+    // Help
+    printf("positional arguments:\n"
+      "input                 Input csv data file\n"
+      "output                Output csv file name and location\n########\n\n");
     exit(1);
   }
+  
+  /*  CSV headers */
+  static const char *header = "lat,long,yr,mon,day,temp,rh,ws,prec";
+  static const char *header_out = "lat,long,yr,mon,day,"
+    "temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
+  
+  // open input file
   printf("Opening input file >>> %s   \n", argv[1]);
   FILE *inp = fopen(argv[1], "r");
   if (NULL == inp)
@@ -50,9 +55,19 @@ int main(int argc, char *argv[])
     printf("\n\n ***** FILE  %s  does not exist\n", argv[1]);
     exit(1);
   }
-  check_header_legacy(inp, header);
+
+  check_header_match(inp, header);
+
+  // open output file
   FILE *out = fopen(argv[2], "w");
+  if (out == NULL) {
+    printf("\n\n***** FILE %s can not be opened\n", argv[2]);
+    exit(1);
+  }
+  printf("Saving outputs to file >>> %s\n", argv[2]);
   fprintf(out, "%s\n", header_out);
+
+  // start calculation
   struct row_daily cur;
   int err = read_row_daily(inp, &cur);
   while (err > 0)
@@ -66,34 +81,13 @@ int main(int argc, char *argv[])
     double ws_min = 0.15 * cur.wind;
     double ws_max = 1.25 * cur.wind;
     save_csv(out,
-             "%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.2f\n",
-             cur.lat,
-             cur.lon,
-             cur.year,
-             cur.mon,
-             cur.day,
-             temp_min,
-             temp_max,
-             rh_min,
-             rh_max,
-             ws_min,
-             ws_max,
-             cur.rain);
-    printf("%.4f,%.4f,%4d,%02d,%02d,%.1f,%.1f,%.0f,%.0f,%.1f,%.1f,%.2f\n",
-           cur.lat,
-           cur.lon,
-           cur.year,
-           cur.mon,
-           cur.day,
-           temp_min,
-           temp_max,
-           rh_min,
-           rh_max,
-           ws_min,
-           ws_max,
-           cur.rain);
+             "%.4f,%.4f,%d,%d,%d,"
+             "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%f\n",
+             cur.lat, cur.lon, cur.year, cur.mon, cur.day,
+             temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, cur.rain);
     err = read_row_daily(inp, &cur);
   } /* end the main while(err>0)  */
+  
   fclose(inp);
   fclose(out);
   return 0;

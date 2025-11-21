@@ -396,7 +396,7 @@ struct daily_summary generate_daily_summary(struct day_vals day){
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
+    if (argc < 3) {
         printf("\n########\nhelp/usage:\n"
             "%s input output [reset_hr]\n\n", argv[0]);
         puts("positional arguments:\n"
