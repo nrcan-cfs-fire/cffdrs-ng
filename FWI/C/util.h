@@ -97,6 +97,24 @@ double findQ(double temp, double rh);
 double findrh(double q, double temp);
 
 /**
+ * Find if a year is a leap year or not
+ * 
+ * @param yr    Year
+ * @return      Boolean whether year is a leap year or not
+ */
+bool is_leap(int yr);
+
+/**
+ * Find day of year
+ *
+ * @param yr          Year
+ * @param mon         Month of year
+ * @param day         Day of month
+ * @return            Day of year
+ */
+int julian(int yr, int mon, int day);
+
+/**
  * Calculate hourly surface open-site shortwave radiation in kW/m^2.
  *
  * @param r                 Structure of data row (required columns:
@@ -113,23 +131,6 @@ double single_hour_solrad_estimation(struct row *r);
  * @return              Updates .sunrise and .sunset members of input structure
  */
 void sunrise_sunset(struct row *r);
-
-/**
- * Find if a year is a leap year or not
- * 
- * @param yr    Year
- * @return      Boolean whether year is a leap year or not
- */
-bool is_leap(int yr);
-
-/**
- * Find day of year. Does not properly deal with leap years.
- *
- * @param mon         Month
- * @param day         Day of month
- * @return            Day of year
- */
-int julian(int mon, int day);
 
 /**
  * Check that the file stream matches the given string and exit if not

@@ -11,8 +11,8 @@ int main(int argc, char *argv[])
   if (argc < 3) {
     printf("\n########\nhelp/usage:\n"
       "%s input output timezone\n"
-      "ffmc_old mcffmc_old dmc_old dc_old mcgfmc_matted_old mcgfmc_standing_old\n"
-      "prec_cumulative canopy_drying\n\n", argv[0]);
+      "[ffmc_old] [mcffmc_old] [dmc_old] [dc_old] [mcgfmc_matted_old] [mcgfmc_standing_old]\n"
+      "[prec_cumulative] [canopy_drying]\n\n", argv[0]);
     // Help
     printf("positional arguments:\n"
       "input                 Input csv data file\n"
@@ -292,13 +292,13 @@ int main(int argc, char *argv[])
     sunlight_hours = cur.sunset - cur.sunrise;
 
     save_csv(out,
-      "%.4f,%.4f,%.2f,%4d,%02d,%02d,%02d,"
+      "%.4f,%.4f,%.2f,%d,%d,%d,%d,"
       "%.1f,%.0f,%.1f,%.2f,"
       "%.2f,%.2f,"
       "%.4f,%.4f,%.4f,%.4f,"
       "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
       "%.4f,%.4f,%.4f,%.4f,%.4f,"
-      "%.4f,%.4f\n",
+      "%.4f,%d\n",
       cur.lat, cur.lon, cur.timezone, cur.year, cur.mon, cur.day, cur.hour,
       cur.temp, cur.rh, cur.ws, cur.rain,
       cur.grass_fuel_load, cur.percent_cured,

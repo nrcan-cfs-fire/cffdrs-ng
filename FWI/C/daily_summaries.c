@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
+#include <time.h>
 
 struct pseudo_date{
     int year;
-    int jd;
+    int yday;
 };
 
 struct daily_summary{
@@ -33,37 +34,19 @@ struct daily_summary{
 };
 
 struct hour_vals {
-    int hour;
-    double ffmc;
-    double dmc;
-    double dc;
-    double isi;
-    double bui;
-    double fwi;
-    double dsr;
-    double gfmc;
-    double gsi;
-    double gfwi;
-    double ws;
-
-    double smooth_ws;
-    double smooth_isi;
-
-    double mcgfmc_matted;
-    double mcgfmc_standing;
-    double perc_cured;
-
-    double sunrise;
-    double sunset;
-
-    int year;
-    int month;
-    int day;
+    // read in from input
+    double lat, lon, timezone;
+    int year, month, day, hour;
+    double ws, percent_cured, sunrise, sunset;
+    double ffmc, dmc, dc, isi, bui, fwi, dsr;
+    double mcgfmc_matted, mcgfmc_standing, gfmc, gsi, gfwi;
+    // variables to calculate
+    double smooth_ws, smooth_isi;
 };
 
 struct day_vals {
     struct pseudo_date* p_day;
-    struct hour_vals* day[24];
+    struct hour_vals* hour[24];
     int hour_slots_filled;
 };
 
@@ -110,8 +93,8 @@ void smooth_5pt(double *source, int source_len, double *dest){
     }
 
     miss = 0;
-    for(i = (source_len); i < source_len; i++){
-        if(*(source + i) < -90.0){
+    for(i = source_len - 3; i < source_len; i++){
+        if((source[i]) < -90.0){
             miss = miss + 1;
         }
     }
@@ -124,114 +107,48 @@ void smooth_5pt(double *source, int source_len, double *dest){
     }
 }
 
-
-//this function calculates a fake date based on 5am-5am instead of midnight to midnight
-//used for generating daily summaries to make data look at 5am-5am instead
-//output form is "year-julian_day", with the julian day rounded back if the time is before 5am
-//for Jan 1st where the julian day rollback would make it zero it gets bumped to the last day of the previous year
-void pseudo_date(int year, int month, int day, int hour, int reset_hour, struct pseudo_date *pd){
+/**
+ * Calculate a pseudo-date that changes not at midnight but forward at another hour
+ * 
+ * @param    yr        year
+ * @param    mon       month number
+ * @param    day       day of month
+ * @param    hr        hour of day
+ * @param    reset_hr  the new boundary hour instead of midnight (default 5)
+ * @param    pd        pseudo_date structure pointer
+ */
+void pseudo_date(yr, mon, day, hr, reset_hr, pd)
+int yr, mon, day, hr, reset_hr;
+struct pseudo_date *pd;
+{
     int adjusted_jd;
     int adjusted_year;
 
-    if(hour < reset_hour){
-        adjusted_jd = julian(month, day) - 1;
-    }
-    else{
-        adjusted_jd = julian(month, day);
-    }
-
-    if(adjusted_jd == 0){
-        adjusted_jd = julian(12,31);
-        adjusted_year = year -1;
-    }
-    else{
-        adjusted_year = year;
+    // using julian function due to weird behaviour at 23h with struct tm and mktime()
+    if (hr < reset_hr) {
+        adjusted_jd = julian(yr, mon, day) - 1;
+    } else {
+        adjusted_jd = julian(yr, mon, day);
     }
 
-    //struct pseudo_date pd;
-    pd->jd = adjusted_jd;
+    if (adjusted_jd == 0) {  // where Jan 1 shifts to 0, bump it to end of previous year
+        adjusted_jd = julian(yr - 1, 12, 31);
+        adjusted_year = yr - 1;
+    } else {
+        adjusted_year = yr;
+    }
+
+    // fill in struct pseudo_date pd;
+    pd->yday = adjusted_jd;
     pd->year = adjusted_year;
-    //return pd;
 }
 
-
-//daily summary for a specific pseudo-date
-struct daily_summary generate_daily_summary(struct day_vals day, int reset_hour){
-
-    const double spread_threshold_isi = 5.0;
-    struct daily_summary summary;
-
-    int i;
-
-    //calculate smoothed ws 
-    double *ws_pt = (double*)malloc(sizeof(double)*day.hour_slots_filled);
-    for(i = 0; i< day.hour_slots_filled; i++){
-        ws_pt[i] = day.day[i]->ws;
-    }
-    double *ws_smmoth_pt= (double*)malloc(sizeof(double)*day.hour_slots_filled);
-    smooth_5pt(ws_pt, day.hour_slots_filled, ws_smmoth_pt);
-
-    //calculate smoothed isi and find peak info
-    int ffmc_max_spot = 0;
-    int peak_time_spot = 0;
-    int duration = 0;
-    
-    for(i = 0; i < day.hour_slots_filled; i++){
-        day.day[i]->smooth_ws = ws_smmoth_pt[i];
-        day.day[i]->smooth_isi = initial_spread_index(day.day[i]->smooth_ws, day.day[i]->ffmc);
-
-        if(day.day[i]->smooth_isi > spread_threshold_isi){
-            duration+=1;
-        }
-        if(day.day[i]->ffmc > day.day[ffmc_max_spot]->ffmc){
-            ffmc_max_spot = i;
-        }
-        if(day.day[i]->smooth_isi > day.day[peak_time_spot]->smooth_isi){
-            peak_time_spot = i;
-        }
-    }
-
-    if(day.day[ffmc_max_spot]->ffmc < 85.0){
-        peak_time_spot =  12;
-    }
-    summary.bui = day.day[peak_time_spot]->bui;
-    summary.dc = day.day[peak_time_spot]->dc;
-    summary.dmc = day.day[peak_time_spot]->dmc;
-    summary.dsr = day.day[peak_time_spot]->dsr;
-    summary.ffmc = day.day[peak_time_spot]->ffmc;
-    summary.fwi = day.day[peak_time_spot]->fwi;
-    summary.gfmc = day.day[peak_time_spot]->gfmc;
-    summary.gfwi = day.day[peak_time_spot]->gfwi;
-    summary.gsi = day.day[peak_time_spot]->gsi;
-    summary.isi = day.day[peak_time_spot]->isi;
-    summary.ws_smooth = day.day[peak_time_spot]->smooth_ws;
-    summary.isi_smooth = day.day[peak_time_spot]->smooth_isi;
-    summary.duration = duration;
-    summary.sunrise = day.day[peak_time_spot]->sunrise;
-    summary.sunset = day.day[peak_time_spot]->sunset;
-    summary.peak_hour = day.day[peak_time_spot]->hour;
-    summary.year = day.day[0]->year;
-    summary.month = day.day[0]->month;
-    summary.day = day.day[0]->day;
-
-    bool standing;
-    double mcgfmc;
-    if(julian(day.day[peak_time_spot]->month,day.day[peak_time_spot]->day) < DATE_GRASS){
-        standing = false;
-        mcgfmc = day.day[peak_time_spot]->mcgfmc_matted;
-    }
-    else{
-        standing = true;
-        mcgfmc = day.day[peak_time_spot]->mcgfmc_standing;
-    }
-    summary.gsi_smooth = grass_spread_index(summary.ws_smooth, mcgfmc, day.day[peak_time_spot]->perc_cured, standing);
-
-    free(ws_pt);
-    free(ws_smmoth_pt);
-    return summary;
-
-}
-
+/**
+ * Loads and compares input file header to string
+ * 
+ * @param    inp        input file pointer
+ * @param    header     string to compare to
+ */
 void check_header_daily_summaries(FILE *inp, const char *header){
     char intake[1];
     int err = fscanf(inp, "%c", &intake[0]);
@@ -258,91 +175,64 @@ void check_header_daily_summaries(FILE *inp, const char *header){
     }
 }
 
-int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *buffer, int reset_hour){
-    
+/**
+ * Load hourly data until pseudo-date changes
+ * 
+ * @param   inp         input file pointer
+ * @param   by_date     day_vals structure to load hourly data into
+ * @param   buffer      hour_vals structure to store next hour's data in
+ * @param   reset_hour  new boundary to define pseudo-date summarize (default 5)
+ * @return              number of arguments read by fscanf()
+ */
+int read_row_daily_summaries(inp, by_date, buffer, reset_hour)
+FILE *inp;
+struct day_vals *by_date;
+struct hour_vals *buffer;
+int reset_hour;
+{
     bool day_change_flag = false;
-    int err = 0;
-    int round = 0;
-    while(!day_change_flag){
-        
-        round+=1;
-        if(buffer->year == -1){
+    int err = 0, round = 0, h;
+    struct pseudo_date pd;
+
+    while (!day_change_flag) {
+        round++;
+        if (buffer->year == -1) {  // if buffer was already written to by_date
             char waste_c[1];
-            double waste_lf;
-            int waste_int;
-            int year, month, day, hour;
-            double ws, ffmc, dmc, dc, isi, bui, fwi, dsr, gfmc, gsi, gfwi, mcgfmc_matted, mcgfmc_standing, sunrise, sunset, perc_cured;
+            int waste_i, year, month, day, hour;
+            double waste_f, ws, percent_cured, sunrise, sunset;
+            double ffmc, dmc, dc, isi, bui, fwi, dsr;
+            double mcgfmc_matted, mcgfmc_standing, gfmc, gsi, gfwi;
+
             err = fscanf(inp,
-                        "%lf%c%lf%c%d%c%d%c%d%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%d%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf%c%lf\n",
-                        &waste_lf,
-                        waste_c,
-                        &perc_cured,
-                        waste_c,
-                        &year,
-                        waste_c,
-                        &month,
-                        waste_c,
-                        &day,
-                        waste_c,
-                        &hour,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &ws,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &perc_cured,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_int,
-                        waste_c,
-                        &sunrise,
-                        waste_c,
-                        &sunset,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &ffmc,
-                        waste_c,
-                        &dmc,
-                        waste_c,
-                        &dc,
-                        waste_c,
-                        &isi,
-                        waste_c,
-                        &bui,
-                        waste_c,
-                        &fwi,
-                        waste_c,
-                        &dsr,
-                        waste_c,
-                        &mcgfmc_matted,
-                        waste_c,
-                        &mcgfmc_standing,
-                        waste_c,
-                        &gfmc,
-                        waste_c,
-                        &gsi,
-                        waste_c,
-                        &gfwi,
-                        waste_c,
-                        &waste_lf,
-                        waste_c,
-                        &waste_lf);
+                "%lf%c%lf%c%lf%c"  // lat, long, timezone
+                "%d%c%d%c%d%c%d%c"  // yr, mon, day, hr
+                "%lf%c%lf%c%lf%c%lf%c"  // temp, rh, ws, prec
+                "%lf%c%lf%c%lf%c"  // grass_fuel_load, percent_cured, solrad
+                "%lf%c%lf%c%lf%c"  // sunrise, sunset, sunlight_hours
+                "%lf%c%lf%c%lf%c%lf%c"  // mcffmc, ffmc, dmc, dc
+                "%lf%c%lf%c%lf%c%lf%c"  // isi, bui, fwi, dsr
+                "%lf%c%lf%c"  // mcgfmc_matted, mcgfmc_standing
+                "%lf%c%lf%c%lf%c"  // gfmc, gsi, gfwi
+                "%lf%c%d",  // prec_cumulative, canopy_drying
+                &waste_f, waste_c, &waste_f, waste_c, &waste_f, waste_c,
+                &year, waste_c, &month, waste_c, &day, waste_c, &hour, waste_c,
+                &waste_f, waste_c, &waste_f, waste_c, &ws, waste_c, &waste_f, waste_c,
+                &waste_f, waste_c, &percent_cured, waste_c, &waste_f, waste_c,
+                &sunrise, waste_c, &sunset, waste_c, &waste_f, waste_c,
+                &waste_f, waste_c, &ffmc, waste_c, &dmc, waste_c, &dc, waste_c,
+                &isi, waste_c, &bui, waste_c, &fwi, waste_c, &dsr, waste_c,
+                &mcgfmc_matted, waste_c, &mcgfmc_standing, waste_c,
+                &gfmc, waste_c, &gsi, waste_c, &gfwi, waste_c,
+                &waste_f, waste_c, &waste_i);
 
             buffer->year = year;
             buffer->month = month;
             buffer->day = day;
             buffer->hour = hour;
             buffer->ws = ws;
+            buffer->percent_cured = percent_cured;
+            buffer->sunrise = sunrise;
+            buffer->sunset = sunset;
             buffer->ffmc = ffmc;
             buffer->dmc = dmc;
             buffer->dc = dc;
@@ -350,189 +240,263 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *day, struct hour_vals *
             buffer->bui = bui;
             buffer->fwi = fwi;
             buffer->dsr = dsr;
+            buffer->mcgfmc_matted = mcgfmc_matted;
+            buffer->mcgfmc_standing = mcgfmc_standing;
             buffer->gfmc = gfmc;
             buffer->gsi = gsi;
             buffer->gfwi = gfwi;
-            buffer->mcgfmc_matted = mcgfmc_matted;
-            buffer->mcgfmc_standing = mcgfmc_standing;
-            buffer->sunrise = sunrise;
-            buffer->sunset = sunset;
-            buffer->perc_cured = perc_cured;
-                     
         }
-        if(err == EOF){
-            break;
+
+        if (err == EOF) {  // reached end of input file
+            return err;
         }
-        struct pseudo_date *pd = (struct pseudo_date*)malloc(sizeof(struct pseudo_date));
-        pseudo_date(buffer->year, buffer->month, buffer->day, buffer->hour, reset_hour, pd);
+
+        pseudo_date(buffer->year, buffer->month, buffer->day, buffer->hour,
+            reset_hour, &pd);
         
-        if(day->hour_slots_filled == 0){
-            
-            day->day[0]->bui = buffer->bui;
-            day->day[0]->day = buffer->day;
-            day->day[0]->dc = buffer->dc;
-            day->day[0]->dmc = buffer->dmc;
-            day->day[0]->dsr = buffer->dsr;
-            
-            day->day[0]->ffmc = buffer->ffmc;
-            day->day[0]->fwi = buffer->fwi;
-            day->day[0]->gfmc = buffer->gfmc;
-            day->day[0]->gfwi = buffer->gfwi;
-            day->day[0]->gsi = buffer->gsi;
-            day->day[0]->hour = buffer->hour;
-            day->day[0]->isi = buffer->isi;
-           
-            day->day[0]->mcgfmc_matted = buffer->mcgfmc_matted;
-            day->day[0]->mcgfmc_standing = buffer->mcgfmc_standing;
-            day->day[0]->month = buffer->month;
-            day->day[0]->perc_cured = buffer->perc_cured;
-            day->day[0]->smooth_isi = buffer->smooth_isi;
-            day->day[0]->smooth_ws = buffer->smooth_ws;
-            day->day[0]->sunrise = buffer->sunrise;
-            day->day[0]->sunset = buffer->sunset;
-          
-            day->day[0]->ws = buffer->ws;
-            day->day[0]->year = buffer->year;
-            day->hour_slots_filled = 1;
-     
-            day->p_day->jd = pd->jd;
-            day->p_day->year = pd->year;
-          
-            buffer->year = -1;
-        
+        if (by_date->hour_slots_filled == 0) {  // new pseudo-date
+            // set pseudo-date of by_date
+            by_date->p_day->yday = pd.yday;
+            by_date->p_day->year = pd.year;
         }
-        else if((pd->jd == day->p_day->jd) && (pd->year == day->p_day->year)){
-           
-            day->day[day->hour_slots_filled]->bui = buffer->bui;
-            day->day[day->hour_slots_filled]->day = buffer->day;
-            day->day[day->hour_slots_filled]->dc = buffer->dc;
-            day->day[day->hour_slots_filled]->dmc = buffer->dmc;
-            day->day[day->hour_slots_filled]->dsr = buffer->dsr;
-       
-            day->day[day->hour_slots_filled]->ffmc = buffer->ffmc;
-            day->day[day->hour_slots_filled]->fwi = buffer->fwi;
-            day->day[day->hour_slots_filled]->gfmc = buffer->gfmc;
-            day->day[day->hour_slots_filled]->gfwi = buffer->gfwi;
-            day->day[day->hour_slots_filled]->gsi = buffer->gsi;
-            day->day[day->hour_slots_filled]->hour = buffer->hour;
-      
-            day->day[day->hour_slots_filled]->isi = buffer->isi;
-            day->day[day->hour_slots_filled]->mcgfmc_matted = buffer->mcgfmc_matted;
-            day->day[day->hour_slots_filled]->mcgfmc_standing = buffer->mcgfmc_standing;
-            day->day[day->hour_slots_filled]->month = buffer->month;
-            day->day[day->hour_slots_filled]->perc_cured = buffer->perc_cured;
-            day->day[day->hour_slots_filled]->smooth_isi = buffer->smooth_isi;
+
+        if ((pd.yday == by_date->p_day->yday) &&
+            (pd.year == by_date->p_day->year)) {
+            // copy buffer to corresponding hour in by_date
+            h = by_date->hour_slots_filled;
+
+            by_date->hour[h]->year = buffer->year;
+            by_date->hour[h]->month = buffer->month;
+            by_date->hour[h]->day = buffer->day;
+            by_date->hour[h]->hour = buffer->hour;
+            by_date->hour[h]->ws = buffer->ws;
+            by_date->hour[h]->percent_cured = buffer->percent_cured;
+            by_date->hour[h]->sunrise = buffer->sunrise;
+            by_date->hour[h]->sunset = buffer->sunset;
+            by_date->hour[h]->ffmc = buffer->ffmc;
+            by_date->hour[h]->dmc = buffer->dmc;
+            by_date->hour[h]->dc = buffer->dc;
+            by_date->hour[h]->isi = buffer->isi;
+            by_date->hour[h]->bui = buffer->bui;
+            by_date->hour[h]->fwi = buffer->fwi;
+            by_date->hour[h]->dsr = buffer->dsr;
+            by_date->hour[h]->mcgfmc_matted = buffer->mcgfmc_matted;
+            by_date->hour[h]->mcgfmc_standing = buffer->mcgfmc_standing;
+            by_date->hour[h]->gfmc = buffer->gfmc;
+            by_date->hour[h]->gfwi = buffer->gfwi;
+            by_date->hour[h]->gsi = buffer->gsi;
         
-            day->day[day->hour_slots_filled]->smooth_ws = buffer->smooth_ws;
-            day->day[day->hour_slots_filled]->sunrise = buffer->sunrise;
-            day->day[day->hour_slots_filled]->sunset = buffer->sunset;
-            day->day[day->hour_slots_filled]->ws = buffer->ws;
-            day->day[day->hour_slots_filled]->year = buffer->year;
-        
-            day->hour_slots_filled += 1;
-            buffer->year = -1;
-        
-        }
-        else{
-          
+            by_date->hour_slots_filled++;
+            buffer->year = -1;  // set to read in next row
+        } else {  // new pseudo-date, exit function but continue to hold buffer
             day_change_flag = true;
         }
-    
-        free(pd);
-        pd=NULL;
-    
     }
-
     return err;
 }
 
-int main(int argc, char *argv[]){
+/**
+ * Calculate Daily Summaries given hourly FWI indices from a pseudo-date
+ * 
+ * @param    day        day_vals structure for a pseudo-date
+ * @return              daily_summary structure of peak FWI conditions
+ */
+struct daily_summary generate_daily_summary(struct day_vals day){
+    const double spread_threshold_isi = 5.0;
+    struct daily_summary summary;
 
-    //################# args are --input file --output file
+    int i;
 
-    //headers for csvs
-    static const char *header_in = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load,timezone,sunrise,sunset,sunlight_hours,mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,prec_cumulative,canopy_drying";
-    static const char *header_out = "yr,mon,day,sunrise,sunset,peak_hr,duration,ffmc,dmc,dc,isi,bui,fwi,dsr,gfmc,gsi,gfwi,ws_smooth,isi_smooth,gsi_smooth";
+    //calculate smoothed ws 
+    double *ws_pt = (double*)malloc(sizeof(double)*day.hour_slots_filled);
+    for(i = 0; i< day.hour_slots_filled; i++){
+        ws_pt[i] = day.hour[i]->ws;
+    }
+    double *ws_smooth_pt= (double*)malloc(sizeof(double)*day.hour_slots_filled);
+    smooth_5pt(ws_pt, day.hour_slots_filled, ws_smooth_pt);
 
-    if(argc != 4){
-        printf("Command Line:    %s <input file> <output file> <reset hour>", argv[0]);
-        printf("input file should be an output file from NG_FWI with all columns\n");
-        printf("rounding must be an int for number of decimals or \"n\" for no rounding\n");
-        exit(1);
+    //calculate smoothed isi and find peak info
+    int ffmc_max_spot = 0;
+    int peak_time_spot = 0;
+    int duration = 0;
+    
+    for(i = 0; i < day.hour_slots_filled; i++){
+        day.hour[i]->smooth_ws = ws_smooth_pt[i];
+        day.hour[i]->smooth_isi = initial_spread_index(
+            day.hour[i]->smooth_ws, day.hour[i]->ffmc);
+
+        if(day.hour[i]->smooth_isi > spread_threshold_isi){
+            duration+=1;
+        }
+        if(day.hour[i]->ffmc > day.hour[ffmc_max_spot]->ffmc){
+            ffmc_max_spot = i;
+        }
+        if(day.hour[i]->smooth_isi > day.hour[peak_time_spot]->smooth_isi){
+            peak_time_spot = i;
+        }
     }
 
+    if(day.hour[ffmc_max_spot]->ffmc < 85.0){
+        peak_time_spot =  12;
+    }
 
-    int reset_hour = atof(argv[3]);
-    //int rounding = NULL;
-    //if (argv[4] != "n"){
-    //    rounding = atof(argv[4]);
-    //}
+    // find the rest of the values at peak
+    summary.year = day.hour[0]->year;
+    summary.month = day.hour[0]->month;
+    summary.day = day.hour[0]->day;
+    summary.sunrise = day.hour[peak_time_spot]->sunrise;
+    summary.sunset = day.hour[peak_time_spot]->sunset;
 
+    summary.peak_hour = day.hour[peak_time_spot]->hour;
+    summary.duration = duration;
 
-    //check input header
+    summary.ffmc = day.hour[peak_time_spot]->ffmc;
+    summary.dmc = day.hour[peak_time_spot]->dmc;
+    summary.dc = day.hour[peak_time_spot]->dc;
+    summary.isi = day.hour[peak_time_spot]->isi;
+    summary.bui = day.hour[peak_time_spot]->bui;
+    summary.fwi = day.hour[peak_time_spot]->fwi;
+    summary.dsr = day.hour[peak_time_spot]->dsr;
+    summary.gfmc = day.hour[peak_time_spot]->gfmc;
+    summary.gsi = day.hour[peak_time_spot]->gsi;
+    summary.gfwi = day.hour[peak_time_spot]->gfwi;
+    summary.ws_smooth = day.hour[peak_time_spot]->smooth_ws;
+    summary.isi_smooth = day.hour[peak_time_spot]->smooth_isi;
+
+    // check for matted to standing transition, and calculate gsi_smooth
+    bool standing;
+    double mcgfmc;
+    struct tm ts = {
+        .tm_year = day.hour[peak_time_spot]->year - 1900,  // years since 1900
+        .tm_mon = day.hour[peak_time_spot]->month - 1,  // 0-indexed month
+        .tm_mday = day.hour[peak_time_spot]->day,
+        .tm_hour = 0,
+        .tm_isdst = 0
+    };
+    struct tm DATE_GRASS_STANDING = {
+    .tm_year = day.hour[peak_time_spot]->year - 1900,
+    .tm_mon = MON_STANDING - 1,
+    .tm_mday = DAY_STANDING,
+    .tm_isdst = 0};
+
+    if (GRASS_TRANSITION &&
+        difftime(mktime(&ts), mktime(&DATE_GRASS_STANDING)) < 0) {
+        standing = false;
+        mcgfmc = day.hour[peak_time_spot]->mcgfmc_matted;
+    } else {
+        standing = true;
+        mcgfmc = day.hour[peak_time_spot]->mcgfmc_standing;
+    }
+    summary.gsi_smooth = grass_spread_index(
+        summary.ws_smooth, mcgfmc, day.hour[peak_time_spot]->percent_cured, standing);
+
+    free(ws_pt);
+    free(ws_smooth_pt);
+    return summary;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("\n########\nhelp/usage:\n"
+            "%s input output [reset_hr]\n\n", argv[0]);
+        puts("positional arguments:\n"
+            "input                 Input csv data file\n"
+            "output                Output csv file name and location\n"
+            "reset_hr              New boundary to define day to summarize (default 5)\n"
+            "########\n\n");
+        exit(1);
+    }
+    
+    // headers for csvs
+    static const char *header_in = "lat,long,timezone,yr,mon,day,hr,"
+        "temp,rh,ws,prec,grass_fuel_load,percent_cured,"
+        "solrad,sunrise,sunset,sunlight_hours,"
+        "mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,"
+        "mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,"
+        "prec_cumulative,canopy_drying";
+    static const char *header_out = "yr,mon,day,"
+        "sunrise,sunset,"
+        "peak_hr,duration,"
+        "ffmc,dmc,dc,isi,bui,fwi,dsr,"
+        "gfmc,gsi,gfwi,"
+        "ws_smooth,isi_smooth,gsi_smooth";
+    
+    int reset_hr;
+    
+    // open input file
     FILE *inp = fopen(argv[1], "r");
     printf("Opening input file >>> %s   \n", argv[1]);
-    if (inp == NULL){
+    if (inp == NULL) {
         printf("\n\n ***** FILE  %s  does not exist\n", argv[1]);
         exit(1);
     }
 
+    // load optional argument if provided, or set to default
+    if (argc > 3) {
+        reset_hr = atof(argv[3]);
+    } else {
+        reset_hr = 5;
+    }
 
+    if (argc > 4) {
+        puts("Warning: too many arguments provided, some unused\n");
+    }
+
+    // check input header
     check_header_daily_summaries(inp, header_in);
     
+    // open output file
+    FILE *out = fopen(argv[2], "w");
+    if (out == NULL) {
+        printf("\n\n***** FILE %s can not be opened\n", argv[2]);
+        exit(1);
+    }
+    printf("Saving outputs to file >>> %s\n", argv[2]);
+    fprintf(out, "%s\n", header_out);
+
+    // start calculation
     struct hour_vals *buffer;
     buffer = (struct hour_vals*)malloc(sizeof(struct hour_vals));
-    buffer->year=-1;
-  
-    FILE *out = fopen(argv[2], "w");
-    fprintf(out, "%s\n", header_out);
+    buffer->year = -1;
     int err = 1;
    
-    while(err>0){
-        //run summary function for pseudo day
-        struct day_vals *day = (struct day_vals*)malloc(sizeof(struct day_vals));
-        day->p_day = (struct pseudo_date*)malloc(sizeof(struct pseudo_date));
+    while (err > 0) {  // while there is a next row of data in input file
+        // allocate storage in by_date for all data for a pseudo-date
+        struct day_vals *by_date = (struct day_vals*)malloc(sizeof(struct day_vals));
+        by_date->p_day = (struct pseudo_date*)malloc(sizeof(struct pseudo_date));
         for(int i = 0; i< 24; i++){
-            day->day[i] = (struct hour_vals*)malloc(sizeof(struct hour_vals));
+            by_date->hour[i] = (struct hour_vals*)malloc(sizeof(struct hour_vals));
         }
-        day->hour_slots_filled=0;
-        err = read_row_daily_summaries(inp, day, buffer, reset_hour);
-   
-        if(day->hour_slots_filled > 12){
-            struct daily_summary summary = generate_daily_summary(*day,reset_hour);
-            fprintf(out, "%02d,%02d,%02d,%.4f,%.4f,%02d,%02d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
-            summary.year,
-            summary.month,
-            summary.day,
-            summary.sunrise,
-            summary.sunset,
-            summary.peak_hour,
-            summary.duration,
-            summary.ffmc,
-            summary.dmc,
-            summary.dc,
-            summary.isi,
-            summary.bui,
-            summary.fwi,
-            summary.dsr,
-            summary.gfmc,
-            summary.gsi,
-            summary.gfwi,
-            summary.ws_smooth,
-            summary.isi_smooth,
-            summary.gsi_smooth);    
+        by_date->hour_slots_filled = 0;
+
+        err = read_row_daily_summaries(inp, by_date, buffer, reset_hr);
+        
+        // run summary function if there are at least 12h in pseudo-date
+        if (by_date->hour_slots_filled > 12) {
+            struct daily_summary summary = generate_daily_summary(*by_date);
+            fprintf(out,
+                "%d,%d,%d,"
+                "%.4f,%.4f,"
+                "%d,%d,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f,"
+                "%.4f,%.4f,%.4f\n",
+                summary.year, summary.month, summary.day,
+                summary.sunrise, summary.sunset,
+                summary.peak_hour, summary.duration,
+                summary.ffmc, summary.dmc, summary.dc,
+                summary.isi, summary.bui, summary.fwi, summary.dsr,
+                summary.gfmc, summary.gsi, summary.gfwi,
+                summary.ws_smooth, summary.isi_smooth, summary.gsi_smooth);
         }
-      
 
-        //output
-
-        free(day->p_day);
+        free(by_date->p_day);
         for(int i = 0; i< 24; i++){
-            free(day->day);
+            free(by_date->hour);
         }
-        free(day);
-        day=NULL;
-
+        free(by_date);
+        by_date=NULL;
     }
 
     free(buffer);
@@ -541,5 +505,3 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
-
-

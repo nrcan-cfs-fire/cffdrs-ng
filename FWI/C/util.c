@@ -50,6 +50,23 @@ bool is_leap(int yr) {
   return (yr % 4 == 0 && yr % 100 != 0 || yr % 400 == 0);
 }
 
+int julian(int yr, int mon, int day)
+{
+    if (mon == 1) {  // January
+        return day;
+    } else if (mon == 2) {  // February
+        return day + 31;
+    } else {  // March-December depends on leap year, use algorithm
+        int i;
+        if (is_leap(yr)) {
+            i = 2;
+        } else {
+            i = 3;
+        }
+        return (30 * (mon - 1) + floor(0.6 * (mon + 1)) - i + day);
+    }
+}
+
 double single_hour_solrad_estimation(struct row *r)
 {
   double dechour = 12.0;
@@ -104,12 +121,6 @@ void sunrise_sunset(struct row *r)
   r->sunset = (720.0 - 4.0 * (r->lon - halfday) - eqtime) / 60.0 + r->timezone;
 }
 
-int julian(int mon, int day)
-{
-  static const int month[13] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
-  return month[mon - 1] + day;
-}
-
 void check_header(FILE *input, const char *header_req, struct flags *f) {
 
   char header_full[200];
@@ -126,7 +137,7 @@ void check_header(FILE *input, const char *header_req, struct flags *f) {
   in_buffer_len = strlen(in_buffer);
 
   if (in_buffer_len == 200) {  // limit input header to 200 characters
-    puts("Input header has more than 200 characters, increase limit");
+    puts("Input header has more than 200 characters, remove columns or increase limit");
     exit(1);
   }
 
@@ -275,7 +286,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
   err = fscanf(inp, "%500s", line);  // limit a row of data to 500 characters
   
   if (strlen(line) == 500) {  // limit a row of data to 500 characters
-    puts("Input data line has more than 500 characters, increase limit");
+    puts("Input data line has more than 500 characters, remove columns or increase limit");
     exit(1);
   }
 
