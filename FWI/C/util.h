@@ -5,6 +5,9 @@
 #include <stdbool.h>
 #include <time.h>
 
+
+
+////// Variable Definitions
 #ifndef M_PI
 #define M_PI 3.1415926535897932384626433
 #endif
@@ -64,7 +67,7 @@ struct flags{
   bool grass_fuel_load_flag, percent_cured_flag, solrad_flag;
 };
 
-////// Function Declarations
+////// Function Declarations and Help
 
 /* C90 max() also causing problems */
 double _max(double x, double y);

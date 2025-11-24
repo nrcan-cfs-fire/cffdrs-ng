@@ -2,6 +2,7 @@
 #include "NG_FWI.h"
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <math.h>
 
 
@@ -17,7 +18,7 @@ int main(int argc, char *argv[])
     printf("positional arguments:\n"
       "input                 Input csv data file\n"
       "output                Output csv file name and location\n"
-      "timezone              UTC offset\n"
+      "timezone              UTC offset (required in C version)\n"
       "ffmc_old              Starting value for FFMC (default 85, \"n\" for mcffmc_old)\n"
       "mcffmc_old            Starting value for mcffmc (default \"n\" for ffmc_old input)\n"
       "dmc_old               Starting DMC (default 6)\n"
@@ -86,12 +87,12 @@ int main(int argc, char *argv[])
   if (argc > 8) {
     mcgfmc_matted_old = atof(argv[8]);
   } else {
-    mcgfmc_matted_old = fine_fuel_moisture_from_code(85);
+    mcgfmc_matted_old = ffmc_to_mcffmc(85);
   }
   if (argc > 9) {
     mcgfmc_standing_old = atof(argv[9]);
   } else {
-    mcgfmc_standing_old = fine_fuel_moisture_from_code(85);
+    mcgfmc_standing_old = ffmc_to_mcffmc(85);
   }
   if (argc > 10) {
     prec_cumulative = atof(argv[10]);
@@ -153,15 +154,15 @@ int main(int argc, char *argv[])
   }
 
   // initialize parameters
-  double mcffmc, dmc, dc, mcgfmc_standing, mcgfmc_matted;
+  double mcffmc, mcdmc, mcdc, mcgfmc_standing, mcgfmc_matted;
 
   if (ffmc_old == -1) {
     mcffmc = mcffmc_old;
   } else {
-    mcffmc = fine_fuel_moisture_from_code(ffmc_old);
+    mcffmc = ffmc_to_mcffmc(ffmc_old);
   }
-  dmc = dmc_old;
-  dc = dc_old;
+  mcdmc = dmc_to_mcdmc(dmc_old);
+  mcdc = dc_to_mcdc(dc_old);
   mcgfmc_standing = mcgfmc_standing_old;
   mcgfmc_matted = mcgfmc_matted_old;
 
@@ -187,6 +188,11 @@ int main(int argc, char *argv[])
     .tm_isdst = 0};
   
   // open output file
+  if (strcmp(argv[1], argv[2]) == 0) {
+    puts("Input and Output files have to be different!");
+    exit(1);
+  }
+  
   FILE *out = fopen(argv[2], "w");
   if (out == NULL) {
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
@@ -196,7 +202,7 @@ int main(int argc, char *argv[])
   fprintf(out, "%s\n", header_out);
 
   // start calculation
-  double rain_ffmc, ffmc, isi, bui, fwi, dsr;
+  double rain_ffmc, ffmc, dmc, dc, isi, bui, fwi, dsr;
   double mcgfmc, gfmc, gsi, gfwi, sunlight_hours;
 
   while (err > 0)  // while there is a next row of data in input file
@@ -222,41 +228,38 @@ int main(int argc, char *argv[])
         cur.sunset,
         &canopy);
     /* use lesser of remaining intercept and current hour's rain */
-    rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT
-                           ? 0.0
-                           : ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain
-                                  ? cur.rain
-                                  : canopy.rain_total - FFMC_INTERCEPT);
-    mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.ws, rain_ffmc, mcffmc);
-    /* convert to code for output, but keep using moisture % for precision */
-    ffmc = fine_fuel_moisture_code(mcffmc);
-    /* not ideal, but at least encapsulates the code for each index */
-    dmc = duff_moisture_code(
-        dmc,
-        cur.temp,
-        cur.rh,
-        cur.ws,
-        cur.rain,
-        cur.mon,
-        cur.hour,
-        cur.solrad,
-        cur.sunrise,
-        cur.sunset,
-        canopy.rain_total_prev,
-        canopy.rain_total);
-    dc = drought_code(
-        dc,
-        cur.temp,
-        cur.rh,
-        cur.ws,
-        cur.rain,
-        cur.mon,
-        cur.hour,
-        cur.solrad,
-        cur.sunrise,
-        cur.sunset,
-        canopy.rain_total_prev,
-        canopy.rain_total);
+    rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT ? 0.0 :
+      ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain ? cur.rain :
+      canopy.rain_total - FFMC_INTERCEPT);
+    mcffmc = hourly_fine_fuel_moisture(
+      mcffmc,
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      rain_ffmc,
+      1.0);
+    ffmc = mcffmc_to_ffmc(mcffmc);
+    mcdmc = duff_moisture_code(
+      mcdmc,
+      cur.hour,
+      cur.temp,
+      cur.rh,
+      cur.rain,
+      cur.sunrise,
+      cur.sunset,
+      canopy.rain_total_prev,
+      1.0);
+    dmc = mcdmc_to_dmc(mcdmc);
+    mcdc = drought_code(
+      mcdc,
+      cur.hour,
+      cur.temp,
+      cur.rain,
+      cur.sunrise,
+      cur.sunset,
+      canopy.rain_total_prev,
+      1.0);
+    dc = mcdc_to_dc(mcdc);
     isi = initial_spread_index(cur.ws, ffmc);
     bui = buildup_index(dmc, dc);
     fwi = fire_weather_index(isi, bui);

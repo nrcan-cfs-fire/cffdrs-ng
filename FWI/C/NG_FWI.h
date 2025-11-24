@@ -8,6 +8,7 @@
 
 
 
+////// Variable Definitions
 static const double DAILY_K_DMC_DRYING = 1.894;
 static const double DAILY_K_DC_DRYING = 3.937;
 
@@ -22,7 +23,7 @@ static const double DC_HOURLY_CONST = 0.36 / 3.397;  // DC_DAILY_CONST / DAILY_K
 static const double OFFSET_SUNRISE = 0.0; //2.5;
 static const double OFFSET_SUNSET = 0.0; //0.5;
 
-/* Default grass fuel load and percent_cured start date set and used in util */
+/* Default grass fuel load and percent_cured start date set in util.h */
 
 /* default startup values */
 static const double FFMC_DEFAULT = 85;
@@ -39,64 +40,115 @@ static const bool GRASS_TRANSITION = true;  // default True, False for GFMC to a
 static const int MON_STANDING = 7;
 static const int DAY_STANDING = 1;
 
-/*
- * Fine Fuel Moisture Code (FFMC) from moisture %
+////// Function Declarations and Help
+/**
+ * @brief Convert to fine fuel moisture content (%)
+ *
+ * @param ffmc      Fine Fuel Moisture Code (FFMC)
+ * @return          fine fuel moisture content (%)
  */
-double fine_fuel_moisture_code(double moisture_percent);
+double mcffmc_to_ffmc(double ffmc);
 
-/*
- * Fine Fuel Moisture (percent) from FFMC
+/**
+ * @brief Convert to FFMC
+ *
+ * @param mcffmc    fine fuel moisture content (%)
+ * @return          FFMC
  */
-double fine_fuel_moisture_from_code(double moisture_code);
+double ffmc_to_mcffmc(double mcffmc);
 
+/**
+ * @brief Convert to duff moisture content (%)
+ * 
+ * @param dmc       Duff Moisture Code (DMC)
+ * @return          duff moisture content (%)
+ */
+double dmc_to_mcdmc(double dmc);
 
-double mc_dmc_to_dmc(double mc_dmc);
+/**
+ * @brief Convert to duff moisture content (%)
+ * 
+ * @param mcdmc     duff moisture content (%)
+ * @return          DMC
+ */
+double mcdmc_to_dmc(double mcdmc);
 
-double dmc_to_mc_dmc(double dmc);
+/**
+ * @brief Convert to to DC moisture content (%)
+ * @param dc        Drought Code (DC)
+ * @return          DC moisture content (%)
+ */
+double dc_to_mcdc(double dc);
 
-
+/**
+ * @brief Convert to DC
+ * @param mcdc      DC moisture content (%)
+ * @return          DC
+ */
+double mcdc_to_dc(double mcdc);
 
 /**
  * Calculate hourly Fine Fuel Moisture (percent) value
  *
+ * @param lastmc          Previous Fine Fuel Moisture (percent)
  * @param temp            Temperature (Celcius)
  * @param rh              Relative Humidity (percent, 0-100)
  * @param ws              Wind Speed (km/h)
- * @param rain            Precipitation (mm)
- * @param lastmc          Previous Fine Fuel Moisture (percent)
- * @return                Hourly Fine Fuel Moisture (percent)
+ * @param rain            Rainfall AFTER intercept (mm)
+ * @param time_increment  Duration of timestep (hr, mainly 1.0)
+ * @return                Hourly fine fuel moisture content (%)
  */
-double hourly_fine_fuel_moisture(const double temp,
-                                 const double rh,
-                                 const double ws,
-                                 const double rain,
-                                 const double lastmc);
+double hourly_fine_fuel_moisture(double lastmc,
+                                 double temp,
+                                 double rh,
+                                 double ws,
+                                 double rain,
+                                 double time_increment);
 
-double duff_moisture_code(double last_dmc,
+/**
+ * @brief Calculate duff moisture content
+ * 
+ * @param last_mcdmc              Previous duff moisture content (%)
+ * @param hr                      Time of day (hr)
+ * @param temp                    Temperature (Celcius)
+ * @param rh                      Relative Humidity (%)
+ * @param prec                    Hourly precipitation (mm)
+ * @param sunrise                 Sunrise (hr)
+ * @param sunset                  Sunset (hr)
+ * @param prec_cumulative_prev    Cumulative precipitation since start of rain (mm)
+ * @param time_increment          Duration of timestep (hr, mainly 1.0)
+ * @return                        Hourly duff moisture content (%)
+ */
+double duff_moisture_code(double last_mcdmc,
+                          int hour,
                           double temp,
                           double rh,
-                          double ws,
-                          double rain,
-                          int mon,
-                          int hour,
-                          double solrad,
+                          double prec,
                           double sunrise,
                           double sunset,
-                          double rain_total_prev,
-                          double rain_total);
+                          double prec_cumulative_prev,
+                          double time_increment);
 
-double drought_code(double last_dc,
-                    double temp,
-                    double rh,
-                    double ws,
-                    double rain,
-                    int mon,
+/**
+ * @brief Calculate drought code moisture content
+ * @param last_mcdc               Previous drought code moisture content (%)
+ * @param hr                      Time of day (hr)
+ * @param temp                    Temperature (Celcius)
+ * @param prec                    Hourly precipitation (mm)
+ * @param sunrise                 Sunrise (hr)
+ * @param sunset                  Sunset (hr)
+ * @param prec_cumulative_prev    Cumulative precipitation since start of rain (mm)
+ * @param time_increment          Duration of timestep (hr, mainly 1.0)
+ * @return                        Hourly drought code moisture content (%)
+ */
+double drought_code(double last_mcdc,
                     int hour,
-                    double solrad,
+                    double temp,
+                    double prec,
                     double sunrise,
                     double sunset,
-                    double rain_total_prev,
-                    double rain_total);
+                    double prec_cumulative_prev,
+                    double time_increment);
 
 /**
  * Calculate Initial Spread Index (ISI)
@@ -197,4 +249,3 @@ void rain_since_intercept_reset(double temp,
                                 double sunrise,
                                 double sunset,
                                 struct rain_intercept *canopy);
-

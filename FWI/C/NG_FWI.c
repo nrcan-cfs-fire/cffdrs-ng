@@ -1,73 +1,42 @@
-/*  Phase1  NG-FWI.c
-
-inputs full hourly weather sttream only.
-new hourly DMC and DC
-calcuats solar radiation from lat/long
-grass moisture, grass spread index and grass fire weahter index added.\
-
- THis is only set up for ONE station at a time.   And ONE year really.
-
-version 0.9    (still testing)
-
-bmw/2021
-*/
-
 #include "util.h"
 #include "NG_FWI.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
 
-/*
- * Fine Fuel Moisture Code (FFMC) from moisture %
- */
-double fine_fuel_moisture_code(double moisture_percent)
+
+
+// see NG_FWI.h for variable definitions and function help
+
+double ffmc_to_mcffmc(double ffmc) {
+  return MPCT_TO_MC * (101.0 - ffmc) / (59.5 + ffmc);
+}
+
+double mcffmc_to_ffmc(double mcffmc) {
+  return (59.5 * (250.0 - mcffmc) / (MPCT_TO_MC + mcffmc));
+}
+
+double dmc_to_mcdmc(double dmc) {
+  return 280.0 / exp(dmc / 43.43) + 20.0;
+}
+
+double mcdmc_to_dmc(double mcdmc) {
+  return 43.43 * log(280.0 / (mcdmc - 20.0));
+}
+
+double dc_to_mcdc(double dc) {
+  return 400.0 * exp(-dc / 400.0);
+}
+
+double mcdc_to_dc(double mcdc) {
+  return 400.0 * log(400.0 / mcdc);
+}
+
+double hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment)
+double lastmc, temp, rh, ws, rain, time_increment;
 {
-  return (59.5 * (250.0 - moisture_percent) / (MPCT_TO_MC + moisture_percent));
-}
-
-/*
- * Fine Fuel Moisture (percent) from FFMC
- */
-double fine_fuel_moisture_from_code(double moisture_code)
-{
-  return MPCT_TO_MC * (101.0 - moisture_code) / (59.5 + moisture_code);
-}
-
-
-double mc_dmc_to_dmc(double mc_dmc){
-  double dmc = 43.43*log(280.0/(mc_dmc-20.0));
-  return dmc;
-}
-
-double dmc_to_mc_dmc(double dmc){
-  double mc_dmc = 280.0/exp(dmc/43.43) + 20.0;
-  return mc_dmc;
-}
-
-
-
-/**
- * Calculate hourly Fine Fuel Moisture (percent) value
- *
- * @param temp            Temperature (Celcius)
- * @param rh              Relative Humidity (percent, 0-100)
- * @param ws              Wind Speed (km/h)
- * @param rain            Precipitation (mm)
- * @param lastmc          Previous Fine Fuel Moisture (percent)
- * @return                Hourly Fine Fuel Moisture (percent)
- */
-double hourly_fine_fuel_moisture(const double temp,
-                                 const double rh,
-                                 const double ws,
-                                 const double rain,
-                                 const double lastmc)
-{
-  
   static const double rf = 42.5;
   static const double drf = 0.0579;
-  /* Time since last observation (hours) */
-  static const double time = 1.0;
   /* use moisture directly instead of converting to/from ffmc */
   /* expects any rain intercept to already be applied */
   double mo = lastmc;
@@ -102,221 +71,167 @@ double hourly_fine_fuel_moisture(const double temp,
                           : (100.0 - rh) / 100.0;
     const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
     const double kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp);
-    m += (mo - m) * pow(10, -kd_or_kw * time);
+    m += (mo - m) * pow(10, -kd_or_kw * time_increment);
     
   }
   return m;
 }
 
-double duff_moisture_code(double last_dmc,
-                          double temp,
-                          double rh,
-                          double ws,
-                          double rain,
-                          int mon,
-                          int hour,
-                          double solrad,
-                          double sunrise,
-                          double sunset,
-                          double rain_total_prev,
-                          double rain_total)
+double duff_moisture_code(last_mcdmc, hour, temp, rh, prec,
+  sunrise, sunset, prec_cumulative_prev, time_increment)
+double last_mcdmc, temp, rh, prec;
+double sunrise, sunset, prec_cumulative_prev, time_increment;
+int hour;
 {
+  double mr, mcdmc;
 
+  // wetting
+  if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  // prec_cumulative above threshold
+    double rw, last_dmc, b;
 
-  //########################################## Mike's version ############################
-  double TIME_INCREMENT = 1.0;
-  double last_mc_dmc = dmc_to_mc_dmc(last_dmc);
+    if (prec_cumulative_prev < DMC_INTERCEPT) {  // just passed threshold
+      rw = (prec_cumulative_prev + prec) * 0.92 - 1.27;
+    } else {
+      rw = prec * 0.92;
+    }
 
-  double rk = 0.0;
-  if(temp >= 0.0){
-    rk = 2.22*temp*(100.0-rh)*0.0001;
+    last_dmc = mcdmc_to_dmc(last_mcdmc);
+    if (last_dmc <= 33.0) {
+      b = 100.0 / (0.3 * last_dmc + 0.5);
+    } else if (last_dmc <= 65.0) {
+      b = -1.3 * log(last_dmc) + 14.0;
+    } else {
+      b = 6.2 * log(last_dmc) - 17.2;
+    }
+
+    mr = last_mcdmc + 1e3 * rw / (b * rw + 48.77);
+  } else {  // prec_cumulative below threshold
+    mr = last_mcdmc;
   }
 
-  double invtau = rk/43.43;
-
-  double mr;
-  if(rain_total <= DMC_INTERCEPT){ //is the total rain in this 'event' above the threshold 
-    mr = last_mc_dmc;
-  }
-  else{
-    //this is a little awkward because the 1.5mm threshold was an approximation from original tables whch were based on 1/100 inch
-    //it really should be a rain day is   rain >0.05"   (not 0.06")     0.05"=1.27 as in the original tables
-    double rw;
-    if(rain_total_prev < 1.5){
-      rw = rain_total*0.92 - 1.27;
-    }
-    else{
-      rw = rain*0.92;
-    }
-
-
-    double b;
-    if(last_dmc <= 33.0){
-      b = 100.0/(0.5 + 0.3*last_dmc);
-    }
-    else if(last_dmc <= 65.0){
-      b = 14.0 - 1.3*log(last_dmc);
-    }
-    else{
-      b = 6.2*log(last_dmc) - 17.2;
-    }
-
-    mr = last_mc_dmc + 1000.0*rw/(48.77 + b*rw);
-  }
-
-  if(mr > 300.0){
+  if (mr > 300.0) {
     mr = 300.0;
   }
+  
+  // drying
+  double sunrise_start, sunset_start;
+  sunrise_start = sunrise + OFFSET_SUNRISE;
+  sunset_start = sunset + OFFSET_SUNSET;
+  // since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  double hr = (double) hour;
+  if ((hr >= sunrise && hr <= sunset) ||
+    (hr < 6 && hr + 24 >= sunrise && hr + 24 <= sunset)) {  // day
+    double rk, invtau;
 
-  bool is_daytime = false;
-  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-  if((((double)hour >= sunrise) && ((double)hour <= sunset)) || (((double)(hour+24) >= sunrise) && ((double)(hour+24) <= sunset) && (hour < 6))){
-    is_daytime = true;
-  }
-  double mc_dmc;
-  if(is_daytime){
-    mc_dmc = 20.0 + (mr-20.0)*exp(-1.0*TIME_INCREMENT*invtau);
-  }
-  else{
-    mc_dmc = mr; //no overnight drying
+    if (temp < 0) {
+      temp = 0.0;
+    }
+    rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh);
+    invtau = rk / 43.43;
+    mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0;
+  } else {  // night
+    mcdmc = mr;  // no overnight drying
   }
 
-  if(mc_dmc > 300.0){
-    mc_dmc = 300.0;
+  if (mcdmc > 300.0) {
+    mcdmc = 300.0;
   }
 
-
-  double new_dmc = mc_dmc_to_dmc(mc_dmc);
-  //if(new_dmc < 0.0){
-  //  new_dmc = 0.0;
- // }
-  return new_dmc;
+  return mcdmc;
 }
 
-double drought_code(double last_dc,
-                    double temp,
-                    double rh,
-                    double ws,
-                    double rain,
-                    int mon,
+double drought_code(double last_mcdc,
                     int hour,
-                    double solrad,
+                    double temp,
+                    double prec,
                     double sunrise,
                     double sunset,
-                    double rain_total_prev,
-                    double rain_total)
+                    double prec_cumulative_prev,
+                    double time_increment)
 {
-  //#################################################################################
-  // for now we are using Mike's method for calculating DC
+  double mr, mcdc;
 
-  double offset = 3.0;
-  double mult = 0.015;
-  double pe = 0.0;
-  double rw = 0.0;
-  double mr = 0.0;
-  double mcdc = 0.0;
-  
-  double last_mc_dc = 400*exp(-last_dc/400);
-  double TIME_INCREMENT = 1.0;
-  if (temp > 0.0){
-    pe = mult * temp + offset/16.0;
-  }
-  
-  double invtau = pe/400.0;
-  
-  if (rain_total_prev + rain <= DC_INTERCEPT){
-    mr = last_mc_dc;
-  }
-  else {
-    if (rain_total_prev <= 2.8){
-      rw = (rain_total_prev + rain)*0.83 - 1.27;
+  // wetting
+  if (prec_cumulative_prev + prec > DC_INTERCEPT) {  // prec_cumulative above threshold
+    double rw;
+
+    if (prec_cumulative_prev <= DC_INTERCEPT) {  // just passed threshold
+      rw = (prec_cumulative_prev + prec) * 0.83 - 1.27;
+    } else {
+      rw = prec * 0.83;
     }
-    else {
-      rw = rain*0.83;
-    }
-    mr = last_mc_dc + 3.937*rw/2.0;
+    mr = last_mcdc + 3.937 * rw / 2.0;
+  } else {
+    mr = last_mcdc;
   }
   
-  if(mr > 400.0){
+  if (mr > 400.0) {
     mr = 400.0;
   }
-  
-  bool is_daytime = false;
-  //since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-  if(((hour >= sunrise) && (hour <= sunset)) || (((hour + 24) >= sunrise) && ((hour + 24) <= sunset) && (hour < 6))){
-    is_daytime = true;
-  }
-  
-  if(is_daytime){
-    mcdc = 0.0 + (mr+0.0)*exp(-1.0*TIME_INCREMENT*invtau);
-  }
-  else{
+
+  // drying
+  double sunrise_start, sunset_start;
+  sunrise_start = sunrise + OFFSET_SUNRISE;
+  sunset_start = sunset + OFFSET_SUNSET;
+  // since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  double hr = (double) hour;
+  if ((hr >= sunrise && hr <= sunset) ||
+    (hr < 6 && hour + 24 >= sunrise && hr + 24 <= sunset)) {
+    double pe, invtau;
+    double offset = 3.0;
+    double mult = 0.015;
+    if (temp > 0) {
+      pe = mult * temp + offset / 16.0;
+    } else {
+      pe = 0.0;
+    }
+    invtau = pe / 400.0;
+    mcdc = mr * exp(-time_increment * invtau);
+  } else {
     mcdc = mr;
   }
-  if (mcdc > 400.0){
+
+  if (mcdc > 400.0) {
     mcdc = 400.0;
   }
-  double dc = 400.0*log(400.0/mcdc);
   
-  return dc;
+  return mcdc;
 }
 
-/**
- * Calculate Initial Spread Index (ISI)
- *
- * @param ws              Wind Speed (km/h)
- * @param ffmc            Fine Fuel Moisure Code
- * @return                Initial Spread Index
- */
 double initial_spread_index(double ws, double ffmc)
 {
-  const double fm = fine_fuel_moisture_from_code(ffmc);
-  const double fw = 40 <= ws
-                        ? 12 * (1 - exp(-0.0818 * (ws - 28)))
-                        : exp(0.05039 * ws);
-  const double ff = 91.9 * exp(-0.1386 * fm) * (1.0 + pow(fm, 5.31) / 4.93e07);
-  const double isi = 0.208 * fw * ff;
+  double mcffmc, fw, ff, isi;
+  mcffmc = ffmc_to_mcffmc(ffmc);
+  fw = (40 <= ws) ? 12 * (1 - exp(-0.0818 * (ws - 28))) : exp(0.05039 * ws);
+  ff = 91.9 * exp(-0.1386 * mcffmc) * (1.0 + pow(mcffmc, 5.31) / 4.93e7);
+  isi = 0.208 * fw * ff;
   return isi;
 }
 
-/**
- * Calculate Build-up Index (BUI)
- *
- * @param dmc             Duff Moisture Code
- * @param dc              Drought Code
- * @return                Build-up Index
- */
 double buildup_index(double dmc, double dc)
 {
-  double bui = 0 == dmc && 0 == dc
-                   ? 0.0
-                   : 0.8 * dc * dmc / (dmc + 0.4 * dc);
+  double bui, p, cc;
+  bui = (0 == dmc && 0 == dc) ? 0.0 : 0.8 * dc * dmc / (dmc + 0.4 * dc);
   if (bui < dmc)
   {
-    const double p = (dmc - bui) / dmc;
-    const double cc = 0.92 + pow(0.0114 * dmc, 1.7);
+    p = (dmc - bui) / dmc;
+    cc = 0.92 + pow(0.0114 * dmc, 1.7);
     bui = dmc - cc * p;
-    if (bui <= 0)
+    if (bui <= 0.0)
     {
-      bui = 0;
+      bui = 0.0;
     }
   }
   return bui;
 }
 
-/**
- * Calculate Fire Weather Index (FWI)
- *
- * @param isi             Initial Spread Index
- * @param bui             Build-up Index
- * @return                Fire Weather Index
- */
 double fire_weather_index(double isi, double bui)
 {
-  const double bb = 0.1 * isi * (bui > 80 ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui)) : 0.626 * pow(bui, 0.809) + 2.0);
-  const double fwi = bb <= 1
-                         ? bb
-                         : exp(2.72 * pow(0.434 * log(bb), 0.647));
+  double bb, fwi;
+  bb = 0.1 * isi *
+    (bui > 80 ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui)) :
+    0.626 * pow(bui, 0.809) + 2.0);
+  fwi = (bb <= 1) ? bb : exp(2.72 * pow(0.434 * log(bb), 0.647));
   return fwi;
 }
 
@@ -532,7 +447,7 @@ wind=  10 m open wind (km/h)
   if(egmc > 250.0){
     egmc = 250.0;
   }
-  return fine_fuel_moisture_code(egmc); /*   convert to code with FF-scale */
+  return mcffmc_to_ffmc(egmc); /*   convert to code with FF-scale */
 }
 
 double matted_grass_spread_ROS(double ws, double mc, double cur)
@@ -703,4 +618,3 @@ void rain_since_intercept_reset(double temp,
   canopy->rain_total_prev = canopy->rain_total;
   canopy->rain_total += rain;
 }
-
