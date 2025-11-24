@@ -153,7 +153,7 @@ minmax_to_hourly_single <- function(w, skip_invalid = FALSE, verbose = FALSE) {
   r$HR <- 12
   # as_datetime() defaults to UTC, but we only use TIMESTAMP for it's combined yr, mon, day, hr
   r[, TIMESTAMP := make_datetime(YR, MON, DAY, HR)]
-  if (!(nrow(r) == 1 || is_sequential(as.Date(r$TIMESTAMP)))) {
+  if (!is_sequential_days(r)) {
     if (skip_invalid) {
       warning(paste0(r$ID[[1]], " for ", r$YR[[1]],
         " - Expected input to be sequential daily weather"))

@@ -231,12 +231,6 @@ double grass_fire_weather_index(double gsi, double load);
  * Calculate number of drying "units" this hour contributes
  */
 double drying_units(double temp, double rh, double wind, double rain, double solrad);
-struct rain_intercept
-{
-  double rain_total;
-  double rain_total_prev;
-  double drying_since_intercept;
-};
 
 /* HACK: use struct so it's closer to how R can return multiple values */
 void rain_since_intercept_reset(double temp,

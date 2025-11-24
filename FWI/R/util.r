@@ -3,33 +3,35 @@ library(data.table)
 library(lubridate)
 
 
-#' Determine if data is sequential at intervals of 1 unit
-#'
-#' @param data          data to check
-#' @return              whether each entry in data is 1 unit from the next entry
-is_sequential <- function(data) {
-  v <- na.omit(unique(data - data.table::shift(data, 1)))
-  return(length(data) == 1 || (1 == v[[1]] && length(v) == 1))
-}
 
 #' Determine if data is sequential days
 #'
-#' @param df            data to check
+#' @param df            data to check (requires timestamp column)
 #' @return              whether each entry is 1 day from the next entry
 is_sequential_days <- function(df) {
   data <- copy(df)
   colnames(data) <- tolower(colnames(data))
-  return(is_sequential(as.Date(data$date)))
+  if (!"timestamp" %in% names(data)) {
+    stop("timestamp column (using make_datetime()) required to check sequential days")
+  }
+  l <- nrow(data)
+  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
+  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "days")))
 }
 
 #' Determine if data is sequential hours
 #'
-#' @param df            data to check
+#' @param df            data to check (requires timestamp column)
 #' @return              whether each entry is 1 hour from the next entry
 is_sequential_hours <- function(df) {
   data <- copy(df)
   colnames(data) <- tolower(colnames(data))
-  return(is_sequential(as.POSIXct(df$timestamp)))
+  if (!"timestamp" %in% names(data)) {
+    stop("timestamp column (using make_datetime()) required to check sequential hours")
+  }
+  l <- nrow(data)
+  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
+  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "hours")))
 }
 
 #' Find specific humidity

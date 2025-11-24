@@ -236,10 +236,11 @@ def minmax_to_hourly_single(w, skip_invalid=False, verbose=False):
         ),
         axis=1,
     )
-    if not (len(r) == 1 or util.is_sequential_days(r)):
+    if not (util.is_sequential_days(r)):
         if skip_invalid:
             raise RuntimeWarning(
-                f'{r["ID"].iloc[0]} for {r["YR"].iloc[0]} - Expected input to be sequential daily weather'
+                f'{r["ID"].iloc[0]} for {r["YR"].iloc[0]}' +
+                    ' - Expected input to be sequential daily weather'
             )
         return None
     orig_dates = pd.DataFrame(

@@ -9,26 +9,30 @@ import pandas as pd
 ##
 # Determine if data is sequential days
 #
-# @param data          data to check
+# @param data          data to check (requires timestamp column)
 # @return              whether each entry is 1 day from the next entry
 def is_sequential_days(data):
     test = data.copy()
     test.columns = map(str.lower, test.columns)
-    return np.all(
-        datetime.timedelta(days=1)
+    if not "timestamp" in test.columns:
+        raise RuntimeError("timestamp column required to check sequential days")
+    return test.shape[0] == 1 or np.all(
+        datetime.timedelta(days = 1)
         == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 
 ##
 # Determine if data is sequential hours
 #
-# @param data          data to check
+# @param data          data to check (requires timestamp column)
 # @return              whether each entry is 1 hour from the next entry
 def is_sequential_hours(data):
     test = data.copy()
     test.columns = map(str.lower, test.columns)
-    return np.all(
-        datetime.timedelta(hours=1)
+    if not "timestamp" in test.columns:
+        raise RuntimeError("timestamp column required to check sequential hours")
+    return test.shape[0] == 1 or np.all(
+        datetime.timedelta(hours = 1)
         == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 

@@ -67,6 +67,13 @@ struct flags{
   bool grass_fuel_load_flag, percent_cured_flag, solrad_flag;
 };
 
+struct rain_intercept
+{
+  double rain_total;
+  double rain_total_prev;
+  double drying_since_intercept;
+};
+
 ////// Function Declarations and Help
 
 /* C90 max() also causing problems */

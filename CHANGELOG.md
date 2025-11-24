@@ -7,11 +7,11 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - Option when running `hFWI()` to have a transition from matted to standing grassland fuel (default, for regions with winter snowfall), or stick with standing instead (*Python* and *R*)
 - Option when running `hFWI()` to not split by year (for regions with seasonal data that includes Dec 31-Jan 1) and run each station's data as one continuous block (*Python* and *R*)
-- Standard `hFWI()` and `generate_daily_summaries()` output data (.csv files) using PRF 2007 hourly weather data
+- Standard `hFWI()` and `generate_daily_summaries()` output datasets using PRF 2007 hourly weather data (**PRF2007_standard_hourly_FWI.csv** and **PRF2007_standard_daily_summaries.csv** respectively)
 
 ### Changed
-- Leap years are properly accounted for in the transition between matted and standing GFMC, default `percent_cured` values, and in `get_sunlight()` (*Python* and *R*)
-- Transition between matted and standing GFMC and start of grassland fuel green up now defined by calendar date instead of Julian date (ordinal date) (*Python* and *R*)
+- Leap years are properly accounted for in the transition between matted and standing GFMC, default `percent_cured` values, and in `get_sunlight()`
+- Transition between matted and standing GFMC and start of grassland fuel green up now defined by calendar date instead of Julian (ordinal) date
 
 | Transition                          | Old Value (Julian date) | New Value (Calendar date) |
 | ----------------------------------- | ----------------------- | ------------------------- |
@@ -19,13 +19,19 @@ All notable changes to this project will be documented in this file. The format 
 | Start of standing grassland fuel    | 181                     | July 1st                  |
 | Start of green up (`percent_cured`) | 71 (implicit)           | March 12th                |
 
-- Reorganized **NG_FWI** header parameters (*Python* and *R*)
+- Reorganized **NG_FWI** variable definitions in header (*Python* and *R*)
+- Most startup arguments when running **NG_FWI_main.c** or **daily_summaries.c** by command line are optional (and reorganized) matching R version (*C*)
+- DMC and DC functions take and output moisture content (%) instead of moisture codes (*C*)
+- Updated moisture code to moisture content (and vice versa) conversion functions (*C*)
 
 ### Removed
+- Deprecated `is_sequential()` function (*R*)
 - Unused `dmc_before_rain` and `dc_before_rain` arguments for **NG_FWI** (*C*)
 - Requirement that the `timezone` argument be between -2 and -9 (*C*)
 
 ### Fixed
+- NGFWI and daily summaries outputs in C version now match Python and R versions (*C*)
+- `is_sequential_hours()` and `is_sequential_days()` differentiates by their respective time units (*R*)
 - `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)
 - `grass_fuel_load` actually uses the default 0.35 kg/m^2 if not provided (*C*)
 
