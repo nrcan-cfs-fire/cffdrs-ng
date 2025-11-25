@@ -665,9 +665,12 @@ rain_since_intercept_reset <- function(rain, canopy) {
   # FIX: just use loop for now so it matches C code
   canopy <- list(rain_total_prev = prec_cumulative,
     drying_since_intercept = canopy_drying)
-  # first year for transition btwn matted and standing (esp if southern hemisphere)
+  # transition btwn matted and standing grassland fuel
   # does not account for fire seasons continuous across multiple years
   DATE_GRASS_STANDING <- make_date(r[1, yr], MON_STANDING, DAY_STANDING)
+  if (DATE_GRASS_STANDING < r[1, date]) {  # use next year if date already passed
+    DATE_GRASS_STANDING <- make_date(r[1, yr] + 1, MON_STANDING, DAY_STANDING)
+  }
   results <- NULL
   N <- nrow(r)
   for (i in 1:N) {
@@ -682,13 +685,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
       rain_ffmc <- canopy$rain_total_prev + cur$prec - FFMC_INTERCEPT
     }
 
-    # rain_ffmc <- ifelse(canopy$rain_total <= FFMC_INTERCEPT,
-    #   0.0,
-    #   ifelse((canopy$rain_total - FFMC_INTERCEPT) > cur$prec,
-    #     cur$prec,
-    #     canopy$rain_total - FFMC_INTERCEPT
-    #   )
-    # )
     mcffmc <- hourly_fine_fuel_moisture(mcffmc, cur$temp, cur$rh, cur$ws, rain_ffmc)
     cur$mcffmc <- mcffmc
     # convert to code for output, but keep using moisture % for precision
@@ -953,6 +949,12 @@ hFWI <- function(
       "prec_cumulative", "canopy_drying")
     if (!"solrad" %in% og_names) {
       outcols <- c('solrad', outcols)
+    }
+    if (!"percent_cured" %in% og_names) {
+      outcols <- c('percent_cured', outcols)
+    }
+    if (!"grass_fuel_load" %in% og_names) {
+      outcols <- c('grass_fuel_load', outcols)
     }
     set(results, j = outcols, value = round(results[, ..outcols], as.integer(round_out)))
   }

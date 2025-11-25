@@ -615,9 +615,12 @@ def _stnHFWI(
     # FIX: just use loop for now so it matches C code
     canopy = {"rain_total_prev": prec_cumulative,
         "drying_since_intercept": canopy_drying}
-    # first year for transition btwn matted and standing (esp if southern hemisphere)
+    # transition btwn matted and standing grassland fuel
     # does not account for fire seasons continuous across multiple years
     DATE_GRASS_STANDING = datetime.date(r.at[0, "yr"], MON_STANDING, DAY_STANDING)
+    if DATE_GRASS_STANDING < r.at[0, "date"]:  # use next year if date already passed
+        DATE_GRASS_STANDING = datetime.date(r.at[0, "yr"] + 1,
+            MON_STANDING, DAY_STANDING)
     results = []
     for i in range(len(r)):
         cur = r.iloc[i].to_dict()
@@ -871,6 +874,10 @@ def hFWI(
             "prec_cumulative", "canopy_drying"]
         if "solrad" not in og_names:
             outcols.insert(0, "solrad")
+        if "percent_cured" not in og_names:
+            outcols.insert(0, "percent_cured")
+        if "grass_fuel_load" not in og_names:
+            outcols.insert(0, "grass_fuel_load")
         results[outcols] = results[outcols].map(round, ndigits = int(round_out))
 
     return results
