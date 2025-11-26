@@ -127,7 +127,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
 
   for (stn in unique(hourly_data[, id])) {
     if (!silent) {
-      print(paste("Summarizing", stn, "to daily"))
+      writeLines(paste("Summarizing", stn, "to daily"))
     }
     by_stn <- hourly_data[id == stn]
     by_stn[, pseudo_DATE := Vectorize(pseudo_date)(yr, mon, day, hr, reset_hr)]

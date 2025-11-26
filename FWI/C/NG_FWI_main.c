@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
   
   double TZadjust, ffmc_old, mcffmc_old, dmc_old, dc_old;
   double mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying;
+  bool silent = false;
 
   // open input file
   FILE *inp = fopen(argv[1], "r");
@@ -50,7 +51,9 @@ int main(int argc, char *argv[])
     printf("\n\n***** FILE %s does not exist\n", argv[1]);
     exit(1);
   }
-  printf("Opening input file >>> %s\n", argv[1]);
+  if (!silent) {
+    printf("\nOpening input file >>> %s\n", argv[1]);
+  }
 
   // load required timezone argument
   TZadjust = atof(argv[3]);
@@ -198,8 +201,20 @@ int main(int argc, char *argv[])
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
     exit(1);
   }
-  printf("Saving outputs to file >>> %s\n", argv[2]);
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
+
+  if (!silent) {
+    printf("\n########\nStartup values used:\n");
+    printf("FFMC = %f or mcffmc = %f %%\n", ffmc_old, mcffmc_old);
+    printf("DMC = %f and DC = %f\n", dmc_old, dc_old);
+    printf("mcgfmc matted = %.4f %% and standing = %.4f %%\n",
+      mcgfmc_matted_old, mcgfmc_standing_old);
+    printf("cumulative precipitation = %f mm and canopy drying = %.0f\n",
+      prec_cumulative, canopy_drying);
+  }
 
   // start calculation
   double rain_ffmc, ffmc, dmc, dc, isi, bui, fwi, dsr;
@@ -335,6 +350,10 @@ int main(int argc, char *argv[])
 
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    printf("########\n\n");
+  }
 
   return 0;
 }

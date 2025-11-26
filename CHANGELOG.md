@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file. The format 
 - Option when running `hFWI()` to have a transition from matted to standing grassland fuel (default, for regions with winter snowfall), or stick with standing instead (*Python* and *R*)
 - Option when running `hFWI()` to not split by year (for regions with seasonal data that includes Dec 31-Jan 1) and run each station's data as one continuous block (*Python* and *R*)
 - Standard `hFWI()` and `generate_daily_summaries()` output datasets using PRF 2007 hourly weather data (**PRF2007_standard_hourly_FWI.csv** and **PRF2007_standard_daily_summaries.csv** respectively)
+- New print message when running hourly FWI that show startup values
 
 ### Changed
 - Leap years are properly accounted for in the transition between matted and standing GFMC, default `percent_cured` values, and in `get_sunlight()`

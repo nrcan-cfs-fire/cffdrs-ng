@@ -1,6 +1,6 @@
 # Computes hourly FWI indices for an input hourly weather stream
 
-# Import packages
+### Import packages ###
 import datetime
 import logging
 import argparse
@@ -13,6 +13,10 @@ import util
 logger = logging.getLogger("cffdrs")
 logger.setLevel(logging.WARNING)
 
+### Variable Definitions ###
+# Only change these if you know what you are doing, or
+# reach out to the CFS Fire Danger Group for more info
+
 # Startup moisture code values
 FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
@@ -21,7 +25,7 @@ DC_DEFAULT = 15.0
 # FFMC moisture content to code conversion factor
 MPCT_TO_MC = 250.0 * 59.5 / 101.0
 
-# Wetting parameters
+# Wetting variables
 DAILY_K_DMC_DRYING = 1.894
 DAILY_K_DC_DRYING = 3.937
 DC_DAILY_CONST = 0.36
@@ -32,7 +36,7 @@ FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
-# Drying parameters
+# Drying variables
 OFFSET_SUNRISE = 0
 OFFSET_SUNSET = 0
 HOURLY_K_DMC = 2.22
@@ -51,6 +55,8 @@ DAY_STANDING = 1
 # For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
 # If True, every station's data needs to be sequential (one continuous run)
 CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
+
+### Functions ###
 
 ##
 # Convert to fine fuel moisture content (%)
@@ -745,7 +751,7 @@ def hFWI(
     mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     prec_cumulative = 0.0,
-    canopy_drying = 0.0,
+    canopy_drying = 0,
     silent = False,
     round_out = 4):
     wx = df_wx.copy()
@@ -760,17 +766,10 @@ def hFWI(
     # check timezone
     if timezone == None:
         if not "timezone" in wx.columns:
-            raise RuntimeError("Either provide a timezone column or specify argument in hFWI")
+            raise RuntimeError("Either provide a timezone column or " +
+                "specify argument in hFWI()")
     else:
         wx["timezone"] = float(timezone)
-    # check for one hour run and startup moisture all set to default
-    if (df_wx.shape[0] == 1 and
-        ffmc_old == FFMC_DEFAULT and mcffmc_old == None and
-        dmc_old == DMC_DEFAULT and dc_old == DC_DEFAULT and
-        mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) and
-        mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)):
-        logger.warning("Warning:\nStartup moisture values set to default" +
-            " (instead of previous) in a one hour run")
     # check for optional columns that have a default
     had_stn = "id" in og_names
     had_minute = "minute" in og_names
@@ -795,8 +794,6 @@ def hFWI(
         wx["percent_cured"] = wx.apply(lambda row:
             util.seasonal_curing(row["yr"], row["mon"], row["day"]), axis = 1)
     if not "solrad" in wx.columns:
-        if not silent:
-            print("Solar Radiation not provided so will be calculated")
         needs_solrad = True
     else:
         needs_solrad = False
@@ -835,6 +832,16 @@ def hFWI(
         raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
         raise ValueError("dc_old must be >= 0")
+    
+    # print message with startup values used
+    if not silent:
+        print("\n########\nStartup values used:")
+        print("FFMC =", ffmc_old, "or mcffmc =", mcffmc_old, "%")
+        print("DMC =", dmc_old, "and DC =", dc_old)
+        print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
+            f"and standing = {mcgfmc_standing_old:.4f} %")
+        print("cumulative precipitation =", prec_cumulative,
+            "mm and canopy drying =", canopy_drying, "\n")
     
     # loop over every station year if not continuous multiyear data
     results = None
@@ -879,6 +886,9 @@ def hFWI(
         if "grass_fuel_load" not in og_names:
             outcols.insert(0, "grass_fuel_load")
         results[outcols] = results[outcols].map(round, ndigits = int(round_out))
+
+    if not silent:
+        print("########\n")
 
     return results
 

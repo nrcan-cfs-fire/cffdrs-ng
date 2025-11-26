@@ -1,11 +1,15 @@
 #' Computes hourly FWI indices for an input hourly weather stream
 
-# Import packages
+### Import packages ###
 library(lubridate)
 library(data.table)
 
 # Import from other CFFDRS code files
 source("util.r")
+
+### Variable Definitions ###
+# Only change these if you know what you are doing, or
+# reach out to the CFS Fire Danger Group for more info
 
 # Startup moisture code values
 FFMC_DEFAULT <- 85.0
@@ -15,7 +19,7 @@ DC_DEFAULT <- 15.0
 # FFMC moisture content to code conversion factor
 MPCT_TO_MC <- 250.0 * 59.5 / 101.0
 
-# Wetting parameters
+# Wetting variables
 DAILY_K_DMC_DRYING <- 1.894
 DAILY_K_DC_DRYING <- 3.937
 DC_DAILY_CONST <- 0.36
@@ -26,7 +30,7 @@ FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
 DC_INTERCEPT <- 2.8
 
-# Drying parameters
+# Drying variables
 OFFSET_SUNRISE <- 0
 OFFSET_SUNSET <- 0
 HOURLY_K_DMC <- 2.22
@@ -45,6 +49,8 @@ DAY_STANDING <- 1
 # For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
 # If TRUE, every station's data needs to be sequential (one continuous run)
 CONTINUOUS_MULTIYEAR <- FALSE  # default FALSE, TRUE to not split by year
+
+### Functions ###
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
@@ -792,7 +798,7 @@ hFWI <- function(
   mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   prec_cumulative = 0.0,
-  canopy_drying = 0.0,
+  canopy_drying = 0,
   silent = FALSE,
   round_out = 4
   ) {
@@ -824,15 +830,6 @@ hFWI <- function(
   } else {
     wx[, timezone := as.numeric(..timezone)]
   }
-  # check for one hour run and startup moisture all set to default
-  if (nrow(wx) == 1 &&
-    ffmc_old == FFMC_DEFAULT && is.na(mcffmc_old) &&
-    dmc_old == DMC_DEFAULT && dc_old == DC_DEFAULT &&
-    mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &&
-    mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)) {
-    warning(paste("Startup moisture values set to default (instead of previous)",
-      "in a one hour run"))
-  }
   # check for optional columns that have a default
   hadStn <- "id" %in% og_names
   hadMinute <- "minute" %in% og_names
@@ -859,9 +856,6 @@ hFWI <- function(
     wx[, percent_cured := Vectorize(seasonal_curing)(yr, mon, day)]
   }
   if (!"solrad" %in% og_names) {
-    if (!silent) {
-      print("Solar Radiation not provided so will be calculated")
-    }
     needs_solrad <- TRUE
   } else {
     needs_solrad <- FALSE
@@ -901,6 +895,20 @@ hFWI <- function(
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
 
+  if (!silent) {
+    writeLines("\n########\nStartup values used:")
+    writeLines(paste("FFMC =", format(ffmc_old, nsmall = 1),
+      "or mcffmc =", format(mcffmc_old, nsmall = 1), "%"))
+    writeLines(paste("DMC =", format(dmc_old, nsmall = 1),
+      "and DC =", format(dc_old, nsmall = 1)))
+    writeLines(paste("mcgfmc matted =",
+      format(mcgfmc_matted_old, digits = 6, nsmall = 1), "% and standing =",
+      format(mcgfmc_standing_old, digits = 6, nsmall = 1), "%"))
+    writeLines(paste("cumulative precipitation =",
+      format(prec_cumulative, nsmall = 1), "mm and canopy drying =",
+      canopy_drying, "\n"))
+  }
+
   # loop over every station year if not continuous multiyear data
   results <- NULL
   for (stn in unique(wx$id)) {
@@ -915,9 +923,9 @@ hFWI <- function(
         by_y <- copy(by_stn)
       }
       if (!silent && !CONTINUOUS_MULTIYEAR) {
-        print(paste0("Running ", stn, " for ", y))
+        writeLines(paste0("Running ", stn, " for ", y))
       } else if (!silent && CONTINUOUS_MULTIYEAR) {
-        print(paste0("Running station ", stn))
+        writeLines(paste0("Running station ", stn))
       }
       w <- get_sunlight(by_y, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
@@ -962,6 +970,9 @@ hFWI <- function(
   if (!wasDT) {
     setDF(results)
   }
+  if (!silent) {
+    writeLines("########\n")
+  }
   return(results)
 }
 
@@ -1001,6 +1012,9 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   if (length(args) >= 14) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
+  if (!silent) {
+    writeLines(paste("\nOpening input file >>> ", input))
+  }
   df_out <- hFWI(df_in, timezone, ffmc_old, mcffmc_old, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying,
     silent, round_out)

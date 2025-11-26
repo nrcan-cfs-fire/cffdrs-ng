@@ -5,7 +5,6 @@ outputs min/max weather stream
 
 #include <stdio.h>
 #include <math.h>
-#include <float.h>
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
