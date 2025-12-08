@@ -175,12 +175,10 @@ int main(int argc, char *argv[])
  * @param hourly[24]          array of calculated output values by hour for today
  * @return                    value at sunset today
  */
-double diurnal(v_min, v_max, tv_min, yv_sunset,
-  sunrise, sunset, solarnoon_yest, sunset_yest, sunrise_tom, abg, hourly)
-double v_min, v_max, tv_min, yv_sunset, sunrise, sunset;
-double solarnoon_yest, sunset_yest, sunrise_tom;
-const double *abg;
-double *hourly;
+double diurnal(double v_min, double v_max, double tv_min,
+  double yv_sunset, double sunrise, double sunset,
+  double solarnoon_yest, double sunset_yest, double sunrise_tom,
+  const double *abg, double *hourly)
 {
   const double c_alpha = abg[0];
   const double c_beta = abg[1];

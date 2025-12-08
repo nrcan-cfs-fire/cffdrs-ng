@@ -32,8 +32,8 @@ double mcdc_to_dc(double mcdc) {
   return 400.0 * log(400.0 / mcdc);
 }
 
-double hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment)
-double lastmc, temp, rh, ws, rain, time_increment;
+double hourly_fine_fuel_moisture(double lastmc, double temp, double rh, double ws,
+  double rain, double time_increment)
 {
   static const double rf = 42.5;
   static const double drf = 0.0579;
@@ -58,30 +58,34 @@ double lastmc, temp, rh, ws, rain, time_increment;
   const double e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)));
   const double ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1;
   const double ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1;
-  /* m = ed if mo >= ed else ew */
-  double m = mo < ed
-                 ? ew
-                 : ed;
+
+  double m;
+  if (mo < ed) {
+    m = ew;
+  } else {
+    m = ed;
+  }
   
   if (mo != ed)
   {
+    double a1, k0_or_k1, kd_or_kw;
     /* these are the same formulas with a different value for a1 */
-    const double a1 = mo > ed
-                          ? rh / 100.0
-                          : (100.0 - rh) / 100.0;
-    const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
-    const double kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp);
+    if (mo > ed) {
+      a1 = rh / 100.0;
+    } else {
+      a1 = (100.0 - rh) / 100.0;
+    }
+    k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
+    kd_or_kw = (1.0 / 0.50) * drf * k0_or_k1 * exp(0.0365 * temp);
     m += (mo - m) * pow(10, -kd_or_kw * time_increment);
     
   }
   return m;
 }
 
-double duff_moisture_code(last_mcdmc, hour, temp, rh, prec,
-  sunrise, sunset, prec_cumulative_prev, time_increment)
-double last_mcdmc, temp, rh, prec;
-double sunrise, sunset, prec_cumulative_prev, time_increment;
-int hour;
+double duff_moisture_code(double last_mcdmc, int hour,
+  double temp, double rh, double prec, double sunrise, double sunset,
+  double prec_cumulative_prev, double time_increment)
 {
   double mr, mcdmc;
 
@@ -140,14 +144,8 @@ int hour;
   return mcdmc;
 }
 
-double drought_code(double last_mcdc,
-                    int hour,
-                    double temp,
-                    double prec,
-                    double sunrise,
-                    double sunset,
-                    double prec_cumulative_prev,
-                    double time_increment)
+double drought_code(double last_mcdc, int hour, double temp, double prec,
+  double sunrise, double sunset, double prec_cumulative_prev, double time_increment)
 {
   double mr, mcdc;
 
@@ -228,9 +226,11 @@ double buildup_index(double dmc, double dc)
 double fire_weather_index(double isi, double bui)
 {
   double bb, fwi;
-  bb = 0.1 * isi *
-    (bui > 80 ? 1000.0 / (25.0 + 108.64 / exp(0.023 * bui)) :
-    0.626 * pow(bui, 0.809) + 2.0);
+  if (bui > 80) {
+    bb = 0.1 * isi * 1000.0 / (25.0 + 108.64 / exp(0.023 * bui));
+  } else {
+    bb = 0.1 * isi * (0.626 * pow(bui, 0.809) + 2.0);
+  }
   fwi = (bb <= 1) ? bb : exp(2.72 * pow(0.434 * log(bb), 0.647));
   return fwi;
 }
@@ -242,6 +242,7 @@ double daily_severity_rating(double fwi)
 
 /**
  * Calculate Hourly Grass Fuel Moisture. Needs to be converted to get GFMC.
+ * MARK II of the model (2016) wth new solar rad model specific to grass
  *
  * @param temp            Temperature (Celcius)
  * @param rh              Relative Humidity (percent, 0-100)
@@ -251,118 +252,76 @@ double daily_severity_rating(double fwi)
  * @param solrad          Solar radiation (kW/m^2)
  * @return                Grass Fuel Moisture (percent)
  */
-double hourly_grass_fuel_moisture(double temp,
-                                  double rh,
-                                  double ws,
-                                  double rain,
-                                  double solrad,
-                                  double lastmc,
-                                  double load)
-{
-  /* MARK II of the model (2016) wth new solar rad model specific to grass
-
-     Temp is temperature in C
-     RH is relative humidty in %
-     ws is average wind speed in km/h
-     rain is rainfall in mm
-     solrad is kW/m2  (radiaiton reaching fuel)
-     mo is the old grass fuel moisture   (not as a code value...so elimates the conversion to code)
-     time - time between obs in HOURS
-
-  DRF of 1/16.1 comes from reducting the standard response time curve
-  at 26.7C, 20%RH, 2 km/h to 0.85hr.
-
-  bmw
-  */
-
-  
+double hourly_grass_fuel_moisture(double temp, double rh, double ws, double rain,
+  double solrad, double lastmc, double load)
+{  
   static const double rf = 0.27;
+  // DRF of 1/16.1 comes from reducting the standard response time curve
+  // at 26.7C, 20%RH, 2 km/h to 0.85hr.
   static const double drf = 0.389633;
   /* Time since last observation (hours) */
-  static const double time = 1.0;
+  static const double time_increment = 1.0;
   double mo = lastmc;
+
   if (rain != 0)
   {
-    /*     mo+=rain*rf*exp(-100.0/(251.0-mo))*(1.0-exp(-6.93/rain));*/ /* old routine*/
-    /* this new routine assumes layer is 0.3 kg/m2 so 0.3mm of rain adds +100%MC*/
-    /* *100 to convert to %...  *1/.3 because of 0.3mm=100%  */
     mo += rain / load * 100.0;
     if (mo > 250.0)
     {
       mo = 250.0;
     }
   }
-  /* fuel temp from CEVW*/
-  const double tf = temp + 17.9 * solrad * exp(-0.034 * ws);
-  /* fuel humidity */
-  const double rhf = tf > temp
-                         ? (rh * 6.107 * pow(10.0, 7.5 * temp / (temp + 237.0)) / (6.107 * pow(10.0, 7.5 * tf / (tf + 237.0))))
-                         : rh;
-  
-  /* duplicated in both formulas, so calculate once */
-  const double e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
-  /*GRASS EMC*/
-  const double ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1;
-  const double ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1;
-  /* m = ed if mo >= ed else ew */
 
+  /* temp of fuel from CEVW and RH of fuel */
+  double tf, rhf;
+  tf = temp + 17.9 * solrad * exp(-0.034 * ws);
+  if (tf > temp) {
+    rhf = rh * pow(10.0, 7.5 * temp / (temp + 237.0)) /
+      pow(10.0, 7.5 * tf / (tf + 237.0));
+  } else {
+    rhf = rh;
+  }
   
+  // Equilibrium moisture contents
+  double e1, ed, ew;
+  e1 = rf * (26.7 - tf) * (1.0 - (1.0 / exp(0.115 * rhf)));
+  ed = 1.62 * pow(rhf, 0.532) + (13.7 * exp((rhf - 100) / 13.0)) + e1;
+  ew = 1.42 * pow(rhf, 0.512) + (12.0 * exp((rhf - 100) / 18.0)) + e1;
+  
+  // Moisture content differences
   double moed = mo - ed;
   double moew = mo - ew;
 
-  double e;
-  double a1;
-  double m;
-  double moe;
-  if(moed == 0 || (moew >= 0 && moed < 0)){
+  double e, a1, m, moe;
+  if (moed == 0 || (moew >= 0 && moed < 0)) {
     m = mo;
-    if(moed == 0){
+    if (moed == 0) {
       e = ed;
     }
-    if(moew >= 0){
+    if (moew >= 0) {
       e = ew;
     }
-
-  }
-  else{
-    if(moed > 0){
-      a1 = rhf/100.0;
+  } else {
+    if (moed > 0) {
+      a1 = rhf / 100.0;
       e = ed;
       moe = moed;
-    }
-    else{
-      a1 = (100.0-rhf)/100.0;
+    } else {
+      a1 = (100.0 - rhf) / 100.0;
       e = ew;
       moe = moew;
     }
-    if(a1 < 0){
-      //avoids complex number in a1^1.7 xkd calculation
+    if (a1 < 0) {
+      // avoids complex number in a1^1.7 xkd calculation
       a1 = 0;
     }
-    double xkd = (0.424*(1-pow(a1,1.7))+(0.0694*sqrt(ws)*(1-pow(a1,8))));
-    xkd = xkd*drf*exp(0.0365*tf);
-    m = e + moe*exp(-1.0*log(10.0)*xkd*time);
+
+    double xkd;
+    xkd = (0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))) *
+      drf * exp(0.0365 * tf);
+    m = e + moe * exp(-1.0 * log(10.0) * xkd * time_increment);
   }
   return m;
-
- 
-
-  //double m = (mo < ed && mo < ew)
-  //               ? ew
-  //               : ed;
-  /* printf("%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n", lastmc, mo, e1, ed, ew, m); */
-  //if (mo > ed || (mo < ed && mo < ew))
-  //{
-  //  /* these are the same formulas with a different value for a1 */
-  //  const double a1 = mo > ed
-  //                        ? rhf / 100.0
-  //                        : (100.0 - rhf) / 100.0;
-  //  const double k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)));
-  //  const double kd_or_kw = drf * k0_or_k1 * exp(0.0365 * tf);
-  //  m += (mo - m) * pow(10, -kd_or_kw * time);
-  //  /* printf("%.8f,%.8f,%.8f,%.8f\n", a1, k0_or_k1, kd_or_kw, m); */
-  // }
-  //return m;
 }
 
 double Pign(double mc, double wind2m, double Cint, double Cmc, double Cws)
@@ -376,7 +335,6 @@ double Pign(double mc, double wind2m, double Cint, double Cmc, double Cws)
 */
 {
   const double Prob = 1.0 / (1.0 + exp(-1.0 * (Cint + Cmc * mc + Cws * wind2m)));
-
   return Prob;
 }
 
@@ -578,25 +536,11 @@ double drying_units(double temp, double rh, double wind, double rain, double sol
   /* for now, just add 1 drying "unit" per hour */
   return 1.0;
 }
-//definined in header file
-//struct rain_intercept
-//{
-  //double rain_total;
-  //double rain_total_prev;
-  //double drying_since_intercept;
-//};
 
 /* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp,
-                                double rh,
-                                double ws,
-                                double rain,
-                                int mon,
-                                int hour,
-                                double solrad,
-                                double sunrise,
-                                double sunset,
-                                struct rain_intercept *canopy)
+void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
+  int mon, int hour, double solrad, double sunrise, double sunset,
+  struct rain_intercept *canopy)
 {
   /* for now, want 5 "units" of drying (which is 1 per hour to start) */
   static const double TARGET_DRYING_SINCE_INTERCEPT = 5;

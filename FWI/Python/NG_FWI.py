@@ -293,15 +293,10 @@ def buildup_index(dmc, dc):
 # @param bui             Build-up Index
 # @return                Fire Weather Index
 def fire_weather_index(isi, bui):
-    bb = (
-        0.1
-        * isi
-        * (
-            ((1000 / (25 + 108.64 / exp(0.023 * bui))))
-            if bui > 80
-            else ((0.626 * pow(bui, 0.809) + 2))
-        )
-    )
+    if bui > 80:
+        bb = 0.1 * isi * 1000 / (25 + 108.64 / exp(0.023 * bui))
+    else:
+        bb = 0.1 * isi * (0.626 * pow(bui, 0.809) + 2)
     fwi = bb if bb <= 1 else exp(2.72 * pow(0.434 * log(bb), 0.647))
     return fwi
 
@@ -452,7 +447,7 @@ def mcgfmc_to_gfmc(mc, cur, wind):
     # /*   convert to code with FF-scale */
     # return (59.5*(250.0-egmc)/(MPCT_TO_MC + egmc))
     if egmc > 250.0:
-      egmc = 250.0
+        egmc = 250.0
     return mcffmc_to_ffmc(egmc)
 
 def matted_grass_spread_ROS(ws, mc, cur):

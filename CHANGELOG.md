@@ -7,8 +7,11 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - Option when running `hFWI()` to have a transition from matted to standing grassland fuel (default, for regions with winter snowfall), or stick with standing instead (*Python* and *R*)
 - Option when running `hFWI()` to not split by year (for regions with seasonal data that includes Dec 31-Jan 1) and run each station's data as one continuous block (*Python* and *R*)
-- Standard `hFWI()` and `generate_daily_summaries()` output datasets using PRF 2007 hourly weather data (**PRF2007_standard_hourly_FWI.csv** and **PRF2007_standard_daily_summaries.csv** respectively)
-- New print message when running hourly FWI that show startup values
+- Standard datasets for PRF 2007
+    - Standard hourly weather data input for C (**PRF2007_hourly_wx_C-format.csv**)
+    - Standard `hFWI()` outputs (**PRF2007_standard_hourly_FWI.csv**)
+    - Standard `generate_daily_summaries()` outputs (**PRF2007_standard_daily_summaries.csv**)
+- New print message when running hourly FWI that shows startup values
 
 ### Changed
 - Leap years are properly accounted for in the transition between matted and standing GFMC, default `percent_cured` values, and in `get_sunlight()`
@@ -31,7 +34,7 @@ All notable changes to this project will be documented in this file. The format 
 - Requirement that the `timezone` argument be between -2 and -9 (*C*)
 
 ### Fixed
-- NGFWI and daily summaries outputs in C version now match Python and R versions (*C*)
+- All outputs in C version (NGFWI, daily summaries, make hourly, make minmax) now match Python and R versions (*C*)
 - `is_sequential_hours()` and `is_sequential_days()` differentiates by their respective time units (*R*)
 - `daily_summaries()` accounts for leap years properly (pseudo date differentiates leap days) (*Python* and *R*)
 - `grass_fuel_load` actually uses the default 0.35 kg/m^2 if not provided (*C*)

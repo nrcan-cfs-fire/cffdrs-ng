@@ -179,7 +179,8 @@ int main(int argc, char *argv[])
 
   check_header_FWI(inp, header_req, &flag_holder);
   cur.timezone = TZadjust;  // assign timezone before possibly calculating solrad
-  err = read_row_inputs(inp, &cur, &flag_holder);
+  err = read_row_inputs(inp, &cur, &flag_holder,
+    DEFAULT_GRASS_FUEL_LOAD, MON_CURING, DAY_CURING);
   old.day = -1;  // ensure initial sunrise and sunset calculation
 
   // use first year in data for transition btwn matted and standing
@@ -208,11 +209,11 @@ int main(int argc, char *argv[])
 
   if (!silent) {
     printf("\n########\nStartup values used:\n");
-    printf("FFMC = %f or mcffmc = %f %%\n", ffmc_old, mcffmc_old);
-    printf("DMC = %f and DC = %f\n", dmc_old, dc_old);
+    printf("FFMC = %.1f or mcffmc = %.1f %%\n", ffmc_old, mcffmc_old);
+    printf("DMC = %.1f and DC = %.1f\n", dmc_old, dc_old);
     printf("mcgfmc matted = %.4f %% and standing = %.4f %%\n",
       mcgfmc_matted_old, mcgfmc_standing_old);
-    printf("cumulative precipitation = %f mm and canopy drying = %.0f\n",
+    printf("cumulative precipitation = %.1f mm and canopy drying = %.0f\n",
       prec_cumulative, canopy_drying);
   }
 
@@ -330,7 +331,8 @@ int main(int argc, char *argv[])
       canopy.rain_total, canopy.drying_since_intercept);
     
     old = cur;
-    err = read_row_inputs(inp, &cur, &flag_holder);
+    err = read_row_inputs(inp, &cur, &flag_holder,
+      DEFAULT_GRASS_FUEL_LOAD, MON_CURING, DAY_CURING);
     // err > 0 means a next row of data in input file was detected
 
     // check for continuity and if sequential by hour
