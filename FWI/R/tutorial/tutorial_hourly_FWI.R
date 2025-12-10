@@ -1,12 +1,12 @@
 #### Hourly Fire Weather Index (FWI) Tutorial ####
-# February 2025 (Last updated September 2025)
+# February 2025 (Last updated December 2025)
 #
 # This script was designed to go with a tutorial on the NG-CFFDRS website to inform
 # users how to use scripts associated with FWI2025. Follow along with the
 # 'Hourly FWI Tutorial - R' page on the NG-CFFDRS website:
 # https://cffdrs.github.io/website_en/tutorials/Hourly_FWI_R
 # This tutorial will demonstrate how to generate FWI2025 outputs based on an
-# input from a .csv. The method will differ if using another source file type or
+# input from a CSV file. The method will differ if using another source file type or
 # if integrating code into existing fire management systems. This tutorial
 # assumes the user has a working level knowledge of R.
 ##############################################################################
@@ -26,27 +26,40 @@ source("util.r")
 source("daily_summaries.r")
 
 # Load the input weather station data file
-# Specify the file path if PRF2007_hourly_wx.csv is not in the working directory
-data <- read.csv("PRF2007_hourly_wx.csv")
+# The path below is specified based on the layout in the GitHub repository
+# Change the file path for PRF2007_hourly_wx.csv if your structure is different
+data <- read.csv("../../data/PRF2007_hourly_wx.csv")
 
 # Print the column names, data should contain 12 columns
-names(data)
+print(names(data))
 # [1] "id"       "lat"      "long"     "timezone" "yr"       "mon"
 # [7] "day"      "hr"       "temp"     "rh"       "ws"       "prec"
 
-# Previously, the timezone (UTC offset) was a function parameter and calculated from
-# latitude and longitude. Now it is a data frame column and provided. See the
-# appendix of this tutorial for extra information on how to calculate the timezone,
-# along with the extra information required about the dataset.
+# Previously, the UTC offset (`timezone` column) was a function parameter and could
+# be calculated from latitude and longitude. Now it is a data frame column and
+# provided. See the appendix of this tutorial for extra information on how to
+# calculate the timezone, along with the extra information required about the
+# dataset.
 
 ### Run FWI2025 ###
 # hFWI() is the function that calculates hourly FWI codes in FWI2025. It can
-# handle multiple stations and years/fire seasons (not shown in this tutorial).
-# Default FWI start-up code values are: ffmc_old = 85, dmc_old = 6, dc_old = 15
+# handle multiple stations and years/fire seasons (not shown in this tutorial). For the arguments you can run `args()`.
+args(hFWI)
+
+# For this tutorial, we will leave all the optional parameters to default.
 data_fwi <- hFWI(data)
+# ########
+# Startup values used:
+# FFMC = 85.0 or mcffmc = NA %
+# DMC = 6.0 and DC = 15.0
+# mcgfmc matted = 16.3075 % and standing = 16.3075 %
+# cumulative precipitation = 0.0 mm and canopy drying = 0
+
+# Running PRF for 2007
+# ########
 
 # Output is a data.frame (matching input class), with FWI calculations appended
-# after the input columns. Save the output as a .csv file (overrides any preexisting
+# after the input columns. Save the output as a CSV file (overrides any preexisting
 # file).
 write.csv(data_fwi, "PRF2007_hourly_FWI.csv", row.names = FALSE)
 
@@ -73,6 +86,8 @@ summary(data_fwi[standard_components])
 # Mean   :23.972   Mean   : 3.877
 # 3rd Qu.:34.605   3rd Qu.: 5.930
 # Max.   :66.148   Max.   :25.135
+
+# Compare your outputs with our standard outputs in PRF2007_standard_hourly_FWI.csv
 
 ### Calculate daily summaries ###
 # Calculate outputs like peak burn time and number of hours of spread potential.
