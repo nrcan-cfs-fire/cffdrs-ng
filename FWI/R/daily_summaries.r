@@ -75,14 +75,15 @@ smooth_5pt <- function(source) {
 #' @param   reset_hr  the new boundary hour instead of midnight (default 5)
 #' @return            pseudo-date including year and ordinal day of the form "YYYY-D"
 pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
+  d <- make_date(yr, mon, day)
   if (hr < reset_hr) {
-    adjusted_jd <- julian(mon, day) - 1
+    adjusted_jd <- as.integer(yday(d)) - 1
   } else {
-    adjusted_jd <- julian(mon, day)
+    adjusted_jd <- as.integer(yday(d))
   }
 
   if (adjusted_jd == 0) {  # where Jan 1 shifts to 0, bump it to end of previous year
-    adjusted_jd <- julian(12, 31)
+    adjusted_jd <- as.integer(yday(make_date(yr - 1, 12, 31)))
     adjusted_yr <- yr - 1
   } else {
     adjusted_yr <- yr
@@ -126,10 +127,12 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
 
   for (stn in unique(hourly_data[, id])) {
     if (!silent) {
-      print(paste("Summarizing", stn, "to daily"))
+      writeLines(paste("Summarizing", stn, "to daily"))
     }
     by_stn <- hourly_data[id == stn]
     by_stn[, pseudo_DATE := Vectorize(pseudo_date)(yr, mon, day, hr, reset_hr)]
+    # first year for transition btwn matted and standing (esp if southern hemisphere)
+    DATE_GRASS_STANDING <- make_date(by_stn[1, yr], MON_STANDING, DAY_STANDING)
 
     for (p_date in unique(by_stn[, pseudo_DATE])) {
       by_date <- by_stn[pseudo_DATE == p_date]
@@ -151,7 +154,8 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
       }
 
       # calculate some extra variables before creating datatable all at once
-      if (by_date[1, julian(mon, day)] < DATE_GRASS) {
+      d <- make_date(by_date[1, yr], by_date[1, mon], by_date[1, day])
+      if (GRASS_TRANSITION && d < DATE_GRASS_STANDING) {
         standing <- FALSE
         mcgfmc <- by_date[peak_time, mcgfmc_matted]
       } else {

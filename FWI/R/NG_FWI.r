@@ -1,37 +1,56 @@
 #' Computes hourly FWI indices for an input hourly weather stream
+
+### Import packages ###
 library(lubridate)
 library(data.table)
+
+# Import from other CFFDRS code files
 source("util.r")
 
+### Variable Definitions ###
+# Only change these if you know what you are doing, or
+# reach out to the CFS Fire Danger Group for more info
 
-DAILY_K_DMC_DRYING <- 1.894
-DAILY_K_DC_DRYING <- 3.937
-
-HOURLY_K_DMC <- 2.22
-HOURLY_K_DC <- 0.085
-DMC_OFFSET_TEMP <- 0.0
-DC_OFFSET_TEMP <- 0.0
-
-DC_DAILY_CONST <- 0.36
-DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
-
-OFFSET_SUNRISE <- 0 ##2.5
-OFFSET_SUNSET <- 0 ##0.5
-
-# Fuel Load (kg/m^2)
-DEFAULT_GRASS_FUEL_LOAD <- 0.35
-
-# default startup values
+# Startup moisture code values
 FFMC_DEFAULT <- 85.0
 DMC_DEFAULT <- 6.0
 DC_DEFAULT <- 15.0
 
+# FFMC moisture content to code conversion factor
 MPCT_TO_MC <- 250.0 * 59.5 / 101.0
+
+# Wetting variables
+DAILY_K_DMC_DRYING <- 1.894
+DAILY_K_DC_DRYING <- 3.937
+DC_DAILY_CONST <- 0.36
+DC_HOURLY_CONST <- DC_DAILY_CONST / DAILY_K_DC_DRYING
+
+# Precipitation intercept
 FFMC_INTERCEPT <- 0.5
 DMC_INTERCEPT <- 1.5
 DC_INTERCEPT <- 2.8
 
-DATE_GRASS <- 181
+# Drying variables
+OFFSET_SUNRISE <- 0
+OFFSET_SUNSET <- 0
+HOURLY_K_DMC <- 2.22
+HOURLY_K_DC <- 0.015
+DMC_OFFSET_TEMP <- 0.0
+DC_OFFSET_TEMP <- 0.0
+
+# Grassland fuel load (grass_fuel_load, kg/m^2)
+DEFAULT_GRASS_FUEL_LOAD <- 0.35
+
+# Transition from matted to standing grass in a calendar year (default July 1st)
+GRASS_TRANSITION <- TRUE  # default TRUE, FALSE for GFMC to always be standing
+MON_STANDING <- 7
+DAY_STANDING <- 1
+
+# For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
+# If TRUE, every station's data needs to be sequential (one continuous run)
+CONTINUOUS_MULTIYEAR <- FALSE  # default FALSE, TRUE to not split by year
+
+### Functions ###
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
@@ -45,22 +64,22 @@ mcffmc_to_ffmc <- function(mcffmc) {
 
 # Duff Moisture Code (DMC) to duff moisture content (%)
 dmc_to_mcdmc <- function(dmc) {
-   return((280 / exp(dmc / 43.43)) + 20)
+  return((280 / exp(dmc / 43.43)) + 20)
 }
 
 # duff moisture content (%) to DMC
 mcdmc_to_dmc <- function(mcdmc) {
-   return(43.43 * log(280 / (mcdmc - 20)))
+  return(43.43 * log(280 / (mcdmc - 20)))
 }
 
 # Drought Code (DC) to DC moisture content(%)
 dc_to_mcdc <- function(dc) {
-   return(400 * exp(-dc / 400))
+  return(400 * exp(-dc / 400))
 }
 
 # DC moisture content (%) to DC
 mcdc_to_dc <- function(mcdc) {
-   return(400 * log(400 / mcdc))
+  return(400 * log(400 / mcdc))
 }
 
 #' Calculate hourly fine fuel moisture content. Needs to be converted to get FFMC
@@ -202,7 +221,7 @@ drought_code <- function(
     } else {  # previously passed threshold
       rw <- prec * 0.83
     }
-    mr <- last_mcdc + 3.937 * rw / 2.0
+    mr <- last_mcdc + DAILY_K_DC_DRYING * rw / 2.0
   } else {
     mr <- last_mcdc
   }
@@ -218,9 +237,8 @@ drought_code <- function(
   if ((hr >= sunrise_start && hr <= sunset_start) ||
     (hr < 6 && (hr + 24 >= sunrise_start && hr + 24 <= sunset_start))) {  # daytime
     offset <- 3.0
-    mult <- 0.015
     if (temp > 0) {
-      pe <- mult * temp + offset / 16.0
+      pe <- HOURLY_K_DC * (temp + DC_OFFSET_TEMP) + offset / 16.0
     } else {
       pe <- 0
     }
@@ -610,7 +628,7 @@ rain_since_intercept_reset <- function(rain, canopy) {
   mcgfmc_standing_old,
   prec_cumulative,
   canopy_drying) {
-  if (length(na.omit(unique(w$yr))) != 1) {
+  if (!CONTINUOUS_MULTIYEAR && length(na.omit(unique(w$yr))) != 1) {
     # only a warning for cases where data extends between years (e.g. southern hemisphere)
     warning("_stnHFWI() function received more than one year")
   }
@@ -653,6 +671,12 @@ rain_since_intercept_reset <- function(rain, canopy) {
   # FIX: just use loop for now so it matches C code
   canopy <- list(rain_total_prev = prec_cumulative,
     drying_since_intercept = canopy_drying)
+  # transition btwn matted and standing grassland fuel
+  # does not account for fire seasons continuous across multiple years
+  DATE_GRASS_STANDING <- make_date(r[1, yr], MON_STANDING, DAY_STANDING)
+  if (DATE_GRASS_STANDING < r[1, date]) {  # use next year if date already passed
+    DATE_GRASS_STANDING <- make_date(r[1, yr] + 1, MON_STANDING, DAY_STANDING)
+  }
   results <- NULL
   N <- nrow(r)
   for (i in 1:N) {
@@ -667,13 +691,6 @@ rain_since_intercept_reset <- function(rain, canopy) {
       rain_ffmc <- canopy$rain_total_prev + cur$prec - FFMC_INTERCEPT
     }
 
-    # rain_ffmc <- ifelse(canopy$rain_total <= FFMC_INTERCEPT,
-    #   0.0,
-    #   ifelse((canopy$rain_total - FFMC_INTERCEPT) > cur$prec,
-    #     cur$prec,
-    #     canopy$rain_total - FFMC_INTERCEPT
-    #   )
-    # )
     mcffmc <- hourly_fine_fuel_moisture(mcffmc, cur$temp, cur$rh, cur$ws, rain_ffmc)
     cur$mcffmc <- mcffmc
     # convert to code for output, but keep using moisture % for precision
@@ -733,7 +750,8 @@ rain_since_intercept_reset <- function(rain, canopy) {
       cur$grass_fuel_load
     )
 
-    if (julian(cur$mon, cur$day) < DATE_GRASS) {
+    # check if matted to standing transition happened already
+    if (GRASS_TRANSITION && cur$date < DATE_GRASS_STANDING) {
       standing <- FALSE
       mcgfmc <- mcgfmc_matted
     } else {
@@ -780,7 +798,7 @@ hFWI <- function(
   mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
   prec_cumulative = 0.0,
-  canopy_drying = 0.0,
+  canopy_drying = 0,
   silent = FALSE,
   round_out = 4
   ) {
@@ -812,15 +830,6 @@ hFWI <- function(
   } else {
     wx[, timezone := as.numeric(..timezone)]
   }
-  # check for one hour run and startup moisture all set to default
-  if (nrow(wx) == 1 &&
-    ffmc_old == FFMC_DEFAULT && is.na(mcffmc_old) &&
-    dmc_old == DMC_DEFAULT && dc_old == DC_DEFAULT &&
-    mcgfmc_matted_old == ffmc_to_mcffmc(FFMC_DEFAULT) &&
-    mcgfmc_standing_old == ffmc_to_mcffmc(FFMC_DEFAULT)) {
-    warning(paste("Startup moisture values set to default (instead of previous)",
-      "in a one hour run"))
-  }
   # check for optional columns that have a default
   hadStn <- "id" %in% og_names
   hadMinute <- "minute" %in% og_names
@@ -831,26 +840,22 @@ hFWI <- function(
     wx[, minute := 0]
   }
   # check for optional columns that can be calculated
-  hadDate <- "date" %in% og_names
   hadTimestamp <- "timestamp" %in% og_names
-  if (!hadDate) {
-    wx[, date := as.character(as.Date(sprintf("%04d-%02d-%02d", yr, mon, day)))]
-  }
+  hadDate <- "date" %in% og_names
   if (!hadTimestamp) {
-    # as_datetime() defaults to UTC, but we only use timestamp for it's combined yr, mon, day, hr
-    wx[, timestamp := as_datetime(sprintf("%04d-%02d-%02d %02d:%02d:00",
-      yr, mon, day, hr, minute))]
+    # as_datetime() defaults to UTC, only use timestamp for combined yr, mon, day, hr
+    wx[, timestamp := make_datetime(yr, mon, day, hr, minute)]
+  }
+  if (!hadDate) {
+    wx[, date := make_date(yr, mon, day)]
   }
   if (!"grass_fuel_load" %in% og_names) {
-    wx$grass_fuel_load <- DEFAULT_GRASS_FUEL_LOAD
+    wx[, grass_fuel_load := DEFAULT_GRASS_FUEL_LOAD]
   }
   if (!"percent_cured" %in% og_names) {
-    wx$percent_cured <- seasonal_curing(julian(wx$mon, wx$day))
+    wx[, percent_cured := Vectorize(seasonal_curing)(yr, mon, day)]
   }
   if (!"solrad" %in% og_names) {
-    if (!silent) {
-      print("Solar Radiation not provided so will be calculated")
-    }
     needs_solrad <- TRUE
   } else {
     needs_solrad <- FALSE
@@ -890,17 +895,38 @@ hFWI <- function(
   stopifnot(dmc_old >= 0)
   stopifnot(dc_old >= 0)
 
-  # loop over every station year
+  if (!silent) {
+    writeLines("\n########\nStartup values used:")
+    writeLines(paste("FFMC =", format(ffmc_old, nsmall = 1),
+      "or mcffmc =", format(mcffmc_old, nsmall = 1), "%"))
+    writeLines(paste("DMC =", format(dmc_old, nsmall = 1),
+      "and DC =", format(dc_old, nsmall = 1)))
+    writeLines(paste("mcgfmc matted =",
+      format(mcgfmc_matted_old, digits = 6, nsmall = 1), "% and standing =",
+      format(mcgfmc_standing_old, digits = 6, nsmall = 1), "%"))
+    writeLines(paste("cumulative precipitation =",
+      format(prec_cumulative, nsmall = 1), "mm and canopy drying =",
+      canopy_drying, "\n"))
+  }
+
+  # loop over every station year if not continuous multiyear data
   results <- NULL
   for (stn in unique(wx$id)) {
     by_stn <- wx[id == stn]
-    # splitting on "yr" makes it split in the middle of southern hemisphere fire season
-    for (y in unique(by_stn$yr)) {
+    split <- unique(by_stn$yr)
+    if (CONTINUOUS_MULTIYEAR) {
+      split <- 1  # if continuous multiyear data, reduce loop over years to 1
+    }
+    for (y in split) {
       by_y <- by_stn[yr == y, ]
-      if (!silent) {
-        print(paste0("Running ", stn, " for ", y))
+      if (CONTINUOUS_MULTIYEAR) {
+        by_y <- copy(by_stn)
       }
-      # FIX: convert this to not need to do individual stations
+      if (!silent && !CONTINUOUS_MULTIYEAR) {
+        writeLines(paste0("Running ", stn, " for ", y))
+      } else if (!silent && CONTINUOUS_MULTIYEAR) {
+        writeLines(paste0("Running station ", stn))
+      }
       w <- get_sunlight(by_y, get_solrad = needs_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
@@ -932,11 +958,20 @@ hFWI <- function(
     if (!"solrad" %in% og_names) {
       outcols <- c('solrad', outcols)
     }
+    if (!"percent_cured" %in% og_names) {
+      outcols <- c('percent_cured', outcols)
+    }
+    if (!"grass_fuel_load" %in% og_names) {
+      outcols <- c('grass_fuel_load', outcols)
+    }
     set(results, j = outcols, value = round(results[, ..outcols], as.integer(round_out)))
   }
 
   if (!wasDT) {
     setDF(results)
+  }
+  if (!silent) {
+    writeLines("########\n")
   }
   return(results)
 }
@@ -977,6 +1012,9 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   if (length(args) >= 14) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
+  if (!silent) {
+    writeLines(paste("\nOpening input file >>> ", input))
+  }
   df_out <- hFWI(df_in, timezone, ffmc_old, mcffmc_old, dmc_old, dc_old,
     mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying,
     silent, round_out)

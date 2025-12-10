@@ -10,7 +10,7 @@ C_WIND <- list(c_alpha = 1.0, c_beta = 1.5, c_gamma = -1.3)
 make_prediction <- function(fcsts, c_alpha, c_beta, c_gamma, v = "TEMP", change_at = "SUNSET",
   min_value = -Inf, max_value = Inf, intervals = 1, verbose = FALSE) {
   if (verbose) {
-    print(paste0("Predicting ", v, " changing at ", change_at))
+    writeLines(paste0("Predicting ", v, " changing at ", change_at))
   }
   fcsts <- copy(fcsts)
   var_min <- paste0(v, "_MIN")
@@ -72,7 +72,7 @@ make_prediction <- function(fcsts, c_alpha, c_beta, c_gamma, v = "TEMP", change_
 
 do_prediction <- function(fcsts, row_temp, row_wind, row_RH, intervals = 1, verbose = FALSE) {
   if (verbose) {
-    print("Doing prediction")
+    writeLines("Doing prediction")
   }
   v_temp <- make_prediction(fcsts, row_temp$c_alpha, row_temp$c_beta, row_temp$c_gamma,
     "TEMP", "SUNSET", intervals = intervals, verbose = verbose)
@@ -89,34 +89,34 @@ do_prediction <- function(fcsts, row_temp, row_wind, row_RH, intervals = 1, verb
   output <- out[, c("ID", "LAT", "LONG", "TIMEZONE", "TIMESTAMP", "TEMP", "WS", "RH")]
   # ~ output <- fwi(output)
   if (verbose) {
-    print("Assigning times")
+    writeLines("Assigning times")
   }
   output[, HR := hour(TIMESTAMP)]
   output[, MINUTE := minute(TIMESTAMP)]
   if (verbose) {
-    print("Converting date")
+    writeLines("Converting date")
   }
   output[, DATE := as.character(as_date(TIMESTAMP))]
   if (verbose) {
-    print("Allocating rain")
+    writeLines("Allocating rain")
   }
   prec <- fcsts[, c("DATE", "PREC")]
   prec[, HR := 7]
   prec[, MINUTE := 0]
   if (verbose) {
-    print("Merging")
+    writeLines("Merging")
   }
   cmp <- merge(output, prec, by = c("DATE", "HR", "MINUTE"), all = TRUE)[!is.na(TIMESTAMP)]
   cmp$PREC <- nafill(cmp$PREC, fill = 0)
   if (verbose) {
-    print("Calculating times")
+    writeLines("Calculating times")
   }
   cmp[, YR := year(TIMESTAMP)]
   cmp[, MON := month(TIMESTAMP)]
   cmp[, DAY := day(TIMESTAMP)]
   cmp[, TIME := HR + MINUTE / 60.0]
   if (verbose) {
-    print("Done prediction")
+    writeLines("Done prediction")
   }
   return(cmp)
 }
@@ -152,8 +152,8 @@ minmax_to_hourly_single <- function(w, skip_invalid = FALSE, verbose = FALSE) {
   }
   r$HR <- 12
   # as_datetime() defaults to UTC, but we only use TIMESTAMP for it's combined yr, mon, day, hr
-  r[, TIMESTAMP := as_datetime(sprintf("%04d-%02d-%02d %02d:00:00", YR, MON, DAY, HR))]
-  if (!(nrow(r) == 1 || is_sequential(as.Date(r$TIMESTAMP)))) {
+  r[, TIMESTAMP := make_datetime(YR, MON, DAY, HR)]
+  if (!is_sequential_days(r)) {
     if (skip_invalid) {
       warning(paste0(r$ID[[1]], " for ", r$YR[[1]],
         " - Expected input to be sequential daily weather"))
@@ -244,7 +244,7 @@ minmax_to_hourly <- function(w, timezone = NA, skip_invalid = FALSE,
     by_stn <- r[ID == stn, ]
     for (yr in unique(by_stn$YR)) {
       by_year <- by_stn[YR == yr, ]
-      print(paste0("Running ", stn, " for ", yr))
+      writeLines(paste0("Running ", stn, " for ", yr))
       df <- minmax_to_hourly_single(by_year, skip_invalid, verbose)
       result <- rbind(result, df)
     }

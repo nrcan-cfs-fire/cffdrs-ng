@@ -3,33 +3,35 @@ library(data.table)
 library(lubridate)
 
 
-#' Determine if data is sequential at intervals of 1 unit
-#'
-#' @param data          data to check
-#' @return              whether each entry in data is 1 unit from the next entry
-is_sequential <- function(data) {
-  v <- na.omit(unique(data - data.table::shift(data, 1)))
-  return(length(data) == 1 || (1 == v[[1]] && length(v) == 1))
-}
 
 #' Determine if data is sequential days
 #'
-#' @param df            data to check
+#' @param df            data to check (requires timestamp column)
 #' @return              whether each entry is 1 day from the next entry
 is_sequential_days <- function(df) {
   data <- copy(df)
   colnames(data) <- tolower(colnames(data))
-  return(is_sequential(as.Date(data$date)))
+  if (!"timestamp" %in% names(data)) {
+    stop("timestamp column (using make_datetime()) required to check sequential days")
+  }
+  l <- nrow(data)
+  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
+  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "days")))
 }
 
 #' Determine if data is sequential hours
 #'
-#' @param df            data to check
+#' @param df            data to check (requires timestamp column)
 #' @return              whether each entry is 1 hour from the next entry
 is_sequential_hours <- function(df) {
   data <- copy(df)
   colnames(data) <- tolower(colnames(data))
-  return(is_sequential(as.POSIXct(df$timestamp)))
+  if (!"timestamp" %in% names(data)) {
+    stop("timestamp column (using make_datetime()) required to check sequential hours")
+  }
+  l <- nrow(data)
+  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
+  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "hours")))
 }
 
 #' Find specific humidity
@@ -54,15 +56,15 @@ find_rh <- function(q, temp) {
   return(100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))))
 }
 
-#' Find day of year. Does not properly deal with leap years.
-#'
-#' @param mon         Month
-#' @param day         Day of month
-#' @return            Day of year
-julian <- function(mon, day) {
-  month <- c(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365)
-  return(month[mon] + day)
-}
+# #' Find day of year. Does not properly deal with leap years.
+# #'
+# #' @param mon         Month
+# #' @param day         Day of month
+# #' @return            Day of year
+# julian <- function(mon, day) {
+#   month <- c(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365)
+#   return(month[mon] + day)
+# }
 
 #' Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
 #' (does not take leap years into account)
@@ -73,26 +75,30 @@ julian <- function(mon, day) {
 get_sunlight <- function(dt, get_solrad = FALSE) {
   colnames(dt) <- tolower(colnames(dt))
   # columns to split along unique days
-  cols_day <- c("lat", "long", "date", "timezone")
+  cols_day <- c("lat", "long", "timezone", "date")
   # required columns
   cols_req <- c("lat", "long", "timezone", "timestamp")
   if (get_solrad) {
-    cols_req <- c(cols_req, "temp")
+    cols_req <- c(cols_req, "temp", "rh")
   }
   for (n in cols_req) {
     stopifnot(n %in% colnames(dt))
   }
   df_copy <- copy(dt)
-  # (re)make date column, strips timestamp of default UTC (GMT) timezone generated in hFWI()
-  df_copy[, date := as_date(timestamp)]
+  if (!"date" %in% colnames(df_copy)) {
+    df_copy[, date := as_date(timestamp)]
+  }
 
   # calculate sunrise and sunset
   # drop duplicate days
   df_stn_dates <- unique(df_copy[, ..cols_day])
   df_dates <- unique(df_stn_dates[, list(date)])
-  df_dates[, jd := julian(month(date), day(date))]
+  df_dates[, jd := yday(date)]
+  # calculate fraction of the year
   dechour <- 12.0
-  df_dates[, fracyear := 2.0 * pi / 365.0 * (jd - 1.0 + (dechour - 12.0) / 24.0)]
+  df_dates[, fracyear := 2.0 * pi * (jd - 1.0 + (dechour - 12.0) / 24.0)]
+  df_dates[, fracyear := ifelse(leap_year(year(date)),
+    fracyear / 366.0, fracyear / 365.0)]
   df_dates[, eqtime := 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear))]
@@ -138,16 +144,19 @@ get_sunlight <- function(dt, get_solrad = FALSE) {
   return(df_result)
  }
 
-seasonal_curing <- function(julian_date) {
+#' Set default percent_cured values based off annual variation in Boreal Plains region
+#'
+#' @param yr             Year
+#' @param mon            Month of year
+#' @param day            Day of month
+#' @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
+#' @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
+#' @return               percent_cured [%], percent of grassland fuel that is cured
+
+seasonal_curing <- function(yr, mon, day, start_mon = 3, start_day = 12) {
+  # store default values of percent_cured every 10 days of the year
   PERCENT_CURED <- c(
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
+    96.0,  # "winter" cured value
     95.0,
     93.0,
     92.0,
@@ -172,16 +181,22 @@ seasonal_curing <- function(julian_date) {
     75.0,
     78.9,
     86.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0,
-    96.0
+    96.0  # "winter" cured value for rest of year
   )
-  jd_class <- (julian_date %/% 10) + 1
-  first <- PERCENT_CURED[jd_class]
-  last <- PERCENT_CURED[jd_class + 1]
-  period_frac <- (julian_date %% 10) / 10.0
-  return(first + (last - first) * period_frac)
+  # find previous green up start date (year - 1 or year)
+  shift <- make_date(yr, mon, day) - make_date(yr, start_mon, start_day)
+  if (shift < 0) {
+    shift <- make_date(yr, mon, day) - make_date(yr - 1, start_mon, start_day)
+  }
+  days_in <- as.integer(shift) + 1  # green up start date is first value (not 0th)
+  # check if date is in green phase or winter (cured) phase
+  if (days_in < (length(PERCENT_CURED) - 1) * 10) {
+    # linear interpolation between every 10-day value
+    per_cur0 <- PERCENT_CURED[days_in %/% 10 + 1]
+    per_cur1 <- PERCENT_CURED[days_in %/% 10 + 2]
+    period_frac <- (days_in %% 10) / 10.0
+    return(per_cur0 + (per_cur1 - per_cur0) * period_frac)
+  } else {
+    return(PERCENT_CURED[length(PERCENT_CURED)])
+  }
 }

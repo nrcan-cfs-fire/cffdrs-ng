@@ -1,6 +1,7 @@
 # Various utility functions used by the other files
 import datetime
 from math import acos, cos, exp, pi, sin, tan
+from calendar import isleap
 import numpy as np
 import pandas as pd
 
@@ -8,26 +9,30 @@ import pandas as pd
 ##
 # Determine if data is sequential days
 #
-# @param data          data to check
+# @param data          data to check (requires timestamp column)
 # @return              whether each entry is 1 day from the next entry
 def is_sequential_days(data):
     test = data.copy()
     test.columns = map(str.lower, test.columns)
-    return np.all(
-        datetime.timedelta(days=1)
+    if not "timestamp" in test.columns:
+        raise RuntimeError("timestamp column required to check sequential days")
+    return test.shape[0] == 1 or np.all(
+        datetime.timedelta(days = 1)
         == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 
 ##
 # Determine if data is sequential hours
 #
-# @param data          data to check
+# @param data          data to check (requires timestamp column)
 # @return              whether each entry is 1 hour from the next entry
 def is_sequential_hours(data):
     test = data.copy()
     test.columns = map(str.lower, test.columns)
-    return np.all(
-        datetime.timedelta(hours=1)
+    if not "timestamp" in test.columns:
+        raise RuntimeError("timestamp column required to check sequential hours")
+    return test.shape[0] == 1 or np.all(
+        datetime.timedelta(hours = 1)
         == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
 
@@ -55,19 +60,18 @@ def find_rh(q, temp):
     rh = 100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3)))
     return rh
 
-##
-# Find day of year. Does not properly deal with leap years.
-#
-# @param mon         Month
-# @param day         Day of month
-# @return            Day of year
-def julian(mon, day):
-    month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
-    return month[int(mon) - 1] + int(day)
+# ##
+# # Find day of year. Does not properly deal with leap years.
+# #
+# # @param mon         Month
+# # @param day         Day of month
+# # @return            Day of year
+# def julian(mon, day):
+#     month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+#     return month[int(mon) - 1] + int(day)
 
 ##
 # Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
-# (does not take leap years into account)
 #
 # @param df                Dataframe to add columns to
 # @param get_solrad        Whether to calculate solar radiation
@@ -75,26 +79,30 @@ def julian(mon, day):
 def get_sunlight(df, get_solrad = False):
     df.columns = map(str.lower, df.columns)
     # columns to split along unique days
-    cols_day = ["lat", "long", "date", "timezone"]
+    cols_day = ["lat", "long", "timezone", "date"]
     # required columns
     cols_req = ["lat", "long", "timezone", "timestamp"]
     if get_solrad:
         cols_req.append("temp")
+        cols_req.append("rh")
     for n in cols_req:
         if n not in df.columns:
-            raise RuntimeError(f"Expected column '{n}' not found")
-    df_copy = df.loc[:]
-    # (re)make date column
-    df_copy.loc[:, "date"] = df_copy["timestamp"].apply(lambda ts: ts.date())
+            raise RuntimeError(f'Expected column "{n}" not found')
+    df_copy = df.copy()
+    if "date" not in df_copy.columns:
+        df_copy["date"] = df_copy["timestamp"].apply(lambda ts: ts.date())
     
     # calculate sunrise and sunset
     # drop duplicate days
     df_stn_dates = df_copy[cols_day].drop_duplicates()
     df_dates = df_stn_dates[["date"]].drop_duplicates()
-    df_dates["jd"] = df_dates["date"].apply(lambda d: julian(d.month, d.day))
+    df_dates["jd"] = df_dates["date"].apply(lambda d: int(d.strftime("%j")))
+    # calculate fraction of the year
     dec_hour = 12.0
     df_dates["fracyear"] = df_dates["jd"].apply(
-        lambda jd: 2.0 * pi / 365.0 * (jd - 1.0 + (dec_hour - 12.0) / 24.0))
+        lambda jd: 2.0 * pi * (jd - 1.0 + (dec_hour - 12.0) / 24.0))
+    df_dates["fracyear"] = df_dates.apply(lambda row: row["fracyear"] / 366.0 if
+        isleap(row["date"].year) else row["fracyear"] / 365.0, axis = 1)
     df_dates["eqtime"] = df_dates["fracyear"].apply(
         lambda fracyear: 229.18 * (0.000075 +
         0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
@@ -153,16 +161,20 @@ def get_sunlight(df, get_solrad = False):
         lambda x: x["sunset"] - x["sunrise"], axis = 1)
     return df_result
 
-def seasonal_curing(julian_date):
+##
+# Set default percent_cured values based off annual variation in Boreal Plains region
+#
+# @param yr             Year
+# @param mon            Month of year
+# @param day            Day of month
+# @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
+# @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
+# @return               percent_cured [%], percent of grassland fuel that is cured
+
+def seasonal_curing(yr, mon, day, start_mon = 3, start_day = 12):
+    # store default values of percent_cured every 10 days of the year
     PERCENT_CURED = [
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
+        96.0,  # "winter" cured value
         95.0,
         93.0,
         92.0,
@@ -187,15 +199,19 @@ def seasonal_curing(julian_date):
         75.0,
         78.9,
         86.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0,
-        96.0
+        96.0  # "winter" cured value for rest of year
     ]
-    jd_class = julian_date // 10
-    first = PERCENT_CURED[jd_class]
-    last = PERCENT_CURED[jd_class + 1]
-    period_frac = (julian_date % 10) / 10.0
-    return first + (last - first) * period_frac
+    # find previous green up start date (year - 1 or year)
+    shift = datetime.date(yr, mon, day) - datetime.date(yr, start_mon, start_day)
+    if shift.days < 0:
+        shift = datetime.date(yr, mon, day) - datetime.date(yr - 1, start_mon, start_day)
+    days_in = shift.days + 1  # green up start date is first value different (not 0th)
+    # check if date is in green phase or winter (cured) phase
+    if days_in < (len(PERCENT_CURED) - 1) * 10:
+        # linear interpolation between every 10-day value
+        per_cur0 = PERCENT_CURED[days_in // 10]
+        per_cur1 = PERCENT_CURED[days_in // 10 + 1]
+        period_frac = (days_in % 10) / 10.0
+        return per_cur0 + (per_cur1 - per_cur0) * period_frac
+    else:
+        return PERCENT_CURED[-1]

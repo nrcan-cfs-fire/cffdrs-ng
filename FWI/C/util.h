@@ -3,17 +3,23 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <time.h>
 
+
+
+////// Variable Definitions
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.1415926535897932384626433
 #endif
+
+////// Structure Declarations
 
 /**
  * A row from the input file for an hourly weather stream
  */
 struct row
 {
-  double lat, lon;
+  double lat, lon, timezone;
   int year, mon, day, hour;
   double temp, rh, ws, rain;
   /* Either need solar radiation to be included, or calculated */
@@ -24,14 +30,8 @@ struct row
   double percent_cured;
   /* grass fuel load (kg/m^2) */
   double grass_fuel_load;
-};
-
-/*
- * Make a structure that's a day's worth of data so we can pass it easily.
- */
-struct double_24hr
-{
-  double hour[24];
+  // timestamp (including julian/yday)
+  struct tm timestamp;
 };
 
 /**
@@ -49,39 +49,32 @@ struct row_daily
  */
 struct row_minmax
 {
-  double lat, lon;
+  double lat, lon, timezone;
   int year, mon, day;
   double temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, rain;
+  double sunrise, sunset;
+  struct tm date;
 };
 
 struct flags{
-  bool solrad_flag;
-  bool percent_cured_flag;
+  bool grass_fuel_load_flag, percent_cured_flag, solrad_flag;
 };
 
+struct rain_intercept
+{
+  double rain_total;
+  double rain_total_prev;
+  double drying_since_intercept;
+};
 
-/*
-* Gets the temp range for the data - do not call after you have started reading files, 
-* this needs to loop through the file to get the min and max temp
-*/
-double read_temp_range(char *file, const char *header);
+////// Function Declarations and Help
 
-/**
- * Read a row from an hourly weather stream file
- */
-int read_row(FILE *inp, struct row *r);
-/**
- * Read a row from an hourly fwi inputs stream file
- */
-int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
-/**
- * Read a row from a daily weather stream file
- */
-int read_row_daily(FILE *inp, struct row_daily *r);
-/**
- * Read a row from a min/max weather stream file
- */
-int read_row_minmax(FILE *inp, struct row_minmax *r);
+/* C90 max() also causing problems */
+double _max(double x, double y);
+
+/* C90 min() also causing problems */
+double _min(double x, double y);
+
 /**
  * Find specific humidity
  *
@@ -90,6 +83,7 @@ int read_row_minmax(FILE *inp, struct row_minmax *r);
  * @return            Specific humidity (g/kg)
  */
 double findQ(double temp, double rh);
+
 /**
  * Find relative humidity
  *
@@ -100,76 +94,76 @@ double findQ(double temp, double rh);
 double findrh(double q, double temp);
 
 /**
- * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
- *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param mon               Month
- * @param day               Day of month
- * @param timezone          Offset from GMT in hours
- * @param temp_range        Range in temperature during the period (Celcius)
- * @param[out] solrad       Hourly solar radiation (kW/m^2)
- */
-void solar_radiation(double lat, double lon, int mon, int day, double timezone, double temp_range, struct double_24hr *solrad);
-
-
-double single_hour_solrad_estimation(double lat, double lon, int jd, double timezone, int hour, double rh, double temp);
-
-
+* Set default percent_cured values
+* This is a simple piecewise tabular summary (10day) of DKT's NDVI based
+* cure state analysis (smoothed) of annual variation in Central Boreal Plains region
+* Users should be encouraged to make local observations each year themselves
+* as such obs will be far superior to this average
+*
+* @param yr           Year
+* @param mon          Month of year
+* @param day          Day of month
+* @param start_mon    Month of grassland fuel green up start (Boreal Plains Mar 12)
+* @param start_day    Day of grassland fuel green up start (Boreal Plains Mar 12)
+* @return             percent_cured [%], percent of grassland fuel that is cured
+*/
+double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day);
 
 /**
- * Calculate Hargreaves hourly surface open-site shortwave radiation in kW/m^2.
- *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param jday              Day of year
- * @param timezone          Offset from GMT in hours
- * @param temp_range        Range in temperature during the period (Celcius)
- * @param[out] solrad       Hourly solar radiation (kW/m^2)
+ * Find if a year is a leap year or not
+ * 
+ * @param yr    Year
+ * @return      Boolean whether year is a leap year or not
  */
-void solar_radiation_julian(double lat, double lon, int jd, double timezone, double temp_range, struct double_24hr *solrad);
+bool is_leap(int yr);
+
 /**
- * Find sunrise and sunset for a given date and location.
+ * Find day of year
  *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param mon               Month
- * @param day               Day of month
- * @param hour              Hour of day
- * @param timezone          Offset from GMT in hours
- * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
- * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
- */
-void sunrise_sunset(double lat, double lon, int mon, int day, double timezone, double *sunrise, double *sunset);
-/**
- * Find sunrise and sunset for a given date and location.
- *
- * @param lat               Latitude (degrees)
- * @param lon               Longitude (degrees)
- * @param jd                Day of year
- * @param hour              Hour of day
- * @param timezone          Offset from GMT in hours
- * @param[out] sunrise      Sunrise in decimal hours (in the local time zone specified)
- * @param[out] sunset       Sunset in decimal hours (in the local time zone specified)
- */
-void sunrise_sunset_julian(double lat, double lon, int jd, double timezone, double *sunrise, double *sunset);
-/**
- * Find day of year. Does not properly deal with leap years.
- *
- * @param mon         Month
+ * @param yr          Year
+ * @param mon         Month of year
  * @param day         Day of month
  * @return            Day of year
  */
-int julian(int mon, int day);
+int julian(int yr, int mon, int day);
+
+/**
+ * Calculate hourly surface open-site shortwave radiation in kW/m^2.
+ *
+ * @param r                 Structure of data row (required columns:
+ *                            lat, lon, timezone, yr, hr, timestamp, temp, rh)
+ * @return                  Hourly solar radiation (kW/m^2)
+ */
+double single_hour_solrad_estimation(struct row *r);
+
+/**
+ * Find sunrise and sunset for a given date and location.
+ *
+ * @param lat           Latitude (DD)
+ * @param lon           Longitude (DD)
+ * @param timezone      UTC offset
+ * @param timestamp     tm structure for year and yday (julian)
+ * @param suntime       double array to put [sunrise, sunset] outputs
+ */
+void sunrise_sunset(double lat, double lon, double timezone,
+  struct tm timestamp, double *suntime);
+
+/**
+ * Custom check that the file stream matches the given string and exit if not
+ *
+ * @param input       Input file to check for string
+ * @param header      String to match
+ * @param f           flags struct for missing [grass_fuel_load, percent_cured, solrad]
+ */
+void check_header_FWI(FILE *input, const char *header, struct flags *f);
+
 /**
  * Check that the file stream matches the given string and exit if not
  *
  * @param input       Input file to check for string
  * @param header      String to match
  */
-void check_header(FILE *input, const char *header, struct flags *f);
-
-void check_header_legacy(FILE *input, const char *header);
+void check_header_match(FILE *input, const char *header);
 
 /**
  * Check that weather parameters are valid
@@ -180,6 +174,7 @@ void check_header_legacy(FILE *input, const char *header);
  * @param rain        Rain (mm)
  */
 void check_weather(double temp, double rh, double wind, double rain);
+
 /**
  * Check that FWI input parameters are valid
  *
@@ -187,21 +182,31 @@ void check_weather(double temp, double rh, double wind, double rain);
  * @param rh              Relative humidity (percent, 0-100)
  * @param wind            Wind speed (km/h)
  * @param rain            Rain (mm)
- * @param solrad          Solar radiation (kW/m^2)
- * @param percent_cured   Grass curing (percent, 0-100)
  * @param grass_fuel_load Grass fuel load ((kg/m^2))
+ * @param percent_cured   Grass curing (percent, 0-100)
+ * @param solrad          Solar radiation (kW/m^2)
  */
-void check_inputs(double temp, double rh, double wind, double rain, double solrad, double percent_cured, double grass_fuel_load, struct flags *f);
-double seasonal_curing(int julian_date);
+void check_inputs(double temp, double rh, double wind, double rain,
+  double grass_fuel_load, double percent_cured, double solrad);
 
-/* C90 max() also causing problems */
-double _max(double x, double y);
+/**
+ * Read a row from an hourly fwi inputs stream file
+ */
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f,
+  float def_grass_fuel_load, int def_mon_curing, int def_day_curing);
 
-/* C90 min() also causing problems */
-double _min(double x, double y);
+/**
+ * Read a row from a daily weather stream file
+ */
+int read_row_daily(FILE *inp, struct row_daily *r);
+
+/**
+ * Read a row from a min/max weather stream file
+ */
+int read_row_minmax(FILE *inp, struct row_minmax *r);
+
+int save_rounded(FILE *file, const char *fmt, const double value);
 
 void save_csv(FILE *file, const char *fmt_all, ...);
 
-/* HACK: format and then output to prevent -0.0 */
-int save_rounded(FILE *file, const char *fmt, const double value);
 #endif

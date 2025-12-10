@@ -1,207 +1,236 @@
-
 #include "util.h"
 #include "NG_FWI.h"
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <math.h>
-
-
-
 
 
 
 int main(int argc, char *argv[])
 {
+  if (argc < 4) {
+    printf("\n########\nhelp/usage:\n"
+      "%s input output timezone\n"
+      "[ffmc_old] [mcffmc_old] [dmc_old] [dc_old] [mcgfmc_matted_old] [mcgfmc_standing_old]\n"
+      "[prec_cumulative] [canopy_drying]\n\n", argv[0]);
+    // Help
+    printf("positional arguments:\n"
+      "input                 Input csv data file\n"
+      "output                Output csv file name and location\n"
+      "timezone              UTC offset (required in C version)\n"
+      "ffmc_old              Starting value for FFMC (default 85, \"n\" for mcffmc_old)\n"
+      "mcffmc_old            Starting value for mcffmc (default \"n\" for ffmc_old input)\n"
+      "dmc_old               Starting DMC (default 6)\n"
+      "dc_old                Starting DC (default 15)\n"
+      "mcgfmc_matted_old     Starting mcgfmc for matted fuels (default 16.3075)\n"
+      "mcgfmc_standing_old   Starting mcgfmc for standing fuels (default 16.3075)\n"
+      "prec_cumulative       Cumulative precipitation of rain event (default 0)\n"
+      "canopy_drying         Canopy drying, or consecutive hours of no prec (default 0)\n"
+      "########\n\n");
+    exit(1);
+  }
+  
   /*  CSV headers */
-  static const char *header = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load";
-  static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec,solrad,percent_cured,grass_fuel_load,timezone,sunrise,sunset,sunlight_hours,mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,prec_cumulative,canopy_drying";
-  if (14 != argc)
-  {
-    printf("Command line:   %s <local GMToffset> <starting FFMC> <starting DMC> <starting DC> <Starting mcFFMC> <starting mc GFMC matted> <starting mc GFMC standing> <starting DMC before rain> <starting DC before rain> <starting cumulative precipitation> <starting canopy drying> <input file> <output file>\n\n", argv[0]);
-    printf("<local GMToffset> is the off of Greenich mean time (for Eastern = -5  Central=-6   MT=-7  PT=-8 )  \n");
-    printf("All times should be local standard time\n");
-    printf("One of <starting FFMC> and <Starting mcFFMC> needs to be \"n\"\n");
-    printf("If <starting mc GFMC matted> or <starting mc GFMC standing> are set to \"n\" they will be set according to <starting FFMC> and <Starting mcFFMC>\n");
-    printf("INPUT FILE format must be HOURLY weather data, comma seperated and take the form\n");
-    printf("%s\n\n", header);
+  static const char *header_req = "lat,long,yr,mon,day,hr,"
+    "temp,rh,ws,prec";  // optional grass_fuel_load, percent_cured, and/or solrad;
+  static const char *header_out = "lat,long,timezone,yr,mon,day,hr,"
+    "temp,rh,ws,prec,"
+    "grass_fuel_load,percent_cured,solrad,sunrise,sunset,sunlight_hours,"
+    "mcffmc,ffmc,dmc,dc,isi,bui,fwi,dsr,"
+    "mcgfmc_matted,mcgfmc_standing,gfmc,gsi,gfwi,"
+    "prec_cumulative,canopy_drying";
+  
+  double TZadjust, ffmc_old, mcffmc_old, dmc_old, dc_old;
+  double mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying;
+  bool silent = false;
+
+  // open input file
+  FILE *inp = fopen(argv[1], "r");
+  if (inp == NULL) {
+    printf("\n\n***** FILE %s does not exist\n", argv[1]);
     exit(1);
   }
-
-  //double temp_range = read_temp_range(argv[12], header);
- 
-
-
-
-
-  FILE *inp = fopen(argv[12], "r");
-  printf("Opening input file >>> %s   \n", argv[12]);
-  if (inp == NULL)
-  {
-    printf("\n\n ***** FILE  %s  does not exist\n", argv[12]);
-    exit(1);
+  if (!silent) {
+    printf("\nOpening input file >>> %s\n", argv[1]);
   }
-  int TZadjust = atoi(argv[1]);
-  if (TZadjust < -9 || TZadjust > -2)
-  {
-    printf("/n *****   Local time zone adjustment must be vaguely in Canada so between -9 and -2 \n");
-    exit(1);
-  }
-  double ffmc_old;
-  if (*argv[2] == 'n'){
-    ffmc_old = -1;
-  }
-  else{
-    ffmc_old = atof(argv[2]);
-    if (ffmc_old > 101 || ffmc_old < 0)
-    {
-      printf(" /n/n *****   FFMC must be between 0 and 101 \n");
-      exit(1);
+
+  // load required timezone argument
+  TZadjust = atof(argv[3]);
+
+  // load optional arguments if provided, or set to default
+  if (argc > 4) {
+    if (*argv[4] == 'n') {
+      ffmc_old = -1;
+    } else {
+      ffmc_old = atof(argv[4]);
     }
+  } else {
+    ffmc_old = FFMC_DEFAULT;
   }
-  const double dmc_old = atof(argv[3]);
-  if (dmc_old < 0)
-  {
-    printf(" /n/n *****  starting DMC must be >=0  \n");
-    exit(1);
-  }
-  double dc_old = atof(argv[4]);
-  if (dc_old < 0)
-  {
-    printf(" /n/n *****   starting DC must be >=0\n");
-    exit(1);
-  }
-  double mcffmc_old;
-  if (*argv[5] == 'n'){
+  if (argc > 5) {
+    if (*argv[5] == 'n') {
+      mcffmc_old = -1;
+    } else {
+      mcffmc_old = atof(argv[5]);
+    }
+  } else {
     mcffmc_old = -1;
   }
-  else{
-    mcffmc_old = atof(argv[5]);
-    if (mcffmc_old > 250 || mcffmc_old < 0)
-    {
-      printf(" /n/n *****   mcFFMC must be between 0 and 250 \n");
+  if (argc > 6) {
+    dmc_old = atof(argv[6]);
+  } else {
+    dmc_old = DMC_DEFAULT;
+  }
+  if (argc > 7) {
+    dc_old = atof(argv[7]);
+  } else {
+    dc_old = DC_DEFAULT;
+  }
+  if (argc > 8) {
+    mcgfmc_matted_old = atof(argv[8]);
+  } else {
+    mcgfmc_matted_old = ffmc_to_mcffmc(85);
+  }
+  if (argc > 9) {
+    mcgfmc_standing_old = atof(argv[9]);
+  } else {
+    mcgfmc_standing_old = ffmc_to_mcffmc(85);
+  }
+  if (argc > 10) {
+    prec_cumulative = atof(argv[10]);
+  } else {
+    prec_cumulative = 0.0;
+  }
+  if (argc > 11) {
+    canopy_drying = atof(argv[11]);
+  } else {
+    canopy_drying = 0.0;
+  }
+  if (argc > 12) {
+    puts("Warning: too many arguments provided, some unused\n");
+  }
+
+  // check for values outside valid range
+  if (mcffmc_old == -1) {
+    if (ffmc_old == -1) {
+      puts("\n\n*****   Either ffmc_old OR mcffmc_old should be \"n\", not both\n");
+      exit(1);
+    } else if (ffmc_old < 0 || ffmc_old > 101) {
+      puts("\n\n*****   ffmc_old must be between 0 and 101\n");
+      exit(1);
+    }
+  } else {
+    if (ffmc_old == -1) {
+      if (mcffmc_old < 0 || mcffmc_old > 250) {
+        puts("\n\n*****   mcffmc_old must be between 0 and 250\n");
+        exit(1);
+      }
+    } else {
+      puts("\n\n*****   One of ffmc_old OR mcffmc_old should be \"n\", not neither\n");
       exit(1);
     }
   }
-  if(((mcffmc_old == -1) && (ffmc_old == -1)) || ((mcffmc_old >= 0) && (ffmc_old >= 0))){
-      printf(" /n/n *****   One and only one of <starting FFMC> and <Starting mcFFMC> can be specified the other must be NULL\n");
-      exit(1);
-  }
-  int matted_tracker = 0;
-  int standing_tracker = 0;
-  double mcgfmc_matted_old;
-  if(*argv[6] == 'n'){
-    matted_tracker+=1;
-    if(mcffmc_old == -1){
-      matted_tracker += 10;
-      mcgfmc_matted_old = fine_fuel_moisture_from_code(ffmc_old);
-    }
-    else{
-      matted_tracker += 100;
-      mcgfmc_matted_old = mcffmc_old;
-    }
-  }
-  else{
-    matted_tracker += 1000;
-    mcgfmc_matted_old = atof(argv[6]);
-    if (mcgfmc_matted_old < 0){
-      matted_tracker += 10000;
-      printf(" /n/n *****   starting mcgfmc matted must be >=0\n");
-      exit(1);
-    }
-  }
-  double mcgfmc_standing_old;
-  if(*argv[7] == 'n'){
-    standing_tracker += 1;
-    if(mcffmc_old == -1){
-      standing_tracker += 10;
-      mcgfmc_standing_old = fine_fuel_moisture_from_code(ffmc_old);
-    }
-    else{
-      standing_tracker += 100;
-      mcgfmc_standing_old = mcffmc_old;
-    }
-  }
-  else{
-    standing_tracker += 1000;
-    mcgfmc_standing_old = atof(argv[7]);
-    if (mcgfmc_standing_old < 0){
-      standing_tracker += 10000;
-      printf(" /n/n *****   starting mcgfmc standing must be >=0\n");
-      exit(1);
-    }
-  }
-  const double dmc_before_rain_old = atof(argv[8]);
-  if (dmc_before_rain_old < 0)
-  {
-    printf(" /n/n *****  starting DMC before rain must be >=0  \n");
+  if (dmc_old < 0) {
+    printf("\n\n*****   dmc_old must be >= 0\n");
     exit(1);
   }
-  double dc_before_rain_old = atof(argv[9]);
-  if (dc_before_rain_old < 0)
-  {
-    printf(" /n/n *****   starting DC before rain must be >=0\n");
+  if (dc_old < 0) {
+    printf("\n\n*****   dc_old must be >= 0\n");
     exit(1);
   }
-  double prec_cumulative_old = atof(argv[10]);
-  if (prec_cumulative_old < 0)
-  {
-    printf(" /n/n *****   starting cumulative precipitation must be >=0\n");
+  if (mcgfmc_matted_old < 0) {
+    printf("\n\n*****   mcgfmc_matted_old must be >= 0\n");
     exit(1);
   }
-  double canopy_drying_old = atof(argv[11]);
-  if (canopy_drying_old < 0)
-  {
-    printf(" /n/n *****   starting canopy drying must be >=0\n");
+  if (mcgfmc_standing_old < 0) {
+    printf("\n\n*****   mcgfmc_standing_old must be >= 0\n");
+    exit(1);
+  }
+  if (prec_cumulative < 0) {
+    printf("\n\n*****   prec_cumulative must be >= 0\n");
+    exit(1);
+  }
+  if (canopy_drying < 0) {
+    printf("\n\n*****   canopy_drying must be >= 0\n");
     exit(1);
   }
 
-   
+  // initialize parameters
+  double mcffmc, mcdmc, mcdc, mcgfmc_standing, mcgfmc_matted;
 
-  double mcffmc;
-  if(ffmc_old==-1){
+  if (ffmc_old == -1) {
     mcffmc = mcffmc_old;
+  } else {
+    mcffmc = ffmc_to_mcffmc(ffmc_old);
   }
-  else{
-    mcffmc = fine_fuel_moisture_from_code(ffmc_old);
+  mcdmc = dmc_to_mcdmc(dmc_old);
+  mcdc = dc_to_mcdc(dc_old);
+  mcgfmc_standing = mcgfmc_standing_old;
+  mcgfmc_matted = mcgfmc_matted_old;
+
+  // initialize input header and data
+  struct flags flag_holder = 
+    {false, false, false}; // {grass_fuel_load, percent_cured, solrad};
+  struct row cur, old;
+  struct rain_intercept canopy = {0.0, prec_cumulative, canopy_drying};
+  int err;
+  bool standing;
+
+  check_header_FWI(inp, header_req, &flag_holder);
+  cur.timezone = TZadjust;  // assign timezone before possibly calculating solrad
+  err = read_row_inputs(inp, &cur, &flag_holder,
+    DEFAULT_GRASS_FUEL_LOAD, MON_CURING, DAY_CURING);
+  old.day = -1;  // ensure initial sunrise and sunset calculation
+
+  // use first year in data for transition btwn matted and standing
+  // does not change for fire seasons continuous across multiple years
+  struct tm DATE_GRASS_STANDING = {
+    .tm_year = cur.year - 1900,
+    .tm_mon = MON_STANDING - 1,
+    .tm_mday = DAY_STANDING,
+    .tm_isdst = 0};
+  
+  // open output file
+  if (strcmp(argv[1], argv[2]) == 0) {
+    puts("Input and Output files have to be different!");
+    exit(1);
   }
-  /* assuming this is fine because swiss sfms uses it now */
-  double mcgfmc = mcffmc;
-  double mcgfmc_standing = mcgfmc_standing_old;
-  double mcgfmc_matted = mcgfmc_matted_old;
-  /* check that the header matches what is expected */
-  struct flags flag_holder = {false,false};
-  check_header(inp, header, &flag_holder);
-  struct row cur;
-  int err = read_row_inputs(inp, &cur, &flag_holder);
-  struct row old = {0};
-  double dmc = dmc_old;
-  double dmc_before_rain = dmc_before_rain_old;
-  double dc = dc_old;
-  double dc_before_rain = dc_before_rain_old;
-  double sunrise;
-  double sunset;
-  struct rain_intercept canopy = {0.0, prec_cumulative_old, canopy_drying_old};
-  struct double_24hr solrad_24hr;
-  FILE *out = fopen(argv[13], "w");
+  
+  FILE *out = fopen(argv[2], "w");
+  if (out == NULL) {
+    printf("\n\n***** FILE %s can not be opened\n", argv[2]);
+    exit(1);
+  }
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
 
-  while (err > 0)
+  if (!silent) {
+    printf("\n########\nStartup values used:\n");
+    printf("FFMC = %.1f or mcffmc = %.1f %%\n", ffmc_old, mcffmc_old);
+    printf("DMC = %.1f and DC = %.1f\n", dmc_old, dc_old);
+    printf("mcgfmc matted = %.4f %% and standing = %.4f %%\n",
+      mcgfmc_matted_old, mcgfmc_standing_old);
+    printf("cumulative precipitation = %.1f mm and canopy drying = %.0f\n",
+      prec_cumulative, canopy_drying);
+  }
+
+  // start calculation
+  double rain_ffmc, ffmc, dmc, dc, isi, bui, fwi, dsr;
+  double mcgfmc, gfmc, gsi, gfwi, sunlight_hours;
+
+  while (err > 0)  // while there is a next row of data in input file
   {
+    /* Only need to calculate sunrise/sunset once per day */
     if (cur.day != old.day || cur.mon != old.mon)
     {
-      /* Only need to calculate sunrise/sunset once per day */
-      sunrise_sunset(cur.lat, cur.lon, cur.mon, cur.day, TZadjust, &sunrise, &sunset); 
-      // check if solrad needs to be added
-      //if (flag_holder.solrad_flag){
-        //solar_radiation(cur.lat, cur.lon, cur.mon, cur.day, TZadjust, temp_range, &solrad_24hr);
-      //}
+      double suntime[2];
+      sunrise_sunset(cur.lat, cur.lon, cur.timezone, cur.timestamp, suntime);
+      cur.sunrise = suntime[0];
+      cur.sunset = suntime[1];
     }
-    if(flag_holder.solrad_flag){
-      cur.solrad = single_hour_solrad_estimation(cur.lat, cur.lon, julian(cur.mon, cur.day), TZadjust, cur.hour, cur.rh, cur. temp); //solrad_24hr.hour[cur.hour];
-    }
-    cur.sunrise = sunrise;
-    cur.sunset = sunset;
-
 
     rain_since_intercept_reset(
         cur.temp,
@@ -215,125 +244,98 @@ int main(int argc, char *argv[])
         cur.sunset,
         &canopy);
     /* use lesser of remaining intercept and current hour's rain */
-    double rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT
-                           ? 0.0
-                           : ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain
-                                  ? cur.rain
-                                  : canopy.rain_total - FFMC_INTERCEPT);
-    mcffmc = hourly_fine_fuel_moisture(cur.temp, cur.rh, cur.ws, rain_ffmc, mcffmc);
-    /* convert to code for output, but keep using moisture % for precision */
-    double ffmc = fine_fuel_moisture_code(mcffmc);
-    /* not ideal, but at least encapsulates the code for each index */
-    dmc = duff_moisture_code(
-        dmc,
-        cur.temp,
-        cur.rh,
-        cur.ws,
-        cur.rain,
-        cur.mon,
-        cur.hour,
-        cur.solrad,
-        cur.sunrise,
-        cur.sunset,
-        &dmc_before_rain,
-        canopy.rain_total_prev,
-        canopy.rain_total);
-    dc = drought_code(
-        dc,
-        cur.temp,
-        cur.rh,
-        cur.ws,
-        cur.rain,
-        cur.mon,
-        cur.hour,
-        cur.solrad,
-        cur.sunrise,
-        cur.sunset,
-        &dc_before_rain,
-        canopy.rain_total_prev,
-        canopy.rain_total);
-    double isi = initial_spread_index(cur.ws, ffmc);
-    double bui = buildup_index(dmc, dc);
-    double fwi = fire_weather_index(isi, bui);
-    double dsr = daily_severity_rating(fwi);
+    rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT ? 0.0 :
+      ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain ? cur.rain :
+      canopy.rain_total - FFMC_INTERCEPT);
+    mcffmc = hourly_fine_fuel_moisture(
+      mcffmc,
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      rain_ffmc,
+      1.0);
+    ffmc = mcffmc_to_ffmc(mcffmc);
+    mcdmc = duff_moisture_code(
+      mcdmc,
+      cur.hour,
+      cur.temp,
+      cur.rh,
+      cur.rain,
+      cur.sunrise,
+      cur.sunset,
+      canopy.rain_total_prev,
+      1.0);
+    dmc = mcdmc_to_dmc(mcdmc);
+    mcdc = drought_code(
+      mcdc,
+      cur.hour,
+      cur.temp,
+      cur.rain,
+      cur.sunrise,
+      cur.sunset,
+      canopy.rain_total_prev,
+      1.0);
+    dc = mcdc_to_dc(mcdc);
+    isi = initial_spread_index(cur.ws, ffmc);
+    bui = buildup_index(dmc, dc);
+    fwi = fire_weather_index(isi, bui);
+    dsr = daily_severity_rating(fwi);
     
-    mcgfmc_matted = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain, cur.solrad, mcgfmc_matted, cur.grass_fuel_load);
-    mcgfmc_standing = hourly_grass_fuel_moisture(cur.temp, cur.rh, cur.ws, cur.rain*0.06, 0, mcgfmc_standing, cur.grass_fuel_load);
-    mcgfmc = mcgfmc_standing;
-    bool standing = true;
-    if(julian(cur.mon, cur.day) < DATE_GRASS){
+    mcgfmc_matted = hourly_grass_fuel_moisture(
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain,
+      cur.solrad,
+      mcgfmc_matted,
+      cur.grass_fuel_load);
+    
+    mcgfmc_standing = hourly_grass_fuel_moisture(
+      cur.temp,
+      cur.rh,
+      cur.ws,
+      cur.rain * 0.06,
+      0,  // no solar radiation felt when standing
+      mcgfmc_standing,
+      cur.grass_fuel_load);
+
+    if (GRASS_TRANSITION &&
+      difftime(mktime(&cur.timestamp), mktime(&DATE_GRASS_STANDING)) < 0) {
       standing = false;
       mcgfmc = mcgfmc_matted;
+    } else {
+      standing = true;
+      mcgfmc = mcgfmc_standing;
     }
 
-    double gfmc = grass_moisture_code(mcgfmc, cur.percent_cured, cur.ws);
-    double gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured, standing);
-    double gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
+    gfmc = grass_moisture_code(mcgfmc, cur.percent_cured, cur.ws);
+    gsi = grass_spread_index(cur.ws, mcgfmc, cur.percent_cured, standing);
+    gfwi = grass_fire_weather_index(gsi, cur.grass_fuel_load);
     
-    double sunlight_hours = sunset-sunrise;
+    sunlight_hours = cur.sunset - cur.sunrise;
+
     save_csv(out,
-             "%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.2f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",
-             cur.lat,
-             cur.lon,
-             cur.year,
-             cur.mon,
-             cur.day,
-             cur.hour,
-             cur.temp,
-             cur.rh,
-             cur.ws,
-             cur.rain,
-             cur.solrad,
-             cur.percent_cured,
-             cur.grass_fuel_load,
-             TZadjust,
-             cur.sunrise,
-             cur.sunset,
-             sunlight_hours,
-             mcffmc,
-             ffmc,
-             dmc,
-             dc,
-             isi,
-             bui,
-             fwi,
-             dsr,
-             mcgfmc_matted,
-             mcgfmc_standing,
-             gfmc,
-             gsi,
-             gfwi,
-             canopy.rain_total,
-             canopy.drying_since_intercept);
-    /*     printf("%.4f,%.4f,%4d,%02d,%02d,%02d,%.1f,%.0f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%.1f,%.2f\n",
-               cur.lat,
-               cur.lon,
-               cur.year,
-               cur.mon,
-               cur.day,
-               cur.hour,
-               cur.temp,
-               cur.rh,
-               cur.ws,
-               cur.rain,
-               cur.solrad,
-               ffmc,
-               dmc,
-               dc,
-               isi,
-               bui,
-               fwi,
-               dsr,
-               gfmc,
-               gsi,
-               gfwi,
-               mcffmc,
-               mcgfmc,
-               cur.percent_cured,
-               cur.grass_fuel_load); */
-    old = cur;
-    err = read_row_inputs(inp, &cur, &flag_holder);
+      "%.4f,%.4f,%.2f,%d,%d,%d,%d,"
+      "%.1f,%.0f,%.1f,%.2f,"
+      "%.2f,%.2f,"
+      "%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%.4f,%.4f,%.4f,%.4f,"
+      "%.4f,%d\n",
+      cur.lat, cur.lon, cur.timezone, cur.year, cur.mon, cur.day, cur.hour,
+      cur.temp, cur.rh, cur.ws, cur.rain,
+      cur.grass_fuel_load, cur.percent_cured,
+      cur.solrad, cur.sunrise, cur.sunset, sunlight_hours,
+      mcffmc, ffmc, dmc, dc, isi, bui, fwi, dsr,
+      mcgfmc_matted, mcgfmc_standing, gfmc, gsi, gfwi,
+      canopy.rain_total, canopy.drying_since_intercept);
     
+    old = cur;
+    err = read_row_inputs(inp, &cur, &flag_holder,
+      DEFAULT_GRASS_FUEL_LOAD, MON_CURING, DAY_CURING);
+    // err > 0 means a next row of data in input file was detected
+
+    // check for continuity and if sequential by hour
     if (err > 0 && (old.lon != cur.lon || old.lat != cur.lat))
     {
       printf("Latitude and Longitude must be constant\n");
@@ -346,13 +348,14 @@ int main(int argc, char *argv[])
              cur.hour);
       exit(1);
     }
-  } /* end the main while(err>0)  */
+  } /* end the main while (err > 0)  */
 
-  
-
-  /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    printf("########\n\n");
+  }
 
   return 0;
 }
