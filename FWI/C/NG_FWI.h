@@ -39,7 +39,12 @@ static const double HOURLY_K_DC = 0.085;
 static const double DMC_OFFSET_TEMP = 0.0;
 static const double DC_OFFSET_TEMP = 0.0;
 
-/* Default grass fuel load and percent_cured start date set in util.h */
+/* Fuel Load (kg/m^2) */
+static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
+
+// Start of grassland fuels curing (default March 12th)
+static const int MON_CURING = 3;
+static const int DAY_CURING = 12;
 
 // Transition from matted to standing grass in a calendar year (default July 1st)
 static const bool GRASS_TRANSITION = true;  // default True, False for GFMC to always be standing
@@ -104,12 +109,8 @@ double mcdc_to_dc(double mcdc);
  * @param time_increment  Duration of timestep (hr, mainly 1.0)
  * @return                Hourly fine fuel moisture content (%)
  */
-double hourly_fine_fuel_moisture(double lastmc,
-                                 double temp,
-                                 double rh,
-                                 double ws,
-                                 double rain,
-                                 double time_increment);
+double hourly_fine_fuel_moisture(double lastmc, double temp, double rh, double ws,
+  double rain, double time_increment);
 
 /**
  * @brief Calculate duff moisture content
@@ -125,15 +126,9 @@ double hourly_fine_fuel_moisture(double lastmc,
  * @param time_increment          Duration of timestep (hr, mainly 1.0)
  * @return                        Hourly duff moisture content (%)
  */
-double duff_moisture_code(double last_mcdmc,
-                          int hour,
-                          double temp,
-                          double rh,
-                          double prec,
-                          double sunrise,
-                          double sunset,
-                          double prec_cumulative_prev,
-                          double time_increment);
+double duff_moisture_code(double last_mcdmc, int hour, double temp, double rh,
+  double prec, double sunrise, double sunset,
+  double prec_cumulative_prev, double time_increment);
 
 /**
  * @brief Calculate drought code moisture content
@@ -147,14 +142,9 @@ double duff_moisture_code(double last_mcdmc,
  * @param time_increment          Duration of timestep (hr, mainly 1.0)
  * @return                        Hourly drought code moisture content (%)
  */
-double drought_code(double last_mcdc,
-                    int hour,
-                    double temp,
-                    double prec,
-                    double sunrise,
-                    double sunset,
-                    double prec_cumulative_prev,
-                    double time_increment);
+double drought_code(double last_mcdc, int hour, double temp, double prec,
+  double sunrise, double sunset,
+  double prec_cumulative_prev, double time_increment);
 
 /**
  * Calculate Initial Spread Index (ISI)
@@ -196,13 +186,8 @@ double daily_severity_rating(double fwi);
  * @param solrad          Solar radiation (kW/m^2)
  * @return                Grass Fuel Moisture (percent)
  */
-double hourly_grass_fuel_moisture(double temp,
-                                  double rh,
-                                  double ws,
-                                  double rain,
-                                  double solrad,
-                                  double lastmc,
-                                  double load);
+double hourly_grass_fuel_moisture(double temp, double rh, double ws, double rain,
+  double solrad, double lastmc, double load);
 
 double Pign(double mc, double wind2m, double Cint, double Cmc, double Cws);
 
@@ -239,13 +224,6 @@ double grass_fire_weather_index(double gsi, double load);
 double drying_units(double temp, double rh, double wind, double rain, double solrad);
 
 /* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp,
-                                double rh,
-                                double ws,
-                                double rain,
-                                int mon,
-                                int hour,
-                                double solrad,
-                                double sunrise,
-                                double sunset,
-                                struct rain_intercept *canopy);
+void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
+  int mon, int hour, double solrad, double sunrise, double sunset,
+  struct rain_intercept *canopy);

@@ -16,14 +16,17 @@ The only branch of this repository with code intended for use is in the default 
 
 cffdrs-ng/
 - data/
-    - `PRF2007_hourly_wx.csv` (test data of hourly weather recorded from the Petawawa Research Forest in 2007)
+    - `PRF2007_hourly_wx_C-format.csv` (hourly weather test data recorded at Petawawa Research Forest in 2007 for C)
+    - `PRF2007_hourly_wx.csv` (hourly weather test data recorded at Petawawa Research Forest in 2007)
+    - `PRF2007_standard-daily_summaries.csv` (sample output file to compare daily summaries)
+    - `PRF2007_standard_hourly_FWI` (sample output file to compare FWI2025) 
 - FWI/
     - C/
+        - tutorial/
+            - `tutorial_hourly_FWI.ps1`
         - `daily_summaries.c` (function to generate the daily summary output)
         - `make_hourly.c` (converts daily min/max weather data to hourly data)
-        - `make_inputs.c` (converts hourly weather data into a data file that has all the inputs required for NG_FWI)
         - `make_minmax.c` (converts daily weather data to daily min/max data)
-        - `NG_FWI_main_historical.c` (old `main()` function before 2025/09/10 argument changes)
         - `NG_FWI_main.c` (`main()` function for generating FWI2025 outputs)
         - `NG_FWI.c` (functions and equations for generating FWI2025 outputs)
         - `NG_FWI.h`
@@ -55,7 +58,7 @@ cffdrs-ng/
 ## Revisions to FWI
 FWI2025 remains a daily, landscape-level planning tool. Changes include improving daily weather tracking, reconciling different versions of codes and indices, and introducing new codes and indices.  
 
-Detailed instructions on how to run FWI2025 scripts can be found on the Tutorials page of [the website](https://cffdrs.github.io/website_en). The first tutorial focuses on calculating hourly FWI codes and indices.
+Detailed instructions on how to run FWI2025 scripts can be found on the [Tutorials page](https://cffdrs.github.io/website_en/tutorials) of the website. The first tutorial focuses on calculating hourly FWI codes and indices.
 
 ### Hourly Fire Weather Data Estimation
 FWI2025 requires hourly weather data. Some weather stations, forecasts, and gridded datasets provide this directly. However, for sub-hourly sources, hourly values must be estimated before calculating hourly FWI by running the `NG_FWI` code. This repository provides methods for this conversion, including specific methods for daily 13:00 Local Daylight Time (LDT) observations as well as daily min/max forecasts:

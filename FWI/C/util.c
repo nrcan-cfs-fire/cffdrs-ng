@@ -33,14 +33,7 @@ double findrh(double q, double temp)
   return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
-/* this is a simple piecewise tabular summary (10day) if DKT's NDVI based cure state analysis (smoothed)
-It is from central canada Boreal Plains
-
-It will be a DEFAULT greenness given NO other information ....Users should be encouraged to make ...
-these local observations each year themselves as such obs will be far superior to this average
-*/
-double seasonal_curing(yr, mon, day, start_mon, start_day)
-int yr, mon, day, start_mon, start_day;
+double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day)
 {
   static double PERCENT_CURED[] = {
     96.0,  // "winter" cured value
@@ -70,11 +63,6 @@ int yr, mon, day, start_mon, start_day;
     86.0,
     96.0  // "winter" cured value for rest of year
   };
-  /* these are data from DanT's 10 day average of curing for Boreal Plains ...they have been smoothed however
-  and the winter has been added at the max curing observed
-  the DATE array values is the first julian date (doy) in the 10 day window....its unnedded the way i did this now
-  A date past the end of year has been added to make the array search easier.
-  */
 
   // find previous green up start date (year - 1 or year)
   struct tm date = {
@@ -135,7 +123,11 @@ double single_hour_solrad_estimation(struct row *r)
   double dechour = 12.0;
   // .tm_yday is already 0-indexed (i.e. Jan 1st = 0)
   double fracyear = 2.0 * M_PI * (r->timestamp.tm_yday + (dechour - 12.0) / 24.0);
-  fracyear = is_leap(r->year) ? (fracyear / 366.0) : (fracyear / 365.0);
+  if (is_leap(r->year)) {
+    fracyear = fracyear / 366.0;
+  } else {
+    fracyear = fracyear / 365.0;
+  }
   double eqtime = 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
@@ -160,15 +152,17 @@ double single_hour_solrad_estimation(struct row *r)
   return solrad;
 }
 
-void sunrise_sunset(lat, lon, timezone, date, suntime)
-double lat, lon, timezone;
-struct tm date;
-double *suntime;
+void sunrise_sunset(double lat, double lon, double timezone,
+  struct tm date, double *suntime)
 {
   double dechour = 12.0;
   // .tm_yday is already 0-indexed (i.e. Jan 1st = 0)
   double fracyear = 2.0 * M_PI * (date.tm_yday + (dechour - 12.0) / 24.0);
-  fracyear = is_leap(date.tm_year) ? (fracyear / 366.0) : (fracyear / 365.0);
+  if (is_leap(date.tm_year)) {
+    fracyear = fracyear / 366.0;
+  } else {
+    fracyear = fracyear / 365.0;
+  }
   double eqtime = 229.18 * (0.000075 +
     0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) - 
     0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear));
@@ -317,8 +311,8 @@ void check_weather(double temp, double rh, double wind, double rain)
   }
 }
 
-void check_inputs(temp, rh, wind, rain, grass_fuel_load, percent_cured, solrad)
-double temp, rh, wind, rain, grass_fuel_load, percent_cured, solrad;
+void check_inputs(double temp, double rh, double wind, double rain,
+  double grass_fuel_load, double percent_cured, double solrad)
 {
   check_weather(temp, rh, wind, rain);
   /* just do basic checks, but use this so we can expand checks if desired */
@@ -339,7 +333,8 @@ double temp, rh, wind, rain, grass_fuel_load, percent_cured, solrad;
   }
 }
 
-int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f,
+  float def_grass_fuel_load, int def_mon_curing, int def_day_curing) {
   char line[500];  // limit a row of data to 500 characters
   int err;
 
@@ -381,14 +376,14 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f) {
 
   // optional inputs provided or calculated
   if (f->grass_fuel_load_flag) {  // true means not provided, needs to be calculated
-    r->grass_fuel_load = DEFAULT_GRASS_FUEL_LOAD;
+    r->grass_fuel_load = def_grass_fuel_load;
   } else {
     r->grass_fuel_load = atof(strtok(NULL, ","));
   }
   
   if (f->percent_cured_flag) {
     r->percent_cured = seasonal_curing(r->year, r->mon, r->day,
-      MON_CURING, DAY_CURING);
+      def_mon_curing, def_day_curing);
   } else {
     r->percent_cured = atof(strtok(NULL, ","));
   }

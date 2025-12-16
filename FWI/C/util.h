@@ -12,13 +12,6 @@
 #define M_PI 3.1415926535897932384626433
 #endif
 
-/* Fuel Load (kg/m^2) */
-static const double DEFAULT_GRASS_FUEL_LOAD = 0.35;
-
-// Start of grassland fuels curing (default March 12th)
-static const int MON_CURING = 3;
-static const int DAY_CURING = 12;
-
 ////// Structure Declarations
 
 /**
@@ -101,14 +94,18 @@ double findQ(double temp, double rh);
 double findrh(double q, double temp);
 
 /**
-* Set default percent_cured values based off annual variation in Boreal Plains region
+* Set default percent_cured values
+* This is a simple piecewise tabular summary (10day) of DKT's NDVI based
+* cure state analysis (smoothed) of annual variation in Central Boreal Plains region
+* Users should be encouraged to make local observations each year themselves
+* as such obs will be far superior to this average
 *
-* @param yr             Year
-* @param mon            Month of year
-* @param day            Day of month
-* @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
-* @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
-* @return               percent_cured [%], percent of grassland fuel that is cured
+* @param yr           Year
+* @param mon          Month of year
+* @param day          Day of month
+* @param start_mon    Month of grassland fuel green up start (Boreal Plains Mar 12)
+* @param start_day    Day of grassland fuel green up start (Boreal Plains Mar 12)
+* @return             percent_cured [%], percent of grassland fuel that is cured
 */
 double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day);
 
@@ -148,8 +145,8 @@ double single_hour_solrad_estimation(struct row *r);
  * @param timestamp     tm structure for year and yday (julian)
  * @param suntime       double array to put [sunrise, sunset] outputs
  */
-void sunrise_sunset(double lat, double lon, double timezone, struct tm timestamp,
-  double *suntime);
+void sunrise_sunset(double lat, double lon, double timezone,
+  struct tm timestamp, double *suntime);
 
 /**
  * Custom check that the file stream matches the given string and exit if not
@@ -195,7 +192,8 @@ void check_inputs(double temp, double rh, double wind, double rain,
 /**
  * Read a row from an hourly fwi inputs stream file
  */
-int read_row_inputs(FILE *inp, struct row *r, struct flags *f);
+int read_row_inputs(FILE *inp, struct row *r, struct flags *f,
+  float def_grass_fuel_load, int def_mon_curing, int def_day_curing);
 
 /**
  * Read a row from a daily weather stream file
