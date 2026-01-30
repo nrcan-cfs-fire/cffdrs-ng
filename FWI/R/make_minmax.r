@@ -2,6 +2,7 @@
 library(data.table)
 source("util.r")
 
+
 #' Convert daily temperature at 1pm (noon standard time) to daily min/max
 #'
 #' @param    temp_noon   traditional temperature measurement [°C]
@@ -23,9 +24,12 @@ temp_min_max <- function(temp_noon, rh_noon) {
 
 #' Convert daily noon weather to daily min/max weather using statistical values
 #'
-#' @param   df          daily noon values weather stream [lat, long, yr, mon, day, temp, rh, ws, prec]
+#' @param   df          daily noon LST weather stream, columns:
+#'                      yr, mon, day, temp, rh, ws, prec
 #' @param   round_out   decimals to truncate output to, NA for none (default 4)
-#' @return              daily min/max values weather stream [lat, long, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
+#' @return              daily min/max weather stream, columns:
+#'                      yr, mon, day, temp_min, temp_max, rh_min, rh_max,
+#'                      ws_min, ws_max, prec
 #' @export  daily_to_minmax
 daily_to_minmax <- function(df, round_out = 4) {
   # check df_wx class for data.frame or data.table
@@ -50,7 +54,7 @@ daily_to_minmax <- function(df, round_out = 4) {
 
   df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
   df[, q := find_q(temp, rh)]
-  # ideally maximum temperature lines up with minimum relative humidity and vice versa
+  # ideally max temperature lines up with min relative humidity and vice versa
   df[, rh_min := pmin(100, pmax(0, find_rh(q, temp_max)))]
   df[, rh_max := pmin(100, pmax(0, find_rh(q, temp_min)))]
   df[, ws_min := 0.15 * ws]
@@ -72,7 +76,9 @@ daily_to_minmax <- function(df, round_out = 4) {
   return(df)
 }
 
-# run daily_to_minmax by command line via Rscript, requires 2 args: input csv and output csv
+
+# run daily_to_minmax by command line via Rscript
+# required args: input csv and output csv
 # optional arg: round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
