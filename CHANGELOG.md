@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file. The format 
 ## To be released
 
 ### Added
-- Option when runnning `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
-- `minmax_to_hourly()` function now sets daily precipitation to the hour of sunrise
+- New option when runnning `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
+- `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
 
 ### Changed
 - Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions
+
+### Fixed
+- `yr`, `mon`, and `day` column outputs for `daily_to_minmax()` returns integers (*Python*)
 
 ## 2025-12-10
 

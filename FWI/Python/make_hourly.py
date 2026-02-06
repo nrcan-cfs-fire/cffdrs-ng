@@ -1,6 +1,7 @@
 import datetime
 import argparse
 from math import exp, pi, sin, ceil
+from warnings import warn
 
 import pandas as pd
 
@@ -198,9 +199,15 @@ def do_prediction(
     if verbose:
         print("Allocating rain")
     rain = fcsts[["DATE", "PREC"]][:]
-    if prec_hr == "sunrise":
+    if prec_hr == "sunrise":  # place daily precipitation at sunrise
         rain["HR"] = fcsts["SUNRISE"].apply(lambda x: ceil(x))
-    else:
+        if (rain["HR"] < 0).any():
+            warn("Daily sunrise precipitation before hour 0 placed at hour 0")
+            rain["HR"] = rain["HR"].apply(lambda x: max(x, 0))
+        if (rain["HR"] > 23).any():
+            warn("Daily sunrise precipitation after hour 23 placed at hour 23")
+            rain["HR"] = rain["HR"].apply(lambda x: min(x, 23))
+    else:  # place daily precipitation at user specified hour
         rain["HR"] = prec_hr
     rain["MINUTE"] = 0
     
@@ -254,18 +261,14 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     )
     if not (util.is_sequential_days(r)):
         if skip_invalid:
-            raise RuntimeWarning(
+            warn(
                 f'{r["ID"].iloc[0]} for {r["YR"].iloc[0]}' +
                     ' - Expected input to be sequential daily weather'
             )
         return None
     orig_dates = pd.DataFrame(
-        {
-            "date": map(
-                lambda x: x.strftime("%Y-%m-%d"),
-                r["TIMESTAMP"].apply(lambda x: x.date()).unique(),
-            )
-        }
+        {"date": map(lambda x: x.strftime("%Y-%m-%d"),
+            r["TIMESTAMP"].apply(lambda x: x.date()).unique())}
     )
     # add one day before start and after end, assuming same values as start and end
     yest = r.iloc[0][:]
@@ -292,7 +295,10 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     r["DATE"] = r["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
     df = do_prediction(r, C_TEMP, C_RH, C_WIND, prec_hr, verbose)
     df.columns = map(str.lower, df.columns)
-    df = pd.merge(orig_dates, df, on=["date"])
+    df = pd.merge(orig_dates, df, on = ["date"])
+    df["yr"] = df["yr"].apply(int)
+    df["mon"] = df["mon"].apply(int)
+    df["day"] = df["day"].apply(int)
     cols = ["lat", "long", "timezone", "yr", "mon", "day", "hr",
         "temp", "rh", "ws", "prec"]
     if had_id:
@@ -349,7 +355,7 @@ def minmax_to_hourly(
         raise TypeError("prec_hr input needs to be 'sunrise' or an integer [0,23]")
     
     # loop over every station year
-    result = None
+    result = pd.DataFrame()
     for stn in r["ID"].unique():
         by_stn = r[r["ID"] == stn]
         for yr in by_stn["YR"].unique():

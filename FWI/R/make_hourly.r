@@ -151,9 +151,17 @@ do_prediction <- function(
     writeLines("Allocating rain")
   }
   prec <- fcsts[, c("DATE", "PREC")]
-  if (prec_hr == "sunrise") {
+  if (prec_hr == "sunrise") {  # place daily precipitation at sunrise
     prec[, HR := ceiling(fcsts[, SUNRISE])]
-  } else {
+    if (any(prec[, HR < 0])) {
+      warning("Daily sunrise precipitation before hour 0 placed at hour 0")
+      prec[, HR := max(HR, 0)]
+    }
+    if (any(prec[, HR > 23])) {
+      warning("Daily sunrise precipitation after hour 23 placed at hour 23")
+      prec[, HR := min(HR, 23)]
+    }
+  } else {  # place daily precipitation at user specified hour
     prec[, HR := prec_hr]
   }
   prec[, MINUTE := 0]
