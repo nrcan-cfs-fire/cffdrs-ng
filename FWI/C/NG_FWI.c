@@ -9,11 +9,13 @@
 // see NG_FWI.h for variable definitions and function help
 
 double ffmc_to_mcffmc(double ffmc) {
-  return MPCT_TO_MC * (101.0 - ffmc) / (59.5 + ffmc);
+  double C_FFMC = 14875.0 / 101.0;
+  return C_FFMC * (101.0 - ffmc) / (59.5 + ffmc);
 }
 
 double mcffmc_to_ffmc(double mcffmc) {
-  return (59.5 * (250.0 - mcffmc) / (MPCT_TO_MC + mcffmc));
+  double C_FFMC = 14875.0 / 101.0;
+  return (59.5 * (250.0 - mcffmc) / (C_FFMC + mcffmc));
 }
 
 double dmc_to_mcdmc(double dmc) {
@@ -118,10 +120,7 @@ double duff_moisture_code(double last_mcdmc, int hour,
   }
   
   // drying
-  double sunrise_start, sunset_start;
-  sunrise_start = sunrise + OFFSET_SUNRISE;
-  sunset_start = sunset + OFFSET_SUNSET;
-  // since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  // since sunset can be > 24, check hr + 24 (ignoring change between days)
   double hr = (double) hour;
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && hr + 24 >= sunrise && hr + 24 <= sunset)) {  // day
@@ -130,7 +129,7 @@ double duff_moisture_code(double last_mcdmc, int hour,
     if (temp < 0) {
       temp = 0.0;
     }
-    rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh);
+    rk = DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh);
     invtau = rk / 43.43;
     mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0;
   } else {  // night
@@ -168,18 +167,13 @@ double drought_code(double last_mcdc, int hour, double temp, double prec,
   }
 
   // drying
-  double sunrise_start, sunset_start;
-  sunrise_start = sunrise + OFFSET_SUNRISE;
-  sunset_start = sunset + OFFSET_SUNSET;
-  // since sunset can be > 24, in some cases we ignore change between days and check hr + 24
+  // since sunset can be > 24, check hr + 24 (ignoring change between days)
   double hr = (double) hour;
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && hour + 24 >= sunrise && hr + 24 <= sunset)) {
     double pe, invtau;
-    double offset = 3.0;
-    double mult = 0.015;
     if (temp > 0) {
-      pe = mult * temp + offset / 16.0;
+      pe = DC_REGRESSION * temp + 3.0 / 16.0;
     } else {
       pe = 0.0;
     }

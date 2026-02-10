@@ -5,12 +5,23 @@ All notable changes to this project will be documented in this file. The format 
 ## To be released
 
 ### Added
-- New option when runnning `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
+- New option when running `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
 - `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
 
 ### Changed
 - Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions
 - Updated `sunrise` and `sunset` outputs from **daily_summaries.c** to match Python and R version's XX:XX format (*C*)
+- Simplified and rearranged equation parameters
+- Renamed parameters
+
+| Old Name       | New Name         |
+| -------------- | ---------------- |
+| `MPCT_TO_MC`   | `C_FFMC`         |
+| `HOURLY_K_DMC` | `DMC_REGRESSION` |
+| `HOURLY_K_DC`  | `DC_REGRESSION`  |
+
+### Removed
+- Unused parameters: `OFFSET_SUNRISE`, `OFFSET_SUNSET`, `DAILY_K_DMC_DRYING`, `DAILY_K_DC_DRYING`, `DC_DAILY_CONST`, `DC_HOURLY_CONST`
 
 ### Fixed
 - `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
