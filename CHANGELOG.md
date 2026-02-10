@@ -10,9 +10,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 - Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions
+- Updated `sunrise` and `sunset` outputs from **daily_summaries.c** to match Python and R version's XX:XX format (*C*)
 
 ### Fixed
-- `yr`, `mon`, and `day` column outputs for `daily_to_minmax()` returns integers (*Python*)
+- `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
+- `yr`, `mon`, and `day` column outputs for `minmax_to_hourly()` returns integers (*Python*)
 
 ## 2025-12-10
 

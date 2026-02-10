@@ -15,7 +15,7 @@ struct daily_summary{
   double gfmc, gsi, gfwi;
   double ws_smooth, isi_smooth, gsi_smooth;
   int duration;
-  double sunrise, sunset;
+  char sunrise[6], sunset[6];
   int peak_hour, year, month, day;
 };
 
@@ -285,55 +285,90 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *by_date,
  * @param    day        day_vals structure for a pseudo-date
  * @return              daily_summary structure of peak FWI conditions
  */
-struct daily_summary generate_daily_summary(struct day_vals day){
+struct daily_summary generate_daily_summary(struct day_vals day) {
   const double spread_threshold_isi = 5.0;
   struct daily_summary summary;
 
   int i;
 
-  //calculate smoothed ws 
-  double *ws_pt = (double*)malloc(sizeof(double)*day.hour_slots_filled);
-  for(i = 0; i< day.hour_slots_filled; i++){
+  // calculate smoothed ws
+  double *ws_pt = (double*)malloc(sizeof(double) * day.hour_slots_filled);
+  for (i = 0; i < day.hour_slots_filled; i++) {
     ws_pt[i] = day.hour[i]->ws;
   }
-  double *ws_smooth_pt= (double*)malloc(sizeof(double)*day.hour_slots_filled);
+  double *ws_smooth_pt = (double*)malloc(sizeof(double) * day.hour_slots_filled);
   smooth_5pt(ws_pt, day.hour_slots_filled, ws_smooth_pt);
 
-  //calculate smoothed isi and find peak info
+  // calculate smoothed isi and find peak info
   int ffmc_max_spot = 0;
   int peak_time_spot = 0;
-  int duration = 0;
+  bool ab_flag = false;
+  struct tm t_ab0 = {
+    .tm_year = day.hour[0]->year - 1900,
+    .tm_mon = day.hour[0]->month - 1,
+    .tm_mday = day.hour[0]->day,
+    .tm_hour = day.hour[0]->hour,
+    .tm_isdst = 0
+  };
+  struct tm t_ab1 = t_ab0;
     
-  for(i = 0; i < day.hour_slots_filled; i++){
+  for (i = 0; i < day.hour_slots_filled; i++) {
+    // calculate smoothed ISI
     day.hour[i]->smooth_ws = ws_smooth_pt[i];
     day.hour[i]->smooth_isi = initial_spread_index(
       day.hour[i]->smooth_ws, day.hour[i]->ffmc);
 
-    if(day.hour[i]->smooth_isi > spread_threshold_isi){
-      duration+=1;
+    // find first and last hours of active burning
+    if (day.hour[i]->smooth_isi >= spread_threshold_isi) {
+      if (!ab_flag) {
+        t_ab0.tm_year = day.hour[i]->year - 1900;
+        t_ab0.tm_mon = day.hour[i]->month - 1;
+        t_ab0.tm_mday = day.hour[i]->day;
+        t_ab0.tm_hour = day.hour[i]->hour;
+        ab_flag = true;
+      }
+      t_ab1.tm_year = day.hour[i]->year - 1900;
+      t_ab1.tm_mon = day.hour[i]->month - 1;
+      t_ab1.tm_mday = day.hour[i]->day;
+      t_ab1.tm_hour = day.hour[i]->hour;
     }
-    if(day.hour[i]->ffmc > day.hour[ffmc_max_spot]->ffmc){
+
+    // find maximum FFMC
+    if (day.hour[i]->ffmc > day.hour[ffmc_max_spot]->ffmc) {
       ffmc_max_spot = i;
     }
-    if(day.hour[i]->smooth_isi > day.hour[peak_time_spot]->smooth_isi){
+
+    // find maximum smoothed ISI
+    if (day.hour[i]->smooth_isi > day.hour[peak_time_spot]->smooth_isi) {
       peak_time_spot = i;
     }
   }
 
-  if(day.hour[ffmc_max_spot]->ffmc < 85.0){
+  if (day.hour[ffmc_max_spot]->ffmc < 85.0) {
     peak_time_spot =  12;
   }
 
-  // find the rest of the values at peak
+  // set date
   summary.year = day.hour[0]->year;
   summary.month = day.hour[0]->month;
   summary.day = day.hour[0]->day;
-  summary.sunrise = day.hour[peak_time_spot]->sunrise;
-  summary.sunset = day.hour[peak_time_spot]->sunset;
 
+  // set sunrise
+  double sr, ss;
+  sr = day.hour[peak_time_spot]->sunrise;
+  ss = day.hour[peak_time_spot]->sunset;
+  sprintf(summary.sunrise, "%02d:%02d", (int)sr, (int)(60 * (sr - (int) sr)));
+  sprintf(summary.sunset, "%02d:%02d", (int)ss, (int)(60 * (ss - (int) ss)));
+
+  // set hour of peak burn and active burning duration
   summary.peak_hour = day.hour[peak_time_spot]->hour;
-  summary.duration = duration;
+  if (ab_flag) {
+    summary.duration = (int)difftime(mktime(&t_ab1), mktime(&t_ab0)) / 3600 + 1;
+  } else {
+    summary.duration = 0;
+  }
 
+  // set outputs at peak burn
   summary.ffmc = day.hour[peak_time_spot]->ffmc;
   summary.dmc = day.hour[peak_time_spot]->dmc;
   summary.dc = day.hour[peak_time_spot]->dc;
@@ -460,7 +495,7 @@ int main(int argc, char *argv[]) {
       struct daily_summary summary = generate_daily_summary(*by_date);
       fprintf(out,
         "%d,%d,%d,"
-        "%.4f,%.4f,"
+        "%s,%s,"
         "%d,%d,"
         "%.4f,%.4f,%.4f,"
         "%.4f,%.4f,%.4f,%.4f,"

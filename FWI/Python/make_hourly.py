@@ -281,9 +281,6 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     r["MON"] = r["TIMESTAMP"].apply(lambda x: x.month)
     r["DAY"] = r["TIMESTAMP"].apply(lambda x: x.day)
     r["HR"] = r["TIMESTAMP"].apply(lambda x: x.hour)
-    # dates = r["TIMESTAMP"].unique()
-    # latitude = r["LAT"].iloc[0]
-    # longitude = r["LONG"].iloc[0]
     r = util.get_sunlight(r, get_solrad = False)
     r.columns = map(str.upper, r.columns)  # get_sunlight outputs lowercase columns
     # approximate solar noon as midpoint between sunrise and sunset
@@ -307,7 +304,7 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
         df = df[cols]
     return df
 
-
+##
 # Convert daily min/max values stream to hourly values stream.
 # Uses Beck & Trevitt method with default A/B/G values.
 #

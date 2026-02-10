@@ -166,6 +166,23 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
       sr <- by_date[peak_time, sunrise]
       ss <- by_date[peak_time, sunset]
 
+      # calculate active burning duration
+      if (any(by_date[, isi_smooth] >= Spread_Threshold_ISI)) {
+        # find first and last hours of active burning
+        active_burning <- by_date[isi_smooth >= Spread_Threshold_ISI]
+        t_ab0 <- make_datetime(first(active_burning)[, yr],
+          first(active_burning)[, mon],
+          first(active_burning)[, day],
+          first(active_burning)[, hr])
+        t_ab1 <- make_datetime(last(active_burning)[, yr],
+          last(active_burning)[, mon],
+          last(active_burning)[, day],
+          last(active_burning)[, hr])
+        dt_ab <- as.integer(difftime(t_ab1, t_ab0, units = "hours") + 1)
+      } else {
+        dt_ab <- 0L
+      }
+
       # find the rest of the values at peak
       daily_report <- data.table(id = by_date[1, id],
         yr = by_date[1, yr],
@@ -174,7 +191,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
         sunrise = sprintf("%02d:%02d", trunc(sr), trunc(60 * (sr - trunc(sr)))),
         sunset = sprintf("%02d:%02d", trunc(ss), trunc(60 * (ss - trunc(ss)))),
         peak_hr = by_date[peak_time, hr],
-        duration = by_date[, sum(isi_smooth > Spread_Threshold_ISI)],
+        duration = dt_ab,
         ffmc = by_date[peak_time, ffmc],
         dmc = by_date[peak_time, dmc],
         dc = by_date[peak_time, dc],
