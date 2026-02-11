@@ -26,11 +26,15 @@ def temp_min_max(temp_noon, rh_noon):
 #
 # @param    df          daily noon LST weather stream, columns:
 #                       yr, mon, day, temp, rh, ws, prec
+# @param    silent      suppresses informative print statements (default False)
 # @param    round_out   decimals to truncate output to, None for none (default 4)
 # @return               daily min/max weather stream, columns:
 #                       yr, mon, day, temp_min, temp_max, rh_min, rh_max,
 #                       ws_min, ws_max, prec
-def daily_to_minmax(df, round_out = 4):
+def daily_to_minmax(df, silent = False, round_out = 4):
+    if not silent:
+        print("\n########\nFWI2025: Make Min/Max Inputs (" + util.version() + ")\n")
+        print("Predicting daily min/max weather")
     df = df.copy()
     # check for required columns
     df.columns = map(str.lower, df.columns)
@@ -65,6 +69,9 @@ def daily_to_minmax(df, round_out = 4):
         outcols = ["temp_min", "temp_max", "rh_min", "rh_max", "ws_min", "ws_max"]
         df[outcols] = df[outcols].map(round, ndigits = int(round_out))
 
+    if not silent:
+        print("########\n")
+
     return df
 
 
@@ -77,10 +84,11 @@ if __name__ == "__main__":
     parser.add_argument("output",
         help = "Output csv file name and location, columns: " +
         "yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec")
+    parser.add_argument("-s", "--silent", action = "store_true")
     parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
         help = "Decimals to truncate outputs to, None for no rounding (default 4)")
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
-    df_out = daily_to_minmax(df_in, args.round_out)
+    df_out = daily_to_minmax(df_in, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)

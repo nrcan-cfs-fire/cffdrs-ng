@@ -267,8 +267,9 @@ minmax_to_hourly_single <- function(
 #'                        temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec
 #' @param   timezone      UTC offset (default NA for column provided in w)
 #' @param   prec_hr       hour when daily precipitation occurs (default "sunrise")
-#' @param   skip_invalid   if station year data non-sequential, skip and warn
+#' @param   skip_invalid  if station year data non-sequential, skip and warn
 #' @param   verbose       whether to output progress messages
+#' @param   silent        suppresses informative print statements (default False)
 #' @param   round_out     decimals to truncate output to, NA for none (default 4)
 #' @return                hourly values weather stream, columns:
 #'                        [id], lat, long, timezone, yr, mon, day, hr,
@@ -280,8 +281,13 @@ minmax_to_hourly <- function(
   prec_hr = "sunrise",
   skip_invalid = FALSE,
   verbose = FALSE,
+  silent = FALSE,
   round_out = 4
 ) {
+  if (!silent) {
+    writeLines(paste0("\n########\nFWI2025: Make Hourly Inputs (", version(), ")\n"))
+  }
+
   # check df_wx class for data.frame or data.table
   wasDT <- is.data.table(w)
   if (wasDT) {
@@ -311,7 +317,8 @@ minmax_to_hourly <- function(
   # check timezone
   if (is.na(timezone) || timezone == "NA") {
     if (!"TIMEZONE" %in% names(r)) {
-      stop("Either provide a timezone column or specify argument in minmax_to_hourly")
+      stop(paste("Either provide a timezone column in input or",
+        "specify argument in minmax_to_hourly() function"))
     }
   } else {
     r[, TIMEZONE := as.numeric(..timezone)]
@@ -328,7 +335,9 @@ minmax_to_hourly <- function(
     by_stn <- r[ID == stn, ]
     for (yr in unique(by_stn$YR)) {
       by_year <- by_stn[YR == yr, ]
-      writeLines(paste0("Running ", stn, " for ", yr))
+      if (!silent) {
+        writeLines(paste0("Predicting hourly weather at ", stn, " for ", yr))
+      }
       df <- minmax_to_hourly_single(by_year, prec_hr, skip_invalid, verbose)
       result <- rbind(result, df)
     }
@@ -342,23 +351,28 @@ minmax_to_hourly <- function(
   # format decimal places of output columns
   if (!(is.na(round_out) || round_out == "NA")) {
     outcols <- c("temp", "rh", "ws")
-    set(result, j = outcols, value = round(result[, ..outcols], as.integer(round_out)))
+    set(result, j = outcols,
+      value = round(result[, ..outcols], as.integer(round_out)))
   }
 
   if (!wasDT) {
     setDF(result)
+  }
+
+  if (!silent) {
+    writeLines("########\n")
   }
   return(result)
 }
 
 
 # run minmax_to_hourly by command line via Rscript
-# required args: input csv and output csv
-# optional args: timezone, prec_hr, skip_invalid, verbose, round_out
+# required arguments: input csv, output csv
+# optional arguments: timezone, prec_hr, skip_invalid, verbose, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
-    stop("at least 2 arguments required: input csv and output csv")
+    stop("at least 2 arguments required: input csv, output csv")
   }
   input <- args[1]
   output <- args[2]
@@ -372,9 +386,11 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   else skip_invalid <- FALSE
   if (length(args) >= 6) verbose <- as.logical(args[6])
   else verbose <- FALSE
-  if (length(args) >= 7) round_out <- args[7]
+  if (length(args) >= 7) silent <- as.logical(args[7])
+  else silent <- FALSE
+  if (length(args) >= 8) round_out <- args[8]
   else round_out <- 4
-  if (length(args) >= 8) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 9) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
   df_out <- minmax_to_hourly(
@@ -383,6 +399,7 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
     prec_hr,
     skip_invalid,
     verbose,
+    silent,
     round_out
   )
   write.csv(df_out, output, row.names = FALSE)

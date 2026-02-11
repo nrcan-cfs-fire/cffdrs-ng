@@ -315,6 +315,7 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
 # @param    prec_hr         hour when daily precipitation occurs (default "sunrise")
 # @param    skip_invalid    if station year data non-sequential, skip and warn
 # @param    verbose         whether to output progress messages
+# @param    silent          suppresses informative print statements (default False)
 # @param    round_out       decimals to truncate output to, None for none (default 4)
 # @return                   hourly values weather stream, columns:
 #                           [id], lat, long, timezone, yr, mon, day, hr,
@@ -325,8 +326,12 @@ def minmax_to_hourly(
     prec_hr = "sunrise",
     skip_invalid = False,
     verbose = False,
+    silent = False,
     round_out = 4
 ):
+    if not silent:
+        print("\n########\nFWI2025: Make Hourly Inputs (" + util.version() + ")\n")
+
     r = w.copy()
     # check for required columns
     r.columns = map(str.upper, r.columns)
@@ -357,7 +362,8 @@ def minmax_to_hourly(
         by_stn = r[r["ID"] == stn]
         for yr in by_stn["YR"].unique():
             by_year = by_stn[by_stn["YR"] == yr]
-            print(f"Running {stn} for {yr}")
+            if not silent:
+                print(f"Predicting hourly weather at {stn} for {yr}")
             df = minmax_to_hourly_single(by_year, prec_hr, skip_invalid, verbose)
             result = pd.concat([result, df])
 
@@ -370,6 +376,9 @@ def minmax_to_hourly(
         outcols = ["temp", "rh", "ws"]
         result[outcols] = result[outcols].map(round, ndigits = int(round_out))
     
+    if not silent:
+        print("########\n")
+
     return result
 
 
@@ -391,6 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("skip_invalid", nargs = "?", default = False,
         help = "If station year data non-sequential, skip and raise warning")
     parser.add_argument("-v", "--verbose", action = "store_true")
+    parser.add_argument("-s", "--silent", action = "store_true")
     parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
         help = "Decimals to truncate outputs to, None for no rounding (default 4)")
 
@@ -402,6 +412,7 @@ if __name__ == "__main__":
         args.prec_hr,
         args.skip_invalid,
         args.verbose,
+        args.silent,
         args.round_out
     )
     df_out.to_csv(args.output, index = False)

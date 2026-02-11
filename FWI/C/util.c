@@ -9,6 +9,13 @@
 
 
 
+char* version()
+{
+  // update this and CHANGELOG.md before merging to main
+  char *version = "2025-12-10 + Dev";
+  return version;
+}
+
 double _max(double x, double y)
 {
   return (x > y ? x : y);

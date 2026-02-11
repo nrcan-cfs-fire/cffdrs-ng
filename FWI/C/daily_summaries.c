@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <time.h>
+#include <string.h>
 
 struct pseudo_date{
   int year;
@@ -417,11 +418,12 @@ struct daily_summary generate_daily_summary(struct day_vals day) {
 int main(int argc, char *argv[]) {
   if (argc < 3) {
     printf("\n########\nhelp/usage:\n"
-      "%s input output [reset_hr]\n\n", argv[0]);
-    puts("positional arguments:\n"
-      "input                 Input csv data file\n"
-      "output                Output csv file name and location\n"
-      "reset_hr              New boundary to define day to summarize (default 5)\n"
+      "%s input output [reset_hr] [silent]\n\n", argv[0]);
+    puts("argument descriptions:\n"
+      "input          Input csv data file\n"
+      "output         Output csv file name and location\n"
+      "reset_hr       New boundary to define day to summarize (default 5)\n"
+      "silent         Suppresses informative print statements (default false)\n"
       "########\n\n");
     exit(1);
   }
@@ -441,6 +443,34 @@ int main(int argc, char *argv[]) {
     "ws_smooth,isi_smooth,gsi_smooth";
 
   int reset_hr;
+  bool silent;
+
+  // load optional argument if provided, or set to default
+  if (argc > 3) {
+    reset_hr = atoi(argv[3]);
+  } else {
+    reset_hr = 5;
+  }
+
+  if (argc > 4) {
+    if (strcmp(argv[4], "true") == 0) {
+      silent = true;
+    } else if (strcmp(argv[4], "false") == 0) {
+      silent = false;
+    } else {
+      printf("\n\n 'silent' can only be [true], [false], or blank (default false)");
+      exit(1);
+    }
+  } else {
+    silent = false;
+  }
+  if (argc > 5) {
+    puts("Warning: too many arguments provided, some unused\n");
+  }
+
+  if (!silent) {
+    printf("\n########\nFWI2025: Daily Summaries (%s)\n\n", version());
+  }
     
   // open input file
   FILE *inp = fopen(argv[1], "r");
@@ -448,17 +478,6 @@ int main(int argc, char *argv[]) {
   if (inp == NULL) {
     printf("\n\n ***** FILE  %s  does not exist\n", argv[1]);
     exit(1);
-  }
-
-  // load optional argument if provided, or set to default
-  if (argc > 3) {
-    reset_hr = atof(argv[3]);
-  } else {
-    reset_hr = 5;
-  }
-
-  if (argc > 4) {
-    puts("Warning: too many arguments provided, some unused\n");
   }
 
   // check input header
@@ -470,10 +489,16 @@ int main(int argc, char *argv[]) {
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
     exit(1);
   }
-  printf("Saving outputs to file >>> %s\n", argv[2]);
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
 
   // start calculation
+  if (!silent) {
+    puts("Summarizing to daily");
+  }
+
   struct hour_vals *buffer;
   buffer = (struct hour_vals*)malloc(sizeof(struct hour_vals));
   buffer->year = -1;
@@ -521,6 +546,10 @@ int main(int argc, char *argv[]) {
   free(buffer);
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    puts("########\n");
+  }
 
   return 0;
 }

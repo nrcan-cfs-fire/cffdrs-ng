@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - New option when running `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
 - `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
+- Program title and date of last update (following this changelog) to print statements
+- `silent` option to suppress print statements (*C*)
 
 ### Changed
 - Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions
@@ -24,6 +26,7 @@ All notable changes to this project will be documented in this file. The format 
 - Unused parameters: `OFFSET_SUNRISE`, `OFFSET_SUNSET`, `DAILY_K_DMC_DRYING`, `DAILY_K_DC_DRYING`, `DC_DAILY_CONST`, `DC_HOURLY_CONST`
 
 ### Fixed
+- **NG_FWI.r** assignment of command line (Rscript) arguments
 - `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
 - `yr`, `mon`, and `day` column outputs for `minmax_to_hourly()` returns integers (*Python*)
 

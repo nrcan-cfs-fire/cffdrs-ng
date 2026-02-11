@@ -83,8 +83,15 @@ def pseudo_date(yr, mon, day, hr, reset_hr = 5):
 # @param    silent          suppresses informative print statements (default False)
 # @param    round_out       decimals to truncate output to, None for none (default 4)
 # @return                   daily summary of peak FWI conditions
-def generate_daily_summaries(hourly_FWI, reset_hr = 5,
-  silent = False, round_out = 4):
+def generate_daily_summaries(
+  hourly_FWI,
+  reset_hr = 5,
+  silent = False,
+  round_out = 4
+):
+  if not silent:
+    print("\n########\nFWI2025: Daily Summaries (" + util.version() + ")\n")
+
   hourly_data = hourly_FWI.copy()
   Spread_Threshold_ISI = 5.0
 
@@ -201,7 +208,10 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
     outcols = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth"]
     results[outcols] = results[outcols].map(round, ndigits = int(round_out))
-    
+
+  if not silent:
+      print("########\n")
+
   return results
 
 

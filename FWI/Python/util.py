@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 
 
+def version():
+    # update this and CHANGELOG.md before merging to main
+    return "2025-12-10 + Dev"
+
 ##
 # Determine if data is sequential days
 #

@@ -211,7 +211,8 @@ def drought_code(
     sunrise,
     sunset,
     prec_cumulative_prev,
-    time_increment = 1.0):
+    time_increment = 1.0
+):
     # wetting
     if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
         if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
@@ -310,7 +311,8 @@ def hourly_grass_fuel_moisture(
     rain,
     solrad,
     load,
-    time_increment = 1.0):
+    time_increment = 1.0
+):
 
     rf = 0.27
     drf = 0.389633
@@ -568,7 +570,8 @@ def _stnHFWI(
     mcgfmc_matted_old,
     mcgfmc_standing_old,
     prec_cumulative,
-    canopy_drying):
+    canopy_drying
+):
     if not CONTINUOUS_MULTIYEAR and len(w["yr"].unique()) != 1:
         logger.warning("WARNING: _stnHFWI() function received more than one year")
     if not util.is_sequential_hours(w):
@@ -733,7 +736,11 @@ def hFWI(
     prec_cumulative = 0.0,
     canopy_drying = 0,
     silent = False,
-    round_out = 4):
+    round_out = 4
+):
+    if not silent:
+        print("\n########\nFWI2025 (" + util.version() + ")\n")
+    
     wx = df_wx.copy()
     # make all column names lower case
     wx.columns = map(str.lower, wx.columns)
@@ -815,8 +822,11 @@ def hFWI(
     
     # print message with startup values used
     if not silent:
-        print("\n########\nStartup values used:")
-        print("FFMC =", ffmc_old, "or mcffmc =", mcffmc_old, "%")
+        print("Startup values used:")
+        if ffmc_old == None:
+            print("FFMC = None and mcffmc =", mcffmc_old, "%")
+        elif mcffmc_old == None:
+            print("FFMC =", ffmc_old, "% and mcffmc = None")
         print("DMC =", dmc_old, "and DC =", dc_old)
         print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
             f"and standing = {mcgfmc_standing_old:.4f} %")

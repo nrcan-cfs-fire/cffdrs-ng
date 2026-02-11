@@ -22,13 +22,15 @@ int main(int argc, char *argv[])
 {
   if (argc < 4)
   {
-    printf("\n########\nhelp/usage:\n%s input output timezone\n\n", argv[0]);
+    printf("\n########\nhelp/usage:\n"
+      "%s input output timezone [prec_hr] [silent]\n\n", argv[0]);
     // Help
-    printf("positional arguments:\n"
+    printf("argument descriptions:\n"
       "input        Input csv data file\n"
       "output       Output csv file name and location\n"
       "timezone     UTC offset\n"
-      "prec_hr      Hour when daily precipitation occurs (default 'sunrise')\n"
+      "prec_hr      Hour when daily precipitation occurs (default sunrise)\n"
+      "silent       Suppresses informative print statements (default false)\n"
       "########\n\n");
     exit(1);
   }
@@ -43,15 +45,7 @@ int main(int argc, char *argv[])
   int prec_hr, err;
   double TZadjust;
   char* prec_hr_def = "sunrise";
-
-  // open input file
-  inp = fopen(argv[1], "r");
-  printf("Opening input file >>> %s   \n", argv[2]);
-  if (inp == NULL)
-  {
-    printf("\n\n ***** FILE  %s  does not exist\n", argv[2]);
-    exit(1);
-  }
+  bool silent;
 
   // load required timezone argument
   TZadjust = atof(argv[3]);
@@ -72,7 +66,34 @@ int main(int argc, char *argv[])
     prec_hr = -1; // use -1 as "sunrise"
   }
   if (argc > 5) {
+    if (strcmp(argv[5], "true") == 0) {
+      silent = true;
+    } else if (strcmp(argv[5], "false") == 0) {
+      silent = false;
+    } else {
+      printf("\n\n 'silent' can only be [true], [false], or blank (default false)");
+      exit(1);
+    }
+  } else {
+    silent = false;
+  }
+  if (argc > 6) {
     puts("Warning: too many arguments provided, some unused\n");
+  }
+
+  if (!silent) {
+    printf("\n########\nFWI2025: Make Hourly Inputs (%s)\n\n", version());
+  }
+
+  // open input file
+  inp = fopen(argv[1], "r");
+  if (!silent) {
+    printf("Opening input file >>> %s   \n", argv[2]);
+  }
+  if (inp == NULL)
+  {
+    printf("\n\n ***** FILE  %s  does not exist\n", argv[2]);
+    exit(1);
   }
 
   check_header_match(inp, header);
@@ -83,15 +104,21 @@ int main(int argc, char *argv[])
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
     exit(1);
   }
-  printf("Saving outputs to file >>> %s\n", argv[2]);
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
 
   // start calculation
+  if (!silent) {
+    puts("Predicting hourly weather");
+  }
+
   struct row_minmax yest, cur, tom;
   err = read_row_minmax(inp, &cur);
   if (!(err > 0))
   {
-    printf("Unable to read first row of indices\n");
+    printf("Error: Unable to read first row of indices\n");
     exit(1);
   }
   cur.timezone = TZadjust;
@@ -194,6 +221,10 @@ int main(int argc, char *argv[])
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    puts("########\n");
+  }
 
   return 0;
 }
