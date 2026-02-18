@@ -55,7 +55,7 @@ DAY_STANDING = 1
 
 # For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
 # If True, every station's data needs to be sequential (one continuous run)
-CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
+CONTINUOUS_MULTIYEAR = True  # default False, True to not split by year
 
 ### Functions ###
 
@@ -544,9 +544,16 @@ def grass_fire_weather_index(gsi, load):
     else:
         return(Fint / 25.0)
 
-def peatland_moisture_code(pmc0, temp, prec, solrad, prec_cumulative_prev, time_increment = 1.0):
+def peatland_moisture_code(
+    pmc0,
+    temp,
+    prec,
+    solrad,
+    prec_cumulative_prev,
+    time_increment = 1.0
+):
     # calculate net precipitation for peatlands
-    precPMC = prec_net(prec, prec_cumulative_prev, 1.0, 1.0)
+    precPMC = prec_net(prec, prec_cumulative_prev, 1.0, 1.0, 1.0)
 
     # calculate specific yield
     A = 0.8674
@@ -561,12 +568,12 @@ def peatland_moisture_code(pmc0, temp, prec, solrad, prec_cumulative_prev, time_
     # calculate potential evapotranspiration
     alpha = 1.0
     gamma = 0.063
-    PET = 100 * alpha * solrad * fPET / (2453 * (fPET + gamma))
+    PET = 100 * alpha * solrad * fPET / (2453.0 * (fPET + gamma))
 
     # calculate actual evapotranspiration
     C = 0.1
     if pmc0 > 0:
-        AET = PET * (1 - (4e-4 + 1 - C) / (1 + exp(-3.45 * (log(pmc0) - 3.743))))
+        AET = PET * (1 - (1 - C) / (1 + (pmc0 * exp(-3.743)) ** -3.45))
     else:
         AET = PET
 
@@ -581,7 +588,7 @@ def peatland_spread_index(pmc, isi):
 
     return psi
 
-def prec_net(prec, prec_cumulative_prev, intercept, subtract, rate = 1.0):
+def prec_net(prec, prec_cumulative_prev, intercept, subtract, rate):
     if prec + prec_cumulative_prev > intercept:
         if prec_cumulative_prev < intercept:
             return (prec_cumulative_prev + prec) * rate - subtract
@@ -898,6 +905,7 @@ def hFWI(
         print("DMC =", dmc_old, "and DC =", dc_old)
         print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
             f"and standing = {mcgfmc_standing_old:.4f} %")
+        print("PMC =", pmc_old)
         print("cumulative precipitation =", prec_cumulative,
             "mm and canopy drying =", canopy_drying, "\n")
     
