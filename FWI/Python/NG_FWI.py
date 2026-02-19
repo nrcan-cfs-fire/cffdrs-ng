@@ -21,7 +21,7 @@ logger.setLevel(logging.WARNING)
 FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
-PMC_DEFAULT = 10
+PMC_DEFAULT = 10.0
 
 # FFMC moisture content to code conversion factor
 MPCT_TO_MC = 250.0 * 59.5 / 101.0
@@ -564,11 +564,12 @@ def peatland_moisture_code(
     # calculate slope of the saturation vapour pressure curve
     fPET = 0.6135 * exp(17.052 * temp / (240.97 + temp)) * (
         17.502 / (240.97 + temp) - 17.502 * temp / (240.97 + temp) ** 2)
-    
+
     # calculate potential evapotranspiration
     alpha = 1.0
     gamma = 0.063
-    PET = 100 * alpha * solrad * fPET / (2453.0 * (fPET + gamma))
+    solrad_convert = 3.6 * solrad  # [kW/m**2] to [MJ/hr/m**2]
+    PET = 100 * alpha * solrad_convert * fPET / (2453.0 * (fPET + gamma))
 
     # calculate actual evapotranspiration
     C = 0.1
