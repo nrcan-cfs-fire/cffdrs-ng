@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file. The format 
 - `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
 - Program title and date of last update (following this changelog) to print statements
 - `silent` option to suppress print statements (*C*)
+- Tutorial files for **make_minmax** and **make_hourly** along with sample daily weather datasets (**PRF2007_daily_wx.csv** and **PRF2007_daily_wx_C-format.csv**)
 
 ### Changed
 - Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions

@@ -57,14 +57,14 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[3], "false") == 0) {
       silent = false;
     } else {
-      printf("\n\n 'silent' can only be [true], [false], or blank (default false)");
+      puts("\n'silent' can only be [true], [false], or blank (default false)");
       exit(1);
     }
   } else {
     silent = false;
   }
   if (argc > 4) {
-    puts("Warning: too many arguments provided, some unused\n");
+    puts("Warning: too many arguments provided, some unused");
   }
 
   if (!silent) {

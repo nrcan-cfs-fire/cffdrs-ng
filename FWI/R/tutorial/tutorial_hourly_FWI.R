@@ -1,5 +1,5 @@
 #### Hourly Fire Weather Index (FWI) Tutorial ####
-# February 2025 (Last updated December 2025)
+# February 2025 (Last updated February 2026)
 #
 # This script was designed to go with a tutorial on the NG-CFFDRS website to inform
 # users how to use scripts associated with FWI2025. Follow along with the
@@ -17,6 +17,9 @@ library(lubridate)
 library(data.table)
 
 ### Load functions and data ###
+# Check your current working directory
+getwd()
+
 # If the working directory is different from where you saved the FWI2025 scripts,
 # change the working directory with setwd() to that folder.
 
@@ -43,7 +46,8 @@ print(names(data))
 
 ### Run FWI2025 ###
 # hFWI() is the function that calculates hourly FWI codes in FWI2025. It can
-# handle multiple stations and years/fire seasons (not shown in this tutorial). For the arguments you can run `args()`.
+# handle multiple stations and years/fire seasons (not shown in this tutorial). For
+# the arguments you can run `args()`.
 args(hFWI)
 
 # For this tutorial, we will leave all the optional parameters to default.
