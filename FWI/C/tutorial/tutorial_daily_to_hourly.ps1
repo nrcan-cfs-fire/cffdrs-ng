@@ -89,3 +89,5 @@ gcc -o minmax_to_hourly make_hourly.c util.c
 # ########
 
 # This will place our outputs in a new CSV file called PRF2007_hourly_out.csv.
+
+# See the website for an appendix about the minmax to hourly parameters.

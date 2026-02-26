@@ -20,16 +20,16 @@ library(lubridate)
 # Check your current working directory
 getwd()
 
-# If the working directory is different from where you saved the FWI2025 scripts,
-# change the working directory with setwd() to that folder.
+# This tutorial will refer to file locations as structured in the GitHub repository.
+# If the working directory is different from the cffdrs-ng/FWI/R folder, you can
+# change to it with setwd(). Change the path characters to match your file layout if
+# it is different.
 
 # Load the files containing the variables and functions to calculate FWI2025.
 source("make_minmax.r")
 source("make_hourly.r")
 
-# Load the input weather station data file.
-# The path below is specified based on the layout in the GitHub repository.
-# Change the file path for PRF2007_hourly_wx.csv if your structure is different.
+# Load the input daily weather data file.
 daily <- read.csv("../../data/PRF2007_daily_wx.csv")
 
 # Print the column names, data should contain 11 columns
@@ -65,7 +65,7 @@ print(tail(minmax[, 5:14], 2))
 # 109 2007   8  27  10.2418    23.59 46.8248    100 1.0134  8.445  0.0
 
 # You can save the daily minmax data as a CSV file (overrides any preexisting file).
-write.csv(minmax, "PRF2007_calculated_minmax_wx.csv", row.names = FALSE)
+write.csv(minmax, "../../PRF2007_calculated_minmax_wx.csv", row.names = FALSE)
 
 ### Convert minmax to hourly ###
 # Finally, convert the daily minmax weather data to hourly weather data that can be
@@ -123,4 +123,6 @@ print(head(hourly[, 5:12], 24))
 
 # You can save the hourly weather data as a CSV file (overrides any preexisting
 # file).
-write.csv(hourly, "PRF2007_calculated_hourly_wx.csv", row.names = FALSE)
+write.csv(hourly, "../../PRF2007_calculated_hourly_wx.csv", row.names = FALSE)
+
+# See the website for an appendix about the minmax to hourly parameters.

@@ -10,15 +10,14 @@ source("util.r")
 #' @return               list of two values [min temperature, max temperature]
 temp_min_max <- function(temp_noon, rh_noon) {
   temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
-  temp_max <- ifelse(temp_range <= 2,
-    temp_noon + 1,
-    temp_noon + 2
-  )
-  temp_min <- ifelse(temp_range <= 2,
-    temp_noon - 1,
-    temp_max - temp_range
-  )
-  return(list(temp_min, temp_max))
+  if (temp_range <= 2) {
+    temp_max <- temp_noon + 1
+    temp_min <- temp_noon - 1
+  } else {
+    temp_max <- temp_noon + 2
+    temp_min <- temp_max - temp_range
+  }
+  return(c(temp_min, temp_max))
 }
 
 
@@ -59,7 +58,8 @@ daily_to_minmax <- function(df, silent = FALSE, round_out = 4) {
     }
   }
 
-  df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
+  temp_calc <- t(Vectorize(temp_min_max)(df[, temp], df[, rh]))
+  df[, c("temp_min", "temp_max") := list(temp_calc[, 1], temp_calc[, 2])]
   df[, q := find_q(temp, rh)]
   # ideally max temperature lines up with min relative humidity and vice versa
   df[, rh_min := pmin(100, pmax(0, find_rh(q, temp_max)))]

@@ -14,29 +14,32 @@
 ### Load packages ###
 # Run `pip install` to install any you are missing.
 import pandas as pd
+import sys
 
 ### Load functions and data ###
-# If the working directory is different from where you saved the FWI2025 scripts,
-# you can add the path to the scripts with the sys package and sys.path.append().
-import sys
-sys.path.append("CHANGE/PATH/TO/cffdrs-ng/FWI/Python")
+# This tutorial will refer to file locations as structured in the GitHub repository.
+# Specify the local path to the cffdrs-ng folder. It can accept absolute paths (e.g.
+# starting with "C:/") or relative paths (e.g. "./" if the working directory is
+# cffdrs-ng). Change the path strings to match your file layout if it is different.
+path_prefix = "CHANGE/TO/PATH/TO/cffdrs-ng/"
+sys.path.append(path_prefix + "FWI/Python")
 
 # Load the files containing the functions to calculate hourly weather.
 from make_minmax import daily_to_minmax
 from make_hourly import minmax_to_hourly
 
 # Load the input weather station data file.
-# The path below is specified based on the layout in the GitHub repository.
-# Change the file path for PRF2007_hourly_wx.csv if your structure is different.
-daily = pd.read_csv("../../data/PRF2007_daily_wx.csv")
+daily = pd.read_csv(path_prefix + "data/PRF2007_daily_wx.csv")
 
-# Print the column names, data should contain 12 columns
+# Print the column names, data should contain 11 columns
 print(daily.columns)
 # Index(['id', 'lat', 'long', 'timezone', 'yr', 'mon', 'day', 'temp', 'rh', 'ws',  
 #        'prec'],
 #       dtype='object')
 
 ### Convert Daily to Minmax ###
+# If you already have daily minmax data (from observations or modelling) then you
+# can skip to converting minmax to hourly.
 # `daily_to_minmax()` is the function that calculates daily minmax data from daily
 # weather data. For details you can run the help.
 help(daily_to_minmax)
@@ -54,7 +57,7 @@ help(daily_to_minmax)
 #     #                       yr, mon, day, temp_min, temp_max, rh_min, rh_max,
 #     #                       ws_min, ws_max, prec
 
-# For this tutorial, we will leave the optional `round_out` parameter to default.
+# For this tutorial, we will leave all optional parameters to default.
 minmax = daily_to_minmax(daily)
 # ########
 # FWI2025: Make Min/Max Inputs (YYYY-MM-DD)
@@ -75,10 +78,10 @@ print(minmax.tail(2).loc[:, "yr":])
 # 108  2007    8   27   10.2418     23.59  46.8248   100.0  1.0134   8.445   0.0
 
 # You can save the daily minmax data as a CSV file (overrides any preexisting file).
-minmax.to_csv("PRF2007_calculated_minmax_wx.csv", index = False)
+minmax.to_csv(path_prefix + "PRF2007_calculated_minmax_wx.csv", index = False)
 
 ### Convert minmax to hourly ###
-# Finally, convert the daily minmax weather data to hourly weather data that can be
+# Next, convert the daily minmax weather data to hourly weather data that can be
 # used to calculate hourly FWI. Run the help for details about the
 # `minmax_to_hourly()` function.
 help(minmax_to_hourly)
@@ -147,4 +150,6 @@ print(hourly.head(24).loc[:, "yr":])
 
 # You can save the hourly weather data as a CSV file (overrides any preexisting
 # file).
-hourly.to_csv("PRF2007_calculated_hourly_wx.csv", index = False)
+hourly.to_csv(path_prefix + "PRF2007_calculated_hourly_wx.csv", index = False)
+
+# See the website for an appendix about the minmax to hourly parameters.
