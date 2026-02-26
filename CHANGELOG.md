@@ -29,7 +29,8 @@ All notable changes to this project will be documented in this file. The format 
 - Unused parameters: `OFFSET_SUNRISE`, `OFFSET_SUNSET`, `DAILY_K_DMC_DRYING`, `DAILY_K_DC_DRYING`, `DC_DAILY_CONST`, `DC_HOURLY_CONST`
 
 ### Fixed
-- **NG_FWI.r** assignment of command line (Rscript) arguments
+- **NG_FWI.r** assignment of command line (Rscript) arguments (*R*)
+- **util.c** detection of the end of the input file for some systems (*C*)
 - `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
 - `yr`, `mon`, and `day` column outputs for `minmax_to_hourly()` returns integers (*Python*)
 

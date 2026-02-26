@@ -353,7 +353,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f,
     exit(1);
   }
 
-  if (err == 0) {  // fscanf didn't find another line
+  if (err == EOF) {  // fscanf didn't find another line
     return err;
   }
 
