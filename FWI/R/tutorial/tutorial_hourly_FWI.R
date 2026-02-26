@@ -1,5 +1,5 @@
 #### Hourly Fire Weather Index (FWI) Tutorial ####
-# February 2025 (Last updated February 2026)
+# February 2025 (last updated February 2026)
 #
 # This script was designed to go with a tutorial on the NG-CFFDRS website to inform
 # users how to use scripts associated with FWI2025. Follow along with the
@@ -111,12 +111,11 @@ summary(report[daily_components])
 # From here, the outputs can be converted to any datatype for further analysis or
 # plotted for visualization.
 
-### Appendix: timezone ###
-# This section will cover how to calculate a timezone based on a location (latitude
-# and longitude) and date. Note that this is not necessarily a substitute for
-# actual information about the time used in a dataset. The CFFDRS Weather Guide
-# specifies to collect data by local standard time, which is different in many
-# places due to the shift to daylight time in summer months (daylight savings).
+### Appendix: Timezone ###
+# This section will cover how to determine the UTC offset of a Local Standard Time
+# (LST) based on a date and location (latitude and longitude). This only applies to
+# datasets that are known to be recorded using LST, and is not a substitute in cases
+# where a dataset's UTC offset is unknown. See the website FAQ for more details.
 
 # The 'lutz' library has functions to get the timezone of the weather station
 # based on latitude and longitude.
@@ -137,12 +136,14 @@ tz_loc <- tz_lookup_coords(stations$lat, stations$long, method = "accurate")
 tz_loc
 # [1] "America/Toronto"
 
-# The UTC offset can then be determined from the timezone location.
-utc <- tz_offset("2007-05-10", tz_loc)[[5]]
+# The UTC offset can then be determined from the timezone location and a date. To
+# guarantee the UTC offset for LST, use a date in winter (e.g. January 1st in the
+# Northern hemisphere or July 1st in the Southern hemisphere).
+utc <- tz_offset("2007-01-01", tz_loc)[[5]]
 # Print the UTC offset
 utc
+# [1] -5
 
-# Since May 10, 2007 is during daylight savings the UTC offset calculated above
-# corresponds to Eastern Daylight Time (EDT), UTC-4. This matches the timezone
-# column provided since this data was collected using EDT. For Eastern Standard Time
-# (EST), the UTC offset would be UTC-5.
+# The provided PRF dataset is actually not recorded in LST, but Local Daylight Time
+# (Eastern Daylight Time). This is why the timezone parameter is set to -4, and
+# why this process is not a substitute for actual information about a dataset.

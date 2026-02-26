@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - New option when running `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
 - `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
-- Program title and date of last update (following this changelog) to print statements
+- Program title and date of last update (following this changelog) to default print statements
 - `silent` option to suppress print statements (*C*)
 - Tutorial files for **make_minmax** and **make_hourly** along with sample daily weather datasets (**PRF2007_daily_wx.csv** and **PRF2007_daily_wx_C-format.csv**)
 
@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file. The format 
 | `MPCT_TO_MC`   | `C_FFMC`         |
 | `HOURLY_K_DMC` | `DMC_REGRESSION` |
 | `HOURLY_K_DC`  | `DC_REGRESSION`  |
+
+- Updated Hourly FWI tutorials to reflect new print statements and updated `timezone` explanation
 
 ### Removed
 - Unused parameters: `OFFSET_SUNRISE`, `OFFSET_SUNSET`, `DAILY_K_DMC_DRYING`, `DAILY_K_DC_DRYING`, `DC_DAILY_CONST`, `DC_HOURLY_CONST`
