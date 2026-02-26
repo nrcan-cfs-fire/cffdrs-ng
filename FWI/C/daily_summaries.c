@@ -6,12 +6,12 @@
 #include <time.h>
 #include <string.h>
 
-struct pseudo_date{
+struct pseudo_date {
   int year;
   int yday;
 };
 
-struct daily_summary{
+struct daily_summary {
   double ffmc, dmc, dc, isi, bui, fwi, dsr;
   double gfmc, gsi, gfwi;
   double ws_smooth, isi_smooth, gsi_smooth;
@@ -458,14 +458,14 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[4], "false") == 0) {
       silent = false;
     } else {
-      printf("\n\n 'silent' can only be [true], [false], or blank (default false)");
+      puts("\n'silent' can only be [true], [false], or blank (default false)");
       exit(1);
     }
   } else {
     silent = false;
   }
   if (argc > 5) {
-    puts("Warning: too many arguments provided, some unused\n");
+    puts("Warning: too many arguments provided, some unused");
   }
 
   if (!silent) {
@@ -474,7 +474,9 @@ int main(int argc, char *argv[]) {
     
   // open input file
   FILE *inp = fopen(argv[1], "r");
-  printf("Opening input file >>> %s   \n", argv[1]);
+  if (!silent) {
+    printf("Opening input file >>> %s\n", argv[1]);
+  }
   if (inp == NULL) {
     printf("\n\n ***** FILE  %s  does not exist\n", argv[1]);
     exit(1);
@@ -536,8 +538,8 @@ int main(int argc, char *argv[]) {
     }
 
     free(by_date->p_day);
-    for(int i = 0; i< 24; i++){
-      free(by_date->hour);
+    for (int i = 0; i < 24; i++) {
+      free(by_date->hour[i]);
     }
     free(by_date);
     by_date=NULL;
