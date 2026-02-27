@@ -12,7 +12,7 @@
 char* version()
 {
   // update this and CHANGELOG.md before merging to main
-  char *version = "2025-12-10 + Dev";
+  char *version = "2026-02-27";
   return version;
 }
 
