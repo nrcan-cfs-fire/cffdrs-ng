@@ -1,5 +1,5 @@
 #### Hourly Fire Weather Index (FWI) Tutorial ####
-# April 2025 (Last updated December 2025)
+# April 2025 (last updated February 2026)
 #
 # This script was designed to go with a tutorial on the NG-CFFDRS website to inform
 # users how to use scripts associated with FWI2025. Follow along with the
@@ -14,34 +14,28 @@
 ### Load packages ###
 # Run `pip install` to install any you are missing.
 import pandas as pd
-from datetime import datetime
+import sys
 
 ### Load functions and data ###
-# If the working directory is different from where you saved the FWI2025 scripts,
-# you can add the path to the scripts with the sys package and sys.path.append().
-import sys
-sys.path.append("CHANGE/PATH/TO/cffdrs-ng/FWI/Python")
+# This tutorial will refer to file locations as structured in the GitHub repository.
+# Specify the local path to the cffdrs-ng folder. It can accept absolute paths (e.g.
+# starting with "C:/") or relative paths (e.g. "./" if the working directory is
+# cffdrs-ng). Change the path strings to match your file layout if it is different.
+path_prefix = "CHANGE/TO/PATH/TO/cffdrs-ng/"
+sys.path.append(path_prefix + "FWI/Python")
 
 # Load the files containing the variables and functions to calculate FWI2025.
 from NG_FWI import hFWI
 from daily_summaries import generate_daily_summaries
 
 # Load the input weather station data file.
-# The path below is specified based on the layout in the GitHub repository.
-# Change the file path for PRF2007_hourly_wx.csv if your structure is different.
-data = pd.read_csv("../../data/PRF2007_hourly_wx.csv")
+data = pd.read_csv(path_prefix + "data/PRF2007_hourly_wx.csv")
 
 # Print the column names, data should contain 12 columns
 print(data.columns)
 # Index(['id', 'lat', 'long', 'timezone', 'yr', 'mon', 'day', 'hr', 'temp', 'rh', 
 #        'ws', 'prec'],
 #       dtype='object')
-
-# Previously, the UTC offset (`timezone` column) was a function parameter and could
-# be calculated from latitude and longitude. Now it is a data frame column and
-# provided. See the appendix of this tutorial for extra information on how to
-# calculate the timezone, along with the extra information required about the
-# dataset.
 
 ### Run FWI2025 ###
 # hFWI() is the function that calculates hourly FWI codes in FWI2025. It can
@@ -68,12 +62,15 @@ help(hFWI)
 #     # Calculate hourly FWI indices from hourly weather stream.
 #     #
 #     # @param    df_wx               hourly values weather stream
+# ...
 
 # For this tutorial, we will leave all the optional parameters to default.
 data_fwi = hFWI(data)
 # ########
+# FWI2025 (YYYY-MM-DD)
+
 # Startup values used:
-# FFMC = 85.0 or mcffmc = None %
+# FFMC = 85.0 % and mcffmc = None
 # DMC = 6.0 and DC = 15.0
 # mcgfmc matted = 16.3075 % and standing = 16.3075 %
 # cumulative precipitation = 0.0 mm and canopy drying = 0
@@ -83,7 +80,7 @@ data_fwi = hFWI(data)
 
 # Output is a DataFrame, with FWI calculations appended after the input columns.
 # Save the output as a CSV file (overrides any preexisting file).
-data_fwi.to_csv("PRF2007_hourly_FWI.csv", index = False)
+data_fwi.to_csv(path_prefix + "PRF2007_hourly_FWI.csv", index = False)
 
 # Print the last two rows of the standard moisture codes and fire behaviour indices.
 standard_components = ['ffmc', 'dmc', 'dc', 'isi', 'bui', 'fwi']
@@ -109,6 +106,11 @@ print(data_fwi.loc[:, standard_components].describe())
 ### Calculate daily summaries ###
 # Calculate outputs like peak burn time and number of hours of spread potential.
 report = generate_daily_summaries(data_fwi)
+# ########
+# FWI2025: Daily Summaries (YYYY-MM-DD)
+
+# Summarizing PRF to daily
+# ########
 
 # Print a simple summary of the daily report.
 daily_components = ["peak_hr", "duration", "isi_smooth", "dsr"]
@@ -140,15 +142,15 @@ print(report['peak_hr'].value_counts().sort_index())
 # From here, the outputs can be converted to any datatype for further analysis or
 # plotted for visualization.
 
-### Appendix: Timezones ###
-# This section will cover how to calculate a timezone based on a location (latitude
-# and longitude) and date. Note that this is not necessarily a substitute for
-# actual information about the time used in a dataset. The CFFDRS Weather Guide
-# specifies to collect data by local standard time, which is different in many
-# places due to the shift to daylight time in summer months (daylight savings).
+### Appendix: Timezone ###
+# This section will cover how to determine the UTC offset of a Local Standard Time
+# (LST) based on a date and location (latitude and longitude). This only applies to
+# datasets that are known to be recorded using LST, and is not a substitute in cases
+# where a dataset's UTC offset is unknown. See the website FAQ for more details.
 
 # The 'timezonefinder' and 'pytz' packages have functions that can get the timezone
 # based on latitude, longitude, and date.
+from datetime import datetime
 from timezonefinder import TimezoneFinder
 from pytz import timezone
 
@@ -167,16 +169,14 @@ tz_loc = tf.timezone_at(lat = stations.at[0, 'lat'], lng = stations.at[0, 'long'
 print(tz_loc)
 # 'America/Toronto'
 
-# The UTC offset can then be determined from the timezone location.
-utc = timezone(tz_loc).localize(datetime(2007, 5, 10)).strftime('%z')
-# Print UTC offset, PRF in May is in Eastern Daylight Time (EDT)
+# The UTC offset can then be determined from the timezone location and a date. To
+# guarantee the UTC offset for LST, use a date in winter (e.g. January 1st in the
+# Northern hemisphere or July 1st in the Southern hemisphere).
+utc = timezone(tz_loc).localize(datetime(2007, 1, 1)).strftime('%z')
+# Print UTC offset, PRF in winter is in Eastern Standard Time.
 print(utc)
-# '-0400'
+# '-0500'
 
-# The UTC offset is expected as integer hours, so we can set it to -4.
-utc = -4
-
-# Since May 10, 2007 is during daylight savings the UTC offset calculated above
-# corresponds to Eastern Daylight Time (EDT), UTC-4. This matches the timezone
-# column provided since this data was collected using EDT. For Eastern Standard Time
-# (EST), the UTC offset would be UTC-5.
+# The provided PRF dataset is actually not recorded in LST, but Local Daylight Time
+# (Eastern Daylight Time). This is why the timezone parameter is set to -4, and
+# why this process is not a substitute for actual information about a dataset.

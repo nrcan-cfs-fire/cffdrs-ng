@@ -3,6 +3,7 @@ import pandas as pd
 
 import util
 
+
 ##
 # Convert daily temperature at 1pm (noon standard time) to daily min/max
 #
@@ -23,10 +24,17 @@ def temp_min_max(temp_noon, rh_noon):
 ##
 # Convert daily noon weather to daily min/max weather using statistical values
 #
-# @param    df              daily noon weather stream [lat, long, yr, mon, day, temp, rh, ws, prec]
-# @param    round_out       decimals to truncate output to, None for none (default 4)
-# @return                   daily min/max weather stream [lat, long, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
-def daily_to_minmax(df, round_out = 4):
+# @param    df          daily noon LST weather stream, columns:
+#                       yr, mon, day, temp, rh, ws, prec
+# @param    silent      suppresses informative print statements (default False)
+# @param    round_out   decimals to truncate output to, None for none (default 4)
+# @return               daily min/max weather stream, columns:
+#                       yr, mon, day, temp_min, temp_max, rh_min, rh_max,
+#                       ws_min, ws_max, prec
+def daily_to_minmax(df, silent = False, round_out = 4):
+    if not silent:
+        print("\n########\nFWI2025: Make Min/Max Inputs (" + util.version() + ")\n")
+        print("Predicting daily min/max weather")
     df = df.copy()
     # check for required columns
     df.columns = map(str.lower, df.columns)
@@ -35,16 +43,19 @@ def daily_to_minmax(df, round_out = 4):
         if not col in df.columns:
             raise RuntimeError("Missing required input column: " + col)
     
-    df.loc[:, ["temp_min", "temp_max"]] = df.apply(
-        lambda row: pd.Series(
-            data = temp_min_max(row["temp"], row["rh"]), index = ["temp_min", "temp_max"]
+    df.loc[:, ["temp_min", "temp_max"]] = df.apply(lambda row:
+        pd.Series(data = temp_min_max(row["temp"], row["rh"]),
+            index = ["temp_min", "temp_max"]
         ), axis = 1
     )
     df["q"] = df.apply(lambda row: util.find_q(row["temp"], row["rh"]), axis = 1)
-    # ideally maximum temperature lines up with minimum relative humidity and vice versa
-    df["rh_min"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_max"]), axis = 1)
-    df["rh_min"] = df["rh_min"].apply(lambda rh: min(100, max(0, rh)))
-    df["rh_max"] = df.apply(lambda row: util.find_rh(row["q"], row["temp_min"]), axis = 1)
+    # ideally max temperature lines up with min relative humidity and vice versa
+    df["rh_min"] = df.apply(lambda row:
+        util.find_rh(row["q"], row["temp_max"]), axis = 1)
+    df["rh_min"] = df["rh_min"].apply(lambda rh:
+        min(100, max(0, rh)))
+    df["rh_max"] = df.apply(lambda row:
+        util.find_rh(row["q"], row["temp_min"]), axis = 1)
     df["rh_max"] = df["rh_max"].apply(lambda rh: min(100, max(0, rh)))
     df["ws_min"] = 0.15 * df["ws"]
     df["ws_max"] = 1.25 * df["ws"]
@@ -58,18 +69,26 @@ def daily_to_minmax(df, round_out = 4):
         outcols = ["temp_min", "temp_max", "rh_min", "rh_max", "ws_min", "ws_max"]
         df[outcols] = df[outcols].map(round, ndigits = int(round_out))
 
+    if not silent:
+        print("########\n")
+
     return df
+
 
 if __name__ == "__main__":
     # run daily_to_minmax by command line. run with option -h or --help to see usage
     parser = argparse.ArgumentParser(prog = "make_minmax")
 
-    parser.add_argument("input", help = "Input csv data file")
-    parser.add_argument("output", help = "Output csv file name and location")
+    parser.add_argument("input", help = "Input csv data file, columns: " +
+        "yr, mon, day, temp, rh, ws, prec")
+    parser.add_argument("output",
+        help = "Output csv file name and location, columns: " +
+        "yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec")
+    parser.add_argument("-s", "--silent", action = "store_true")
     parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
-        help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
+        help = "Decimals to truncate outputs to, None for no rounding (default 4)")
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
-    df_out = daily_to_minmax(df_in, args.round_out)
+    df_out = daily_to_minmax(df_in, args.silent, args.round_out)
     df_out.to_csv(args.output, index = False)

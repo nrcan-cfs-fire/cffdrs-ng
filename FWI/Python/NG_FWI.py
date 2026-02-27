@@ -22,25 +22,14 @@ FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
 
-# FFMC moisture content to code conversion factor
-MPCT_TO_MC = 250.0 * 59.5 / 101.0
-
-# Wetting variables
-DAILY_K_DMC_DRYING = 1.894
-DAILY_K_DC_DRYING = 3.937
-DC_DAILY_CONST = 0.36
-DC_HOURLY_CONST = DC_DAILY_CONST / DAILY_K_DC_DRYING
-
 # Precipitation intercept
 FFMC_INTERCEPT = 0.5
 DMC_INTERCEPT = 1.5
 DC_INTERCEPT = 2.8
 
 # Drying variables
-OFFSET_SUNRISE = 0
-OFFSET_SUNSET = 0
-HOURLY_K_DMC = 2.22
-HOURLY_K_DC = 0.015
+DMC_REGRESSION = 2.22e-4
+DC_REGRESSION = 1.5e-2
 DMC_OFFSET_TEMP = 0.0
 DC_OFFSET_TEMP = 0.0
 
@@ -63,14 +52,16 @@ CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
 # @param ffmc       Fine Fuel Moisture Code (FFMC)
 # @return           fine fuel moisture content (%)
 def ffmc_to_mcffmc(ffmc):
-    return MPCT_TO_MC * (101 - ffmc) / (59.5 + ffmc)
+    C_FFMC = 14875 / 101
+    return C_FFMC * (101 - ffmc) / (59.5 + ffmc)
 
 ##
 # Convert to FFMC
 # @param mcffmc     fine fuel moisture content (%)
 # @return           FFMC
 def mcffmc_to_ffmc(mcffmc):
-    return 59.5 * (250 - mcffmc) / (MPCT_TO_MC + mcffmc)
+    C_FFMC = 14875 / 101
+    return 59.5 * (250 - mcffmc) / (C_FFMC + mcffmc)
 
 ##
 # Convert to duff moisture content (%)
@@ -125,7 +116,7 @@ def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment = 1.0):
         if mo > 250.0: 
             mo = 250.0
     # duplicated in both formulas, so calculate once
-    e1 = 0.18 * (21.1 - temp) * (1.0 - (1.0 / exp(0.115 * rh)))
+    e1 = 0.18 * (21.1 - temp) * (1.0 - (exp(-0.115 * rh)))
     ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1
     ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
     m = ew if (mo < ed) else ed
@@ -133,7 +124,7 @@ def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment = 1.0):
         # these are the same formulas with a different value for a1
         a1 = (rh / 100.0) if (mo > ed) else ((100.0 - rh) / 100.0)
         k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
-        kd_or_kw = (1.0/0.50)*drf * k0_or_k1 * exp(0.0365 * temp)
+        kd_or_kw = 2.0 * drf * k0_or_k1 * exp(0.0365 * temp)
         m += (mo - m) * pow(10, (-kd_or_kw * time_increment))
     return m
 
@@ -184,14 +175,12 @@ def duff_moisture_code(
         mr = 300.0
     
     # drying
-    sunrise_start = sunrise + OFFSET_SUNRISE
-    sunset_start = sunset + OFFSET_SUNSET
-    # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-    if (sunrise_start <= hr <= sunset_start or
-        (hr < 6 and sunrise_start <= hr + 24 <= sunset_start)):  # daytime
+    # since sunset can be > 24, check hr + 24 (ignoring change between days)
+    if (sunrise <= hr <= sunset or
+        (hr < 6 and sunrise <= hr + 24 <= sunset)):  # daytime
         if temp < 0:
             temp = 0.0
-        rk = HOURLY_K_DMC * 1e-4 * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
+        rk = DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
         invtau = rk / 43.43
         mcdmc = (mr - 20.0) * exp(-time_increment * invtau) + 20.0
     else:  # nighttime
@@ -222,14 +211,15 @@ def drought_code(
     sunrise,
     sunset,
     prec_cumulative_prev,
-    time_increment = 1.0):
+    time_increment = 1.0
+):
     # wetting
     if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
         if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
             rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
         else:  # previously passed threshold
             rw = prec * 0.83
-        mr = last_mcdc + DAILY_K_DC_DRYING * rw / 2.0
+        mr = last_mcdc + 3.937 * rw / 2.0
     else:
         mr = last_mcdc
     
@@ -237,14 +227,11 @@ def drought_code(
         mr = 400.0
     
     # drying
-    sunrise_start = sunrise + OFFSET_SUNRISE
-    sunset_start = sunset + OFFSET_SUNSET
-    # since sunset can be > 24, in some cases we ignore change between days and check hr + 24
-    if (sunrise_start <= hr <= sunset_start or
-        (hr < 6 and sunrise_start <= hr + 24 <= sunset_start)):  # daytime
-        offset = 3.0
+    # since sunset can be > 24, check hr + 24 (ignoring change between days)
+    if (sunrise <= hr <= sunset or
+        (hr < 6 and sunrise <= hr + 24 <= sunset)):  # daytime
         if temp > 0:
-            pe = HOURLY_K_DC * (temp + DC_OFFSET_TEMP) + offset / 16.0
+            pe = DC_REGRESSION * (temp + DC_OFFSET_TEMP) + 3.0 / 16.0
         else:
             pe = 0
         invtau = pe / 400.0
@@ -324,7 +311,8 @@ def hourly_grass_fuel_moisture(
     rain,
     solrad,
     load,
-    time_increment = 1.0):
+    time_increment = 1.0
+):
 
     rf = 0.27
     drf = 0.389633
@@ -444,8 +432,7 @@ def mcgfmc_to_gfmc(mc, cur, wind):
         if (newPign > 0.0)
         else 250
     )
-    # /*   convert to code with FF-scale */
-    # return (59.5*(250.0-egmc)/(MPCT_TO_MC + egmc))
+
     if egmc > 250.0:
         egmc = 250.0
     return mcffmc_to_ffmc(egmc)
@@ -583,7 +570,8 @@ def _stnHFWI(
     mcgfmc_matted_old,
     mcgfmc_standing_old,
     prec_cumulative,
-    canopy_drying):
+    canopy_drying
+):
     if not CONTINUOUS_MULTIYEAR and len(w["yr"].unique()) != 1:
         logger.warning("WARNING: _stnHFWI() function received more than one year")
     if not util.is_sequential_hours(w):
@@ -748,7 +736,11 @@ def hFWI(
     prec_cumulative = 0.0,
     canopy_drying = 0,
     silent = False,
-    round_out = 4):
+    round_out = 4
+):
+    if not silent:
+        print("\n########\nFWI2025 (" + util.version() + ")\n")
+    
     wx = df_wx.copy()
     # make all column names lower case
     wx.columns = map(str.lower, wx.columns)
@@ -830,8 +822,11 @@ def hFWI(
     
     # print message with startup values used
     if not silent:
-        print("\n########\nStartup values used:")
-        print("FFMC =", ffmc_old, "or mcffmc =", mcffmc_old, "%")
+        print("Startup values used:")
+        if ffmc_old == None:
+            print("FFMC = None and mcffmc =", mcffmc_old, "%")
+        elif mcffmc_old == None:
+            print("FFMC =", ffmc_old, "% and mcffmc = None")
         print("DMC =", dmc_old, "and DC =", dc_old)
         print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
             f"and standing = {mcgfmc_standing_old:.4f} %")

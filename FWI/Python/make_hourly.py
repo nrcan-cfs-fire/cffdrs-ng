@@ -1,6 +1,7 @@
 import datetime
 import argparse
-from math import exp, pi, sin
+from math import exp, pi, sin, ceil
+from warnings import warn
 
 import pandas as pd
 
@@ -16,12 +17,12 @@ def make_prediction(
     c_alpha,
     c_beta,
     c_gamma,
-    v="TEMP",
-    change_at="SUNSET",
-    min_value=float("-inf"),
-    max_value=float("inf"),
-    intervals=1,
-    verbose=False,
+    v = "TEMP",
+    change_at = "SUNSET",
+    min_value = float("-inf"),
+    max_value = float("inf"),
+    verbose = False,
+    intervals = 1
 ):
     if verbose:
         print(f"Predicting {v} changing at {change_at}")
@@ -51,11 +52,8 @@ def make_prediction(
             del fcsts[column]
     cross = pd.merge(cross, fcsts, on=["ID", "DATE"])
     cross["START_DATE"] = cross.apply(
-        lambda row: (pd.to_datetime(row["DATE"]) - datetime.timedelta(days=1)).strftime(
-            "%Y-%m-%d"
-        )
-        if row["TIME"] <= row["TIME_MIN"]
-        else row["DATE"],
+        lambda row: (pd.to_datetime(row["DATE"]) - datetime.timedelta(days=1))
+        .strftime("%Y-%m-%d") if row["TIME"] <= row["TIME_MIN"] else row["DATE"],
         axis=1,
     )
     cross["HOUR_CURVE"] = cross.apply(
@@ -135,7 +133,15 @@ def make_prediction(
     return out
 
 
-def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False):
+def do_prediction(
+    fcsts,
+    row_temp,
+    row_rh,
+    row_wind,
+    prec_hr,
+    verbose,
+    intervals = 1
+):
     if verbose:
         print("Doing prediction")
     v_temp = make_prediction(
@@ -145,8 +151,8 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
         row_temp["c_gamma"],
         "TEMP",
         "SUNSET",
-        intervals=intervals,
-        verbose=verbose,
+        verbose = verbose,
+        intervals = intervals
     )
     v_wind = make_prediction(
         fcsts,
@@ -155,12 +161,13 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
         row_wind["c_gamma"],
         "WS",
         "SUNSET",
-        min_value=0,
-        intervals=intervals,
-        verbose=verbose,
+        min_value = 0,
+        verbose = verbose,
+        intervals = intervals
     )
-    # FIX: R version only looks at HOUR so wouldn't work with intervals != 1
-    t = v_temp[["ID", "TIMESTAMP", "DATE", "HR", "MINUTE", "LAT", "LONG", "TIMEZONE", "TEMP"]]
+    # R version only looks at HOUR so wouldn't work with intervals != 1
+    t = v_temp[["ID", "TIMESTAMP", "DATE", "HR", "MINUTE", "LAT", "LONG",
+        "TIMEZONE", "TEMP"]]
     w = v_wind[["ID", "TIMESTAMP", "WS"]]
     out = pd.merge(t, w)
     rh = make_prediction(
@@ -169,37 +176,53 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
         row_rh["c_beta"],
         row_rh["c_gamma"],
         "RH_OPP",
-        intervals=intervals,
-        min_value=0,
-        max_value=1,
-        verbose=verbose,
+        "SUNSET",
+        min_value = 0,
+        max_value = 1,
+        verbose = verbose,
+        intervals = intervals
     )
     rh["RH"] = rh["RH_OPP"].apply(lambda rh_opp: 100 * (1 - rh_opp))
     rh = rh[["ID", "TIMESTAMP", "RH"]]
     out = pd.merge(out, rh)
     output = out[["ID", "LAT", "LONG", "TIMEZONE", "TIMESTAMP", "TEMP", "WS", "RH"]][:]
+    
     if verbose:
         print("Assigning times")
     output["HR"] = output["TIMESTAMP"].apply(lambda x: x.hour)
     output["MINUTE"] = output["TIMESTAMP"].apply(lambda x: x.minute)
+    
     if verbose:
         print("Converting date")
     output["DATE"] = output["TIMESTAMP"].apply(lambda x: x.date().strftime("%Y-%m-%d"))
+    
     if verbose:
         print("Allocating rain")
     rain = fcsts[["DATE", "PREC"]][:]
-    rain["HR"] = 7
+    if prec_hr == "sunrise":  # place daily precipitation at sunrise
+        rain["HR"] = fcsts["SUNRISE"].apply(lambda x: ceil(x))
+        if (rain["HR"] < 0).any():
+            warn("Daily sunrise precipitation before hour 0 placed at hour 0")
+            rain["HR"] = rain["HR"].apply(lambda x: max(x, 0))
+        if (rain["HR"] > 23).any():
+            warn("Daily sunrise precipitation after hour 23 placed at hour 23")
+            rain["HR"] = rain["HR"].apply(lambda x: min(x, 23))
+    else:  # place daily precipitation at user specified hour
+        rain["HR"] = prec_hr
     rain["MINUTE"] = 0
+    
     if verbose:
         print("Merging")
     cmp = pd.merge(output, rain, how="outer")
     cmp["PREC"] = cmp["PREC"].fillna(0)
+    
     if verbose:
         print("Calculating times")
     cmp["YR"] = cmp["TIMESTAMP"].apply(lambda x: x.year)
     cmp["MON"] = cmp["TIMESTAMP"].apply(lambda x: x.month)
     cmp["DAY"] = cmp["TIMESTAMP"].apply(lambda x: x.day)
     cmp["TIME"] = cmp.apply(lambda row: row["HR"] + row["MINUTE"] / 60.0, axis=1)
+    
     if verbose:
         print("Done prediction")
     return cmp
@@ -209,11 +232,11 @@ def do_prediction(fcsts, row_temp, row_wind, row_rh, intervals=1, verbose=False)
 # Convert daily min/max values stream to hourly values stream.
 # Uses Beck & Trevitt method with default A/B/G values.
 #
-# @param     w              daily min/max values weather stream [lat, long, timezone, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
-# @param     skip_invalid   if station year data non-sequential, skip and raise warning
+# @param     w              daily min/max values weather stream
+# @param     skip_invalid   if station year data non-sequential, skip and warn
 # @param     verbose        whether to output progress messages
-# @return                   hourly values weather stream [lat, long, timezone, yr, mon, day, hr, temp, rh, wind, prec]
-def minmax_to_hourly_single(w, skip_invalid=False, verbose=False):
+# @return                   hourly values weather stream
+def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     r = w.copy()
     r.columns = map(str.upper, r.columns)
     if 1 != len(r["LAT"].unique()):
@@ -238,20 +261,16 @@ def minmax_to_hourly_single(w, skip_invalid=False, verbose=False):
     )
     if not (util.is_sequential_days(r)):
         if skip_invalid:
-            raise RuntimeWarning(
+            warn(
                 f'{r["ID"].iloc[0]} for {r["YR"].iloc[0]}' +
                     ' - Expected input to be sequential daily weather'
             )
         return None
     orig_dates = pd.DataFrame(
-        {
-            "date": map(
-                lambda x: x.strftime("%Y-%m-%d"),
-                r["TIMESTAMP"].apply(lambda x: x.date()).unique(),
-            )
-        }
+        {"date": map(lambda x: x.strftime("%Y-%m-%d"),
+            r["TIMESTAMP"].apply(lambda x: x.date()).unique())}
     )
-    # duplicate start and end days to assume their values for one day before and after dataset
+    # add one day before start and after end, assuming same values as start and end
     yest = r.iloc[0][:]
     tom = r.iloc[-1][:]
     yest["TIMESTAMP"] = yest["TIMESTAMP"] - datetime.timedelta(days=1)
@@ -262,42 +281,57 @@ def minmax_to_hourly_single(w, skip_invalid=False, verbose=False):
     r["MON"] = r["TIMESTAMP"].apply(lambda x: x.month)
     r["DAY"] = r["TIMESTAMP"].apply(lambda x: x.day)
     r["HR"] = r["TIMESTAMP"].apply(lambda x: x.hour)
-    dates = r["TIMESTAMP"].unique()
-    latitude = r["LAT"].iloc[0]
-    longitude = r["LONG"].iloc[0]
     r = util.get_sunlight(r, get_solrad = False)
     r.columns = map(str.upper, r.columns)  # get_sunlight outputs lowercase columns
-    # FIX: is solar noon just midpoint between sunrise and sunset?
+    # approximate solar noon as midpoint between sunrise and sunset
     r["SOLARNOON"] = r.apply(
-        lambda row: (row["SUNSET"] - row["SUNRISE"]) / 2 + row["SUNRISE"], axis=1
+        lambda row: (row["SUNSET"] - row["SUNRISE"]) / 2 + row["SUNRISE"], axis = 1
     )
     r["RH_OPP_MIN"] = 1 - r["RH_MAX"] / 100
     r["RH_OPP_MAX"] = 1 - r["RH_MIN"] / 100
     r["DATE"] = r["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
-    df = do_prediction(
-        r, row_temp=C_TEMP, row_wind=C_WIND, row_rh=C_RH, verbose=verbose
-    )
+    df = do_prediction(r, C_TEMP, C_RH, C_WIND, prec_hr, verbose)
     df.columns = map(str.lower, df.columns)
-    df = pd.merge(orig_dates, df, on=["date"])
-    cols = ["lat", "long", "timezone", "yr", "mon", "day", "hr", "temp", "rh", "ws", "prec"]
+    df = pd.merge(orig_dates, df, on = ["date"])
+    df["yr"] = df["yr"].apply(int)
+    df["mon"] = df["mon"].apply(int)
+    df["day"] = df["day"].apply(int)
+    cols = ["lat", "long", "timezone", "yr", "mon", "day", "hr",
+        "temp", "rh", "ws", "prec"]
     if had_id:
         df = df[["id"] + cols]
     else:
         df = df[cols]
     return df
 
-
+##
 # Convert daily min/max values stream to hourly values stream.
 # Uses Beck & Trevitt method with default A/B/G values.
 #
-# @param    w               daily min/max values weather stream [lat, long, yr, mon, day temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
+# @param    w               daily min/max values weather stream, columns:
+#                           [id], lat, long, [timezone], yr, mon, day,
+#                           temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec
 # @param    timezone        UTC offset (default None for column provided in w)
-# @param    skip_invalid    if station year data non-sequential, skip and raise warning
+# @param    prec_hr         hour when daily precipitation occurs (default "sunrise")
+# @param    skip_invalid    if station year data non-sequential, skip and warn
 # @param    verbose         whether to output progress messages
+# @param    silent          suppresses informative print statements (default False)
 # @param    round_out       decimals to truncate output to, None for none (default 4)
-# @return                   hourly values weather stream [lat, long, timezone, yr, mon, day, hr, temp, rh, wind, prec]
-def minmax_to_hourly(w, timezone = None, skip_invalid = False,
-                     verbose = False, round_out = 4):
+# @return                   hourly values weather stream, columns:
+#                           [id], lat, long, timezone, yr, mon, day, hr,
+#                           temp, rh, wind, prec
+def minmax_to_hourly(
+    w,
+    timezone = None,
+    prec_hr = "sunrise",
+    skip_invalid = False,
+    verbose = False,
+    silent = False,
+    round_out = 4
+):
+    if not silent:
+        print("\n########\nFWI2025: Make Hourly Inputs (" + util.version() + ")\n")
+
     r = w.copy()
     # check for required columns
     r.columns = map(str.upper, r.columns)
@@ -313,17 +347,24 @@ def minmax_to_hourly(w, timezone = None, skip_invalid = False,
     # check timezone
     if timezone == None:
         if not "TIMEZONE" in r.columns:
-            raise RuntimeError("Either provide a timezone column or specify argument in minmax_to_hourly")
+            raise RuntimeError("Either provide a timezone column or " +
+                "specify argument in minmax_to_hourly")
     else:
         r["TIMEZONE"] = float(timezone)
+    # check prec_hr
+    if not (prec_hr == "sunrise" or
+        (isinstance(prec_hr, int) and 0 <= prec_hr <= 23)):
+        raise TypeError("prec_hr input needs to be 'sunrise' or an integer [0,23]")
+    
     # loop over every station year
-    result = None
+    result = pd.DataFrame()
     for stn in r["ID"].unique():
         by_stn = r[r["ID"] == stn]
         for yr in by_stn["YR"].unique():
             by_year = by_stn[by_stn["YR"] == yr]
-            print(f"Running {stn} for {yr}")
-            df = minmax_to_hourly_single(by_year, skip_invalid, verbose)
+            if not silent:
+                print(f"Predicting hourly weather at {stn} for {yr}")
+            df = minmax_to_hourly_single(by_year, prec_hr, skip_invalid, verbose)
             result = pd.concat([result, df])
 
     # delete ID column if it wasn't provided
@@ -335,24 +376,43 @@ def minmax_to_hourly(w, timezone = None, skip_invalid = False,
         outcols = ["temp", "rh", "ws"]
         result[outcols] = result[outcols].map(round, ndigits = int(round_out))
     
+    if not silent:
+        print("########\n")
+
     return result
+
 
 if __name__ == "__main__":
     # run minmax_to_hourly by command line. run with option -h or --help to see usage
     parser = argparse.ArgumentParser(prog = "make_hourly")
 
-    parser.add_argument("input", help = "Input csv data file")
-    parser.add_argument("output", help = "Output csv file name and location")
+    parser.add_argument("input", help = "Input csv data file, columns: " +
+        "[id], lat, long, [timezone], yr, mon, day, " +
+        "temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec")
+    parser.add_argument("output",
+        help = "Output csv file name and location, columns: " +
+        "[id], lat, long, timezone, yr, mon, day, hr, " +
+        "temp, rh, wind, prec")
     parser.add_argument("timezone", nargs = "?", default = None,
         help = "UTC offset (default None for column provided in input)")
+    parser.add_argument("prec_hr", nargs = "?", default = "sunrise",
+        help = "Hour when daily precipitation occurs (default 'sunrise')")
     parser.add_argument("skip_invalid", nargs = "?", default = False,
         help = "If station year data non-sequential, skip and raise warning")
     parser.add_argument("-v", "--verbose", action = "store_true")
+    parser.add_argument("-s", "--silent", action = "store_true")
     parser.add_argument("-r", "--round_out", default = 4, nargs = "?",
-        help = "Decimal places to truncate outputs to, None for no rounding (default 4)")
+        help = "Decimals to truncate outputs to, None for no rounding (default 4)")
 
     args = parser.parse_args()
     df_in = pd.read_csv(args.input)
-    df_out = minmax_to_hourly(df_in, args.timezone, args.skip_invalid,
-                              args.verbose, args.round_out)
+    df_out = minmax_to_hourly(
+        df_in,
+        args.timezone,
+        args.prec_hr,
+        args.skip_invalid,
+        args.verbose,
+        args.silent,
+        args.round_out
+    )
     df_out.to_csv(args.output, index = False)

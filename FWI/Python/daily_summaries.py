@@ -83,8 +83,15 @@ def pseudo_date(yr, mon, day, hr, reset_hr = 5):
 # @param    silent          suppresses informative print statements (default False)
 # @param    round_out       decimals to truncate output to, None for none (default 4)
 # @return                   daily summary of peak FWI conditions
-def generate_daily_summaries(hourly_FWI, reset_hr = 5,
-  silent = False, round_out = 4):
+def generate_daily_summaries(
+  hourly_FWI,
+  reset_hr = 5,
+  silent = False,
+  round_out = 4
+):
+  if not silent:
+    print("\n########\nFWI2025: Daily Summaries (" + util.version() + ")\n")
+
   hourly_data = hourly_FWI.copy()
   Spread_Threshold_ISI = 5.0
 
@@ -133,7 +140,7 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       else:
         peak_time = by_date["isi_smooth"].idxmax()
       
-      # find the rest of the values at peak
+      # append date
       results["id"].append(stn)
       results["yr"].append(by_date.at[0, "yr"])
       results["mon"].append(by_date.at[0, "mon"])
@@ -142,12 +149,30 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
       # format sunrise and sunset as hh:mm from decimal hours
       sr = by_date.at[peak_time, "sunrise"]
       ss = by_date.at[peak_time, "sunset"]
-      results["sunrise"].append("{:02d}:{:02d}".format(int(sr), int(60 * (sr - int(sr)))))
-      results["sunset"].append("{:02d}:{:02d}".format(int(ss), int(60 * (ss - int(ss)))))
+      results["sunrise"].append("{:02d}:{:02d}".format(int(sr),
+        int(60 * (sr - int(sr)))))
+      results["sunset"].append("{:02d}:{:02d}".format(int(ss),
+        int(60 * (ss - int(ss)))))
       
+      # append hour of peak burn and active burning duration
       results["peak_hr"].append(by_date.at[peak_time, "hr"])
-      results["duration"].append(sum(by_date["isi_smooth"] > Spread_Threshold_ISI))
+      # calculate duration of active burning window
+      if any(by_date["isi_smooth"] >= Spread_Threshold_ISI):
+        # find first and last hours of active burning
+        active_burning = by_date[by_date["isi_smooth"] >= Spread_Threshold_ISI]
+        t_ab0 = datetime.datetime(active_burning.iloc[0].yr,
+          active_burning.iloc[0].mon,
+          active_burning.iloc[0].day,
+          active_burning.iloc[0].hr)
+        t_ab1 = datetime.datetime(active_burning.iloc[-1].yr,
+          active_burning.iloc[-1].mon,
+          active_burning.iloc[-1].day,
+          active_burning.iloc[-1].hr)
+        results["duration"].append((t_ab1 - t_ab0).seconds // 3600 + 1)
+      else:
+        results["duration"].append(0)
 
+      # append outputs at peak burn
       results["ffmc"].append(by_date.at[peak_time, "ffmc"])
       results["dmc"].append(by_date.at[peak_time, "dmc"])
       results["dc"].append(by_date.at[peak_time, "dc"])
@@ -183,7 +208,10 @@ def generate_daily_summaries(hourly_FWI, reset_hr = 5,
     outcols = ["ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth"]
     results[outcols] = results[outcols].map(round, ndigits = int(round_out))
-    
+
+  if not silent:
+      print("########\n")
+
   return results
 
 

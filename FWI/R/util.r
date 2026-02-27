@@ -3,6 +3,10 @@ library(data.table)
 library(lubridate)
 
 
+version <- function() {
+  # update this and CHANGELOG.md before merging to main
+  return("2026-02-27")
+}
 
 #' Determine if data is sequential days
 #'

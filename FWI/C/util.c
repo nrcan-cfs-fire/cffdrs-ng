@@ -9,6 +9,13 @@
 
 
 
+char* version()
+{
+  // update this and CHANGELOG.md before merging to main
+  char *version = "2026-02-27";
+  return version;
+}
+
 double _max(double x, double y)
 {
   return (x > y ? x : y);
@@ -346,7 +353,7 @@ int read_row_inputs(FILE *inp, struct row *r, struct flags *f,
     exit(1);
   }
 
-  if (err == 0) {  // fscanf didn't find another line
+  if (err == EOF) {  // fscanf didn't find another line
     return err;
   }
 

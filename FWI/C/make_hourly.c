@@ -5,6 +5,7 @@ outputs hourly weather stream
 
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "util.h"
 
 /* Alpha/Beta/Gamma coefficients for Temperature, RH, and Wind Speed */
@@ -19,14 +20,18 @@ double diurnal(double v_min, double v_max, double tv_min, double yv_sunset,
 
 int main(int argc, char *argv[])
 {
-  if (argc != 4)
+  if (argc < 4)
   {
-    printf("\n########\nhelp/usage:\n%s input output timezone\n\n", argv[0]);
+    printf("\n########\nhelp/usage:\n"
+      "%s input output timezone [prec_hr] [silent]\n\n", argv[0]);
     // Help
-    printf("positional arguments:\n"
-      "input                 Input csv data file\n"
-      "output                Output csv file name and location\n"
-      "timezone              UTC offset\n########\n\n");
+    printf("argument descriptions:\n"
+      "input        Input csv data file\n"
+      "output       Output csv file name and location\n"
+      "timezone     UTC offset\n"
+      "prec_hr      Hour when daily precipitation occurs (default sunrise)\n"
+      "silent       Suppresses informative print statements (default false)\n"
+      "########\n\n");
     exit(1);
   }
   
@@ -34,22 +39,62 @@ int main(int argc, char *argv[])
   static const char *header = "lat,long,yr,mon,day,"
     "temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
   static const char *header_out = "lat,long,yr,mon,day,hr,temp,rh,ws,prec";
+  // timezone not included in output since NG_FWI doesn't accept it as a column
 
   FILE *inp, *out;
-  int err;
+  int prec_hr, err;
   double TZadjust;
+  char* prec_hr_def = "sunrise";
+  bool silent;
+
+  // load required timezone argument
+  TZadjust = atof(argv[3]);
+
+  // load optional arguments if provided, or set to default
+  if (argc > 4) {
+    int def = strcmp(prec_hr_def, argv[4]);
+    if (def == 0) {
+      prec_hr = -1; // use -1 as "sunrise"
+    } else {
+      prec_hr = atoi(argv[4]);
+      if (argv[4][0] < '0' || argv[4][0] > '9' || prec_hr < 0 || prec_hr > 23) {
+        puts("prec_hr input needs to be 'sunrise' or an integer [0,23]");
+        exit(1);
+      }
+    }
+  } else {
+    prec_hr = -1; // use -1 as "sunrise"
+  }
+  if (argc > 5) {
+    if (strcmp(argv[5], "true") == 0) {
+      silent = true;
+    } else if (strcmp(argv[5], "false") == 0) {
+      silent = false;
+    } else {
+      puts("\n'silent' can only be [true], [false], or blank (default false)");
+      exit(1);
+    }
+  } else {
+    silent = false;
+  }
+  if (argc > 6) {
+    puts("Warning: too many arguments provided, some unused");
+  }
+
+  if (!silent) {
+    printf("\n########\nFWI2025: Make Hourly Inputs (%s)\n\n", version());
+  }
 
   // open input file
   inp = fopen(argv[1], "r");
-  printf("Opening input file >>> %s   \n", argv[2]);
+  if (!silent) {
+    printf("Opening input file >>> %s   \n", argv[2]);
+  }
   if (inp == NULL)
   {
     printf("\n\n ***** FILE  %s  does not exist\n", argv[2]);
     exit(1);
   }
-
-  // load required timezone argument
-  TZadjust = atoi(argv[3]);
 
   check_header_match(inp, header);
   
@@ -59,15 +104,21 @@ int main(int argc, char *argv[])
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
     exit(1);
   }
-  printf("Saving outputs to file >>> %s\n", argv[2]);
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
 
   // start calculation
+  if (!silent) {
+    puts("Predicting hourly weather");
+  }
+
   struct row_minmax yest, cur, tom;
   err = read_row_minmax(inp, &cur);
   if (!(err > 0))
   {
-    printf("Unable to read first row of indices\n");
+    printf("Error: Unable to read first row of indices\n");
     exit(1);
   }
   cur.timezone = TZadjust;
@@ -96,7 +147,6 @@ int main(int argc, char *argv[])
       /* error but we still want to figure out today's values */
       tom = cur;
     }
-    static const int LST_NOON = 12;
 
     // calculate sunrise and sunset for current day and tomorrow
     double suntime[2];
@@ -127,7 +177,23 @@ int main(int argc, char *argv[])
       cur.sunrise, cur.sunset, solarnoon_yest, sunset_yest, tom.sunrise, C_RH, arh);
     ywind_sunset = diurnal(cur.ws_min, cur.ws_max, tom.ws_min, ywind_sunset,
       cur.sunrise, cur.sunset, solarnoon_yest, sunset_yest, tom.sunrise, C_WIND, aws);
-    arain[7] = cur.rain;
+    
+    // Allocate rain
+    if (prec_hr == -1) {  // place daily precipitation at sunrise
+      int sunrise_hr = (int) ceil(cur.sunrise);
+      if (sunrise_hr < 0) {
+        puts("Warning: Daily sunrise precipitation before hour 0 placed at hour 0");
+        sunrise_hr = 0;
+      }
+      if (sunrise_hr > 23) {
+        puts("Warning: Daily sunrise precipitation after hour 23 placed at hour 23");
+        sunrise_hr = 23;
+      }
+      arain[sunrise_hr] = cur.rain;
+    } else {  // place daily precipitation at user specified hour
+      arain[prec_hr] = cur.rain;
+    }
+
     if (done_first)
     {
       for (h = 0; h < 24; ++h)
@@ -155,6 +221,10 @@ int main(int argc, char *argv[])
   /* printf("output has been written to>>> %s\n",argv[6]); */
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    puts("########\n");
+  }
 
   return 0;
 }

@@ -69,6 +69,9 @@ struct rain_intercept
 
 ////// Function Declarations and Help
 
+/* Code version */
+char* version();
+
 /* C90 max() also causing problems */
 double _max(double x, double y);
 

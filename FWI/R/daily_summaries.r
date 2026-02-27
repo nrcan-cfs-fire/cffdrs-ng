@@ -73,7 +73,7 @@ smooth_5pt <- function(source) {
 #' @param   day       day of month
 #' @param   hr        hour of day
 #' @param   reset_hr  the new boundary hour instead of midnight (default 5)
-#' @return            pseudo-date including year and ordinal day of the form "YYYY-D"
+#' @return            pseudo-date including year and ordinal (YYYY-DDD)
 pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
   d <- make_date(yr, mon, day)
   if (hr < reset_hr) {
@@ -82,7 +82,7 @@ pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
     adjusted_jd <- as.integer(yday(d))
   }
 
-  if (adjusted_jd == 0) {  # where Jan 1 shifts to 0, bump it to end of previous year
+  if (adjusted_jd == 0) {  # Jan 1 shifts to 0, bump it to end of previous year
     adjusted_jd <- as.integer(yday(make_date(yr - 1, 12, 31)))
     adjusted_yr <- yr - 1
   } else {
@@ -99,8 +99,14 @@ pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
 #' @param     silent        suppresses informative print statements (default False)
 #' @param     round_out     decimals to truncate output to, NA for none (default 4)
 #' @return                  daily summary of peak FWI conditions
-generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
-  silent = FALSE, round_out = 4) {
+generate_daily_summaries <- function(
+  hourly_FWI,
+  reset_hr = 5,
+  silent = FALSE,
+  round_out = 4
+) {
+  writeLines(paste0("\n########\nFWI2025: Daily Summaries (", version(), ")\n"))
+
   wasDf <- is.data.frame(hourly_FWI)
   hourly_data <- copy(hourly_FWI)
   if (wasDf) {
@@ -116,7 +122,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
     had_stn <- TRUE
   } else {
     if (uniqueN(hourly_data, by = c("yr", "lat", "long")) == 1) {
-      hourly_data[, id := "stn"]
+      hourly_data[, id := "STN"]
       had_stn <- FALSE
     } else {
       stop("Missing 'id' column with multiple years and locations in data")
@@ -131,7 +137,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
     }
     by_stn <- hourly_data[id == stn]
     by_stn[, pseudo_DATE := Vectorize(pseudo_date)(yr, mon, day, hr, reset_hr)]
-    # first year for transition btwn matted and standing (esp if southern hemisphere)
+    # first year for matted to standing transition (esp if southern hemisphere)
     DATE_GRASS_STANDING <- make_date(by_stn[1, yr], MON_STANDING, DAY_STANDING)
 
     for (p_date in unique(by_stn[, pseudo_DATE])) {
@@ -166,6 +172,23 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
       sr <- by_date[peak_time, sunrise]
       ss <- by_date[peak_time, sunset]
 
+      # calculate active burning duration
+      if (any(by_date[, isi_smooth] >= Spread_Threshold_ISI)) {
+        # find first and last hours of active burning
+        active_burning <- by_date[isi_smooth >= Spread_Threshold_ISI]
+        t_ab0 <- make_datetime(first(active_burning)[, yr],
+          first(active_burning)[, mon],
+          first(active_burning)[, day],
+          first(active_burning)[, hr])
+        t_ab1 <- make_datetime(last(active_burning)[, yr],
+          last(active_burning)[, mon],
+          last(active_burning)[, day],
+          last(active_burning)[, hr])
+        dt_ab <- as.integer(difftime(t_ab1, t_ab0, units = "hours") + 1)
+      } else {
+        dt_ab <- 0L
+      }
+
       # find the rest of the values at peak
       daily_report <- data.table(id = by_date[1, id],
         yr = by_date[1, yr],
@@ -174,7 +197,7 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
         sunrise = sprintf("%02d:%02d", trunc(sr), trunc(60 * (sr - trunc(sr)))),
         sunset = sprintf("%02d:%02d", trunc(ss), trunc(60 * (ss - trunc(ss)))),
         peak_hr = by_date[peak_time, hr],
-        duration = by_date[, sum(isi_smooth > Spread_Threshold_ISI)],
+        duration = dt_ab,
         ffmc = by_date[peak_time, ffmc],
         dmc = by_date[peak_time, dmc],
         dc = by_date[peak_time, dc],
@@ -202,18 +225,23 @@ generate_daily_summaries <- function(hourly_FWI, reset_hr = 5,
   if (!(is.na(round_out) || round_out == "NA")) {
     outcols <- c("ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
       "gfmc", "gsi", "gfwi", "ws_smooth", "isi_smooth", "gsi_smooth")
-    set(results, j = outcols, value = round(results[, ..outcols], as.integer(round_out)))
+    set(results, j = outcols,
+      value = round(results[, ..outcols], as.integer(round_out)))
   }
 
   if (wasDf) {
     setDF(results)
   }
 
+  if (!silent) {
+    writeLines("########\n")
+  }
   return(results)
 }
 
-# run generate_daily_summaries by command line via Rscript, requires input and output csv
-# optional args: reset_hr, silent, round_out
+# run generate_daily_summaries by command line via Rscript
+# required arguments: input csv, output csv
+# optional arguments: reset_hr, silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
