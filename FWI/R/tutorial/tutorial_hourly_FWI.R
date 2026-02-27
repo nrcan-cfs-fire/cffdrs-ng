@@ -53,6 +53,8 @@ args(hFWI)
 # For this tutorial, we will leave all the optional parameters to default.
 data_fwi <- hFWI(data)
 # ########
+# FWI2025 (YYYY-MM-DD)
+
 # Startup values used:
 # FFMC = 85.0 or mcffmc = NA %
 # DMC = 6.0 and DC = 15.0
@@ -96,6 +98,11 @@ summary(data_fwi[standard_components])
 ### Calculate daily summaries ###
 # Calculate outputs like peak burn time and number of hours of spread potential.
 report <- generate_daily_summaries(data_fwi)
+# ########
+# FWI2025: Daily Summaries (YYYY-MM-DD)
+
+# Summarizing PRF to daily
+# ########
 
 # Print a simple summary of the daily report.
 daily_components <- c("peak_hr", "duration", "isi_smooth", "dsr")
