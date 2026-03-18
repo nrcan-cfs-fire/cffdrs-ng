@@ -21,6 +21,7 @@ logger.setLevel(logging.WARNING)
 FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
+PMC_DEFAULT = 10.0
 
 # Precipitation intercept
 FFMC_INTERCEPT = 0.5
@@ -43,7 +44,7 @@ DAY_STANDING = 1
 
 # For input data that can't be split by year (i.e. data runs between Dec 31 - Jan 1)
 # If True, every station's data needs to be sequential (one continuous run)
-CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
+CONTINUOUS_MULTIYEAR = True  # default False, True to not split by year
 
 ### Functions ###
 
@@ -530,6 +531,60 @@ def grass_fire_weather_index(gsi, load):
     else:
         return(Fint / 25.0)
 
+def peatland_moisture_code(
+    pmc0,
+    temp,
+    prec,
+    solrad,
+    prec_cumulative_prev,
+    time_increment = 1.0
+):
+    # calculate net precipitation for peatlands
+    precPMC = prec_net(prec, prec_cumulative_prev, 1.0, 1.0, 1.0)
+
+    # calculate specific yield
+    A = 0.8674
+    B = 0.0540
+    Sy_min = 0.1
+    Sy = max(Sy_min, A * exp(-B * pmc0))
+
+    # calculate slope of the saturation vapour pressure curve
+    fPET = 0.6135 * exp(17.052 * temp / (240.97 + temp)) * (
+        17.502 / (240.97 + temp) - 17.502 * temp / (240.97 + temp) ** 2)
+
+    # calculate potential evapotranspiration
+    alpha = 1.0
+    gamma = 0.063
+    solrad_convert = 3.6 * solrad  # [kW/m**2] to [MJ/hr/m**2]
+    PET = 100 * alpha * solrad_convert * fPET / (2453.0 * (fPET + gamma))
+
+    # calculate actual evapotranspiration
+    C = 0.1
+    if pmc0 > 0:
+        AET = PET * (1 - (1 - C) / (1 + (pmc0 * exp(-3.743)) ** -3.45))
+    else:
+        AET = PET
+
+    # calculate Peatland Moisture Code
+    pmc = max(-10, pmc0 + (AET - 0.1 * precPMC) / Sy)
+
+    return pmc
+
+def peatland_spread_index(pmc, isi):
+    # calculate psi
+    psi = pmc * isi / 14
+
+    return psi
+
+def prec_net(prec, prec_cumulative_prev, intercept, subtract, rate):
+    if prec + prec_cumulative_prev > intercept:
+        if prec_cumulative_prev < intercept:
+            return (prec_cumulative_prev + prec) * rate - subtract
+        else:
+            return prec * rate
+    else:
+        return 0
+
 # Calculate number of drying "units" this hour contributes
 def drying_units():  # temp, rh, ws, rain, solrad
     # for now, just add 1 drying "unit" per hour
@@ -569,6 +624,7 @@ def _stnHFWI(
     dc_old,
     mcgfmc_matted_old,
     mcgfmc_standing_old,
+    pmc_old,
     prec_cumulative,
     canopy_drying
 ):
@@ -601,6 +657,7 @@ def _stnHFWI(
     mcgfmc_standing = mcgfmc_standing_old
     mcdmc = dmc_to_mcdmc(dmc_old)
     mcdc = dc_to_mcdc(dc_old)
+    pmc = pmc_old
     # FIX: just use loop for now so it matches C code
     canopy = {"rain_total_prev": prec_cumulative,
         "drying_since_intercept": canopy_drying}
@@ -699,6 +756,17 @@ def _stnHFWI(
         cur["gfmc"] = mcgfmc_to_gfmc(mcgfmc, cur["percent_cured"], cur["ws"])
         cur["gsi"] = grass_spread_index(cur["ws"], mcgfmc, cur["percent_cured"], standing)
         cur["gfwi"] = grass_fire_weather_index(cur["gsi"], cur["grass_fuel_load"])
+
+        pmc = peatland_moisture_code(
+            pmc,
+            cur["temp"],
+            cur["prec"],
+            cur["solrad"],
+            canopy["rain_total_prev"]
+        )
+        cur["pmc"] = pmc
+        cur["psi"] = peatland_spread_index(pmc, cur["isi"])
+
         # save wetting variables for timestep-by-timestep runs
         cur["prec_cumulative"] = canopy["rain_total_prev"]
         cur["canopy_drying"] = canopy["drying_since_intercept"]
@@ -733,6 +801,7 @@ def hFWI(
     dc_old = DC_DEFAULT,
     mcgfmc_matted_old = ffmc_to_mcffmc(FFMC_DEFAULT),
     mcgfmc_standing_old = ffmc_to_mcffmc(FFMC_DEFAULT),
+    pmc_old = PMC_DEFAULT,
     prec_cumulative = 0.0,
     canopy_drying = 0,
     silent = False,
@@ -819,6 +888,8 @@ def hFWI(
         raise ValueError("dmc_old must be >= 0")
     if not (dc_old >= 0):
         raise ValueError("dc_old must be >= 0")
+    if not (pmc_old >= -10):
+        raise ValueError("pmc_old must be >= -10")
     
     # print message with startup values used
     if not silent:
@@ -830,6 +901,7 @@ def hFWI(
         print("DMC =", dmc_old, "and DC =", dc_old)
         print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
             f"and standing = {mcgfmc_standing_old:.4f} %")
+        print("PMC =", pmc_old)
         print("cumulative precipitation =", prec_cumulative,
             "mm and canopy drying =", canopy_drying, "\n")
     
@@ -848,7 +920,7 @@ def hFWI(
         w = by_year.reset_index(drop = True)
         w = util.get_sunlight(w, get_solrad = needs_solrad)
         r = _stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
-            mcgfmc_matted_old, mcgfmc_standing_old,
+            mcgfmc_matted_old, mcgfmc_standing_old, pmc_old,
             prec_cumulative, canopy_drying)
         results = pd.concat([results, r])
     results.reset_index(drop = True, inplace = True)
@@ -868,7 +940,7 @@ def hFWI(
         outcols = ["sunrise", "sunset", "sunlight_hours",
             "mcffmc", "ffmc", "dmc", "dc", "isi", "bui", "fwi", "dsr",
             "mcgfmc_matted", "mcgfmc_standing", "gfmc", "gsi", "gfwi",
-            "prec_cumulative", "canopy_drying"]
+            "pmc", "psi", "prec_cumulative", "canopy_drying"]
         if "solrad" not in og_names:
             outcols.insert(0, "solrad")
         if "percent_cured" not in og_names:
