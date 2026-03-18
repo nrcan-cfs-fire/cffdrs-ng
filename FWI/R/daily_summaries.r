@@ -105,7 +105,9 @@ generate_daily_summaries <- function(
   silent = FALSE,
   round_out = 4
 ) {
-  writeLines(paste0("\n########\nFWI2025: Daily Summaries (", version(), ")\n"))
+  if (!silent) {
+    writeLines(paste0("\n########\nFWI2025: Daily Summaries (", version(), ")\n"))
+  }
 
   wasDf <- is.data.frame(hourly_FWI)
   hourly_data <- copy(hourly_FWI)

@@ -95,7 +95,7 @@ double duff_moisture_code(double last_mcdmc, int hour,
   if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  // prec_cumulative above threshold
     double rw, last_dmc, b;
 
-    if (prec_cumulative_prev < DMC_INTERCEPT) {  // just passed threshold
+    if (prec_cumulative_prev <= DMC_INTERCEPT) {  // just passed threshold
       rw = (prec_cumulative_prev + prec) * 0.92 - 1.27;
     } else {
       rw = prec * 0.92;

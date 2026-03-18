@@ -146,7 +146,7 @@ duff_moisture_code <- function(
 ) {
   # wetting
   if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  # intercept threshold passed
-    if (prec_cumulative_prev < DMC_INTERCEPT) {  # threshold just passed
+    if (prec_cumulative_prev <= DMC_INTERCEPT) {  # threshold just passed
       rw <- (prec_cumulative_prev + prec) * 0.92 - 1.27
     } else {  # threshold previously passed
       rw <- prec * 0.92

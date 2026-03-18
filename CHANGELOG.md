@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## 2026-03-18
+
+### Fixed
+- DMC effective rain after `prec_cumulative` is exactly equal to the DMC precipitation threshold
+
 ## 2026-02-27
 
 ### Added

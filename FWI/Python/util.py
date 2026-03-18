@@ -8,7 +8,7 @@ import pandas as pd
 
 def version():
     # update this and CHANGELOG.md before merging to main
-    return "2026-02-27"
+    return "2026-03-18"
 
 ##
 # Determine if data is sequential days
