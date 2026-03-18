@@ -154,7 +154,7 @@ def duff_moisture_code(
 ):
     # wetting
     if prec_cumulative_prev + prec > DMC_INTERCEPT:  # prec_cumulative above threshold
-        if prec_cumulative_prev < DMC_INTERCEPT:  # just passed threshold
+        if prec_cumulative_prev <= DMC_INTERCEPT:  # just passed threshold
             rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
         else:  # previously passed threshold
             rw = prec * 0.92
