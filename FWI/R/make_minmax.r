@@ -2,6 +2,7 @@
 library(data.table)
 source("util.r")
 
+
 #' Convert daily temperature at 1pm (noon standard time) to daily min/max
 #'
 #' @param    temp_noon   traditional temperature measurement [°C]
@@ -9,25 +10,34 @@ source("util.r")
 #' @return               list of two values [min temperature, max temperature]
 temp_min_max <- function(temp_noon, rh_noon) {
   temp_range <- 17 - 0.16 * rh_noon + 0.22 * temp_noon
-  temp_max <- ifelse(temp_range <= 2,
-    temp_noon + 1,
-    temp_noon + 2
-  )
-  temp_min <- ifelse(temp_range <= 2,
-    temp_noon - 1,
-    temp_max - temp_range
-  )
-  return(list(temp_min, temp_max))
+  if (temp_range <= 2) {
+    temp_max <- temp_noon + 1
+    temp_min <- temp_noon - 1
+  } else {
+    temp_max <- temp_noon + 2
+    temp_min <- temp_max - temp_range
+  }
+  return(c(temp_min, temp_max))
 }
 
 
 #' Convert daily noon weather to daily min/max weather using statistical values
 #'
-#' @param   df          daily noon values weather stream [lat, long, yr, mon, day, temp, rh, ws, prec]
+#' @param   df          daily noon LST weather stream, columns:
+#'                      yr, mon, day, temp, rh, ws, prec
+#' @param   silent      suppresses informative print statements (default False)
 #' @param   round_out   decimals to truncate output to, NA for none (default 4)
-#' @return              daily min/max values weather stream [lat, long, yr, mon, day, temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, prec]
+#' @return              daily min/max weather stream, columns:
+#'                      yr, mon, day, temp_min, temp_max, rh_min, rh_max,
+#'                      ws_min, ws_max, prec
 #' @export  daily_to_minmax
-daily_to_minmax <- function(df, round_out = 4) {
+daily_to_minmax <- function(df, silent = FALSE, round_out = 4) {
+  if (!silent) {
+    writeLines("\n########")
+    writeLines(paste0("FWI2025: Make Min/Max Inputs (", version(), ")\n"))
+    writeLines("Predicting daily min/max weather")
+  }
+
   # check df_wx class for data.frame or data.table
   wasDT <- is.data.table(df)
   if (wasDT) {
@@ -48,9 +58,10 @@ daily_to_minmax <- function(df, round_out = 4) {
     }
   }
 
-  df[, c("temp_min", "temp_max") := temp_min_max(temp, rh)]
+  temp_calc <- t(Vectorize(temp_min_max)(df[, temp], df[, rh]))
+  df[, c("temp_min", "temp_max") := list(temp_calc[, 1], temp_calc[, 2])]
   df[, q := find_q(temp, rh)]
-  # ideally maximum temperature lines up with minimum relative humidity and vice versa
+  # ideally max temperature lines up with min relative humidity and vice versa
   df[, rh_min := pmin(100, pmax(0, find_rh(q, temp_max)))]
   df[, rh_max := pmin(100, pmax(0, find_rh(q, temp_min)))]
   df[, ws_min := 0.15 * ws]
@@ -69,11 +80,17 @@ daily_to_minmax <- function(df, round_out = 4) {
   if (!wasDT) {
     setDF(df)
   }
+
+  if (!silent) {
+    writeLines("########\n")
+  }
   return(df)
 }
 
-# run daily_to_minmax by command line via Rscript, requires 2 args: input csv and output csv
-# optional arg: round_out
+
+# run daily_to_minmax by command line via Rscript
+# required arguments: input csv, output csv
+# optional arguments: silent, round_out
 if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
@@ -81,11 +98,13 @@ if ("--args" %in% commandArgs() && sys.nframe() == 0) {
   }
   input <- args[1]
   output <- args[2]
-  if (length(args) >= 3) round_out <- args[3]
+  if (length(args) >= 3) silent <- as.logical(args[3])
+  else silent <- FALSE
+  if (length(args) >= 4) round_out <- args[4]
   else round_out <- 4
-  if (length(args) >= 4) warning("Too many input arguments provided, some unused")
+  if (length(args) >= 5) warning("Too many input arguments provided, some unused")
 
   df_in <- read.csv(input)
-  df_out <- daily_to_minmax(df_in, round_out)
+  df_out <- daily_to_minmax(df_in, silent, round_out)
   write.csv(df_out, output, row.names = FALSE)
 }

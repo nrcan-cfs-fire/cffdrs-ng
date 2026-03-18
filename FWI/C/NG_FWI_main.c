@@ -11,22 +11,24 @@ int main(int argc, char *argv[])
 {
   if (argc < 4) {
     printf("\n########\nhelp/usage:\n"
-      "%s input output timezone\n"
-      "[ffmc_old] [mcffmc_old] [dmc_old] [dc_old] [mcgfmc_matted_old] [mcgfmc_standing_old]\n"
-      "[prec_cumulative] [canopy_drying]\n\n", argv[0]);
+      "%s input output timezone "
+      "[ffmc_old] [mcffmc_old] [dmc_old] [dc_old] "
+      "[mcgfmc_matted_old] [mcgfmc_standing_old] "
+      "[prec_cumulative] [canopy_drying] [silent]\n\n", argv[0]);
     // Help
-    printf("positional arguments:\n"
-      "input                 Input csv data file\n"
-      "output                Output csv file name and location\n"
-      "timezone              UTC offset (required in C version)\n"
-      "ffmc_old              Starting value for FFMC (default 85, \"n\" for mcffmc_old)\n"
-      "mcffmc_old            Starting value for mcffmc (default \"n\" for ffmc_old input)\n"
-      "dmc_old               Starting DMC (default 6)\n"
-      "dc_old                Starting DC (default 15)\n"
-      "mcgfmc_matted_old     Starting mcgfmc for matted fuels (default 16.3075)\n"
-      "mcgfmc_standing_old   Starting mcgfmc for standing fuels (default 16.3075)\n"
-      "prec_cumulative       Cumulative precipitation of rain event (default 0)\n"
-      "canopy_drying         Canopy drying, or consecutive hours of no prec (default 0)\n"
+    printf("argument descriptions:\n"
+      "input                Input csv data file\n"
+      "output               Output csv file name and location\n"
+      "timezone             UTC offset (required in C version)\n"
+      "ffmc_old             Starting value for FFMC (default 85, n for mcffmc_old)\n"
+      "mcffmc_old           Starting value for mcffmc (default n for ffmc_old input)\n"
+      "dmc_old              Starting DMC (default 6)\n"
+      "dc_old               Starting DC (default 15)\n"
+      "mcgfmc_matted_old    Starting mcgfmc for matted fuels (default 16.3075)\n"
+      "mcgfmc_standing_old  Starting mcgfmc for standing fuels (default 16.3075)\n"
+      "prec_cumulative      Cumulative precipitation of rain event (default 0)\n"
+      "canopy_drying        Canopy drying, or consecutive hours of no prec (default 0)\n"
+      "silent               Suppresses informative print statements (default false)\n"
       "########\n\n");
     exit(1);
   }
@@ -43,17 +45,7 @@ int main(int argc, char *argv[])
   
   double TZadjust, ffmc_old, mcffmc_old, dmc_old, dc_old;
   double mcgfmc_matted_old, mcgfmc_standing_old, prec_cumulative, canopy_drying;
-  bool silent = false;
-
-  // open input file
-  FILE *inp = fopen(argv[1], "r");
-  if (inp == NULL) {
-    printf("\n\n***** FILE %s does not exist\n", argv[1]);
-    exit(1);
-  }
-  if (!silent) {
-    printf("\nOpening input file >>> %s\n", argv[1]);
-  }
+  bool silent;
 
   // load required timezone argument
   TZadjust = atof(argv[3]);
@@ -108,7 +100,33 @@ int main(int argc, char *argv[])
     canopy_drying = 0.0;
   }
   if (argc > 12) {
+    if (strcmp(argv[12], "true") == 0) {
+      silent = true;
+    } else if (strcmp(argv[12], "false") == 0) {
+      silent = false;
+    } else {
+      printf("\n\n 'silent' can only be [true], [false], or blank (default false)");
+      exit(1);
+    }
+  } else {
+    silent = false;
+  }
+  if (argc > 13) {
     puts("Warning: too many arguments provided, some unused\n");
+  }
+
+  if (!silent) {
+    printf("\n########\nFWI2025 (%s)\n\n", version());
+  }
+
+  // open input file
+  FILE *inp = fopen(argv[1], "r");
+  if (inp == NULL) {
+    printf("\n\n***** FILE %s does not exist\n", argv[1]);
+    exit(1);
+  }
+  if (!silent) {
+    printf("Opening input file >>> %s\n", argv[1]);
   }
 
   // check for values outside valid range
@@ -203,18 +221,23 @@ int main(int argc, char *argv[])
     exit(1);
   }
   if (!silent) {
-    printf("Saving outputs to file >>> %s\n", argv[2]);
+    printf("Saving outputs to file >>> %s\n\n", argv[2]);
   }
   fprintf(out, "%s\n", header_out);
 
   if (!silent) {
-    printf("\n########\nStartup values used:\n");
-    printf("FFMC = %.1f or mcffmc = %.1f %%\n", ffmc_old, mcffmc_old);
+    puts("Startup values used:");
+    if (ffmc_old < 0) {
+      printf("FFMC = n and mcffmc = %.1f %%\n", mcffmc_old);
+    } else if (mcffmc_old < 0) {
+      printf("FFMC = %.1f %% and mcffmc = n \n", ffmc_old);
+    }
     printf("DMC = %.1f and DC = %.1f\n", dmc_old, dc_old);
     printf("mcgfmc matted = %.4f %% and standing = %.4f %%\n",
       mcgfmc_matted_old, mcgfmc_standing_old);
-    printf("cumulative precipitation = %.1f mm and canopy drying = %.0f\n",
+    printf("cumulative precipitation = %.1f mm and canopy drying = %.0f\n\n",
       prec_cumulative, canopy_drying);
+    puts("Running FWI2025");
   }
 
   // start calculation
@@ -354,7 +377,7 @@ int main(int argc, char *argv[])
   fclose(out);
 
   if (!silent) {
-    printf("########\n\n");
+    puts("########\n");
   }
 
   return 0;

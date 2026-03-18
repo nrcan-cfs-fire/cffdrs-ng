@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+<<<<<<< dev
+## 2026-03-18
+
+### Fixed
+- DMC effective rain after `prec_cumulative` is exactly equal to the DMC precipitation threshold
+
+## 2026-02-27
+
+### Added
+- New option when running `minmax_to_hourly()` to set which hour of the day daily precipitation is placed in
+- `minmax_to_hourly()` function can now set daily precipitation to the hour of sunrise (and is the new default)
+- Program title and date of last update (following this changelog) to default print statements
+- `silent` option to suppress print statements (*C*)
+- Tutorial files for **make_minmax** and **make_hourly** along with sample daily weather datasets (**PRF2007_daily_wx.csv** and **PRF2007_daily_wx_C-format.csv**)
+
+### Changed
+- Updated help message for `daily_to_minmax()` and `minmax_to_hourly()` functions
+- Updated `sunrise` and `sunset` outputs from **daily_summaries.c** to match Python and R version's XX:XX format (*C*)
+- Simplified and rearranged equation parameters
+- Renamed parameters
+
+| Old Name       | New Name         |
+| -------------- | ---------------- |
+| `MPCT_TO_MC`   | `C_FFMC`         |
+| `HOURLY_K_DMC` | `DMC_REGRESSION` |
+| `HOURLY_K_DC`  | `DC_REGRESSION`  |
+
+- Updated Hourly FWI tutorials to reflect new print statements and updated `timezone` explanation
+
+### Removed
+- Unused parameters: `OFFSET_SUNRISE`, `OFFSET_SUNSET`, `DAILY_K_DMC_DRYING`, `DAILY_K_DC_DRYING`, `DC_DAILY_CONST`, `DC_HOURLY_CONST`
+
+### Fixed
+- **NG_FWI.r** assignment of command line (Rscript) arguments (*R*)
+- **util.c** detection of the end of the input file for some systems (*C*)
+- **daily_summaries.c** deallocation of hourly data in a pseudo-date (*C*)
+- `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
+- `yr`, `mon`, and `day` column outputs for `minmax_to_hourly()` returns integers (*Python*)
+
+=======
+>>>>>>> peat
 ## 2025-12-10
 
 ### Added

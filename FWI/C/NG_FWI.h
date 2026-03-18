@@ -17,25 +17,14 @@ static const double FFMC_DEFAULT = 85;
 static const double DMC_DEFAULT = 6;
 static const double DC_DEFAULT = 15;
 
-// FFMC moisture content to code conversion factor
-static const double MPCT_TO_MC = 250.0 * 59.5 / 101.0;
-
-// Wetting variables
-static const double DAILY_K_DMC_DRYING = 1.894;
-static const double DAILY_K_DC_DRYING = 3.937;
-static const double DC_DAILY_CONST = 0.36;
-static const double DC_HOURLY_CONST = 0.36 / 3.397;  // DC_DAILY_CONST / DAILY_K_DC_DRYING;
-
 // Precipitation intercept
 static const double FFMC_INTERCEPT = 0.5;
 static const double DMC_INTERCEPT = 1.5;
 static const double DC_INTERCEPT = 2.8;
 
 // Drying variables
-static const double OFFSET_SUNRISE = 0.0;
-static const double OFFSET_SUNSET = 0.0;
-static const double HOURLY_K_DMC = 2.22;
-static const double HOURLY_K_DC = 0.085;
+static const double DMC_REGRESSION = 2.22e-4;
+static const double DC_REGRESSION = 1.5e-2;
 static const double DMC_OFFSET_TEMP = 0.0;
 static const double DC_OFFSET_TEMP = 0.0;
 

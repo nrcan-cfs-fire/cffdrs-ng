@@ -31,23 +31,50 @@ void temp_min_max(double temp_noon, double rh_noon, double *temp_min, double *te
 
 int main(int argc, char *argv[])
 {
-  if (argc != 3)
+  if (argc < 3)
   {
-    printf("\n########\nhelp/usage:\n%s input output\n\n", argv[0]);
+    printf("\n########\nhelp/usage:\n"
+      "%s input output [silent]\n\n", argv[0]);
     // Help
-    printf("positional arguments:\n"
-      "input                 Input csv data file\n"
-      "output                Output csv file name and location\n########\n\n");
+    printf("argument descriptions:\n"
+      "input        Input csv data file\n"
+      "output       Output csv file name and location\n"
+      "silent       Suppresses informative print statements (default false)\n"
+      "########\n\n");
     exit(1);
   }
-  
+  bool silent;
+
   /*  CSV headers */
   static const char *header = "lat,long,yr,mon,day,temp,rh,ws,prec";
   static const char *header_out = "lat,long,yr,mon,day,"
     "temp_min,temp_max,rh_min,rh_max,ws_min,ws_max,prec";
   
+  // load optional arguments if provided, or set to default
+  if (argc > 3) {
+    if (strcmp(argv[3], "true") == 0) {
+      silent = true;
+    } else if (strcmp(argv[3], "false") == 0) {
+      silent = false;
+    } else {
+      puts("\n'silent' can only be [true], [false], or blank (default false)");
+      exit(1);
+    }
+  } else {
+    silent = false;
+  }
+  if (argc > 4) {
+    puts("Warning: too many arguments provided, some unused");
+  }
+
+  if (!silent) {
+    printf("\n########\nFWI2025: Make Min/Max Inputs (%s)\n\n", version());
+  }
+
   // open input file
-  printf("Opening input file >>> %s   \n", argv[1]);
+  if (!silent) {
+    printf("Opening input file >>> %s   \n", argv[1]);
+  }
   FILE *inp = fopen(argv[1], "r");
   if (NULL == inp)
   {
@@ -63,10 +90,16 @@ int main(int argc, char *argv[])
     printf("\n\n***** FILE %s can not be opened\n", argv[2]);
     exit(1);
   }
-  printf("Saving outputs to file >>> %s\n", argv[2]);
+  if (!silent) {
+    printf("Saving outputs to file >>> %s\n\n", argv[2]);
+  }
   fprintf(out, "%s\n", header_out);
 
   // start calculation
+  if (!silent) {
+    puts("Predicting daily min/max weather");
+  }
+
   struct row_daily cur;
   int err = read_row_daily(inp, &cur);
   while (err > 0)
@@ -89,5 +122,10 @@ int main(int argc, char *argv[])
   
   fclose(inp);
   fclose(out);
+
+  if (!silent) {
+    puts("########\n");
+  }
+
   return 0;
 }

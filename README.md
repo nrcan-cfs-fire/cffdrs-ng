@@ -11,29 +11,43 @@ While we are not actively seeking code contributions at this time, see our [cont
 
 The next generation revisions to CFFDRS will be released in stages and will be collectively referred to as CFFDRS2025. The Fire Weather Index system (FWI2025) is the first module released.
 
+## February 2026 Notice
+Feedback from users is crucial, and to that effect – we have heard valuable feedback on the compatibility between FWI2025 and the current Fire Behaviour Prediction (FBP) System that needs to be addressed. FWI2025 is related to a new danger-rating system. It has not yet been linked to absolute (rather than relative) quantities of fire behaviour prediction and therefore should not be used with FBP1992 at this time. Linking of FWI2025 and fire behaviour prediction will come with (interim) iFBP2025. As for what agencies can do, they can implement FWI2025 in parallel with FWI1987 to take advantage of its new capabilities and help us with ongoing testing. Some of those new capabilities include:
+
+- Tracking moisture in fast drying fine fuels like the Fine Fuel Moisture Code
+- Provide indication of overnight burning
+- Better indicators for ignition, spread and intensity with the Grassland FWI System components (Grassland Fuel Moisture Code, Grassland Spread Index, Grassland Fire Weather Index)
+- Better indicator of peak fire danger with calculations of the FWI System components in near-real time
+
+For FBP inputs, they should continue to use FWI1987 for operational decisions, though testing FWI2025 with FBP1992 and providing feedback would be valuable. Work is ongoing to quantify the differences between FWI2025 and FWI1987 in relation to the effect on fire behaviour using the current FBP System (FBP1992). We will communicate our findings this spring via our communication channels.  But, at this time, **FWI2025 should not be used as an input to the FBP System**.
+
 ## Repository Structure
 The only branch of this repository with code intended for use is in the default *main* branch. The code is organized into CFFDRS Subsystems followed by programming language in the following structure:  
 
 cffdrs-ng/
 - data/
-    - `PRF2007_hourly_wx_C-format.csv` (hourly weather test data recorded at Petawawa Research Forest in 2007 for C)
+    - `PRF2007_daily_wx.csv` (daily weather test data reduced from PRF2007_hourly_wx.csv)
+    - `PRF2007_daily_wx_C-format.csv` (daily weather test data reduced from PRF2007_hourly_wx.csv for C)
     - `PRF2007_hourly_wx.csv` (hourly weather test data recorded at Petawawa Research Forest in 2007)
+    - `PRF2007_hourly_wx_C-format.csv` (hourly weather test data recorded at Petawawa Research Forest in 2007 for C)
     - `PRF2007_standard-daily_summaries.csv` (sample output file to compare daily summaries)
     - `PRF2007_standard_hourly_FWI` (sample output file to compare FWI2025) 
 - FWI/
     - C/
         - tutorial/
+            - `tutorial_daily_to_hourly.ps1`
             - `tutorial_hourly_FWI.ps1`
         - `daily_summaries.c` (function to generate the daily summary output)
         - `make_hourly.c` (converts daily min/max weather data to hourly data)
         - `make_minmax.c` (converts daily weather data to daily min/max data)
-        - `NG_FWI_main.c` (`main()` function for generating FWI2025 outputs)
         - `NG_FWI.c` (functions and equations for generating FWI2025 outputs)
         - `NG_FWI.h`
+        - `NG_FWI_main.c` (`main()` function for generating FWI2025 outputs)
         - `util.c` (basic, intermediate functions that are not a part of FWI2025 equations)
         - `util.h`
     - Python/
         - tutorial/
+            - `tutorial_daily_to_hourly.py`
             - `tutorial_hourly_FWI.py`
         - `daily_summaries.py` (function to generate the daily summary output)
         - `make_hourly.py` (converts daily min/max weather data to hourly data)
@@ -42,6 +56,7 @@ cffdrs-ng/
         - `util.py` (basic, intermediate functions that are not a part of FWI2025 equations)
     - R/
         - tutorial/
+            - `tutorial_daily_to_hourly.r`
             - `tutorial_hourly_FWI.r`
         - `daily_summaries.r` (function to generate the daily summary output)
         - `make_hourly.r` (converts daily min/max weather data to hourly data)
@@ -58,9 +73,11 @@ cffdrs-ng/
 ## Revisions to FWI
 FWI2025 remains a daily, landscape-level planning tool. Changes include improving daily weather tracking, reconciling different versions of codes and indices, and introducing new codes and indices.  
 
-Detailed instructions on how to run FWI2025 scripts can be found on the [Tutorials page](https://cffdrs.github.io/website_en/tutorials) of the website. The first tutorial focuses on calculating hourly FWI codes and indices.
+See the website for a [tutorial on how to run FWI2025 scripts](https://cffdrs.github.io/website_en/tutorials/#hourly-fwi).
 
 ### Hourly Fire Weather Data Estimation
 FWI2025 requires hourly weather data. Some weather stations, forecasts, and gridded datasets provide this directly. However, for sub-hourly sources, hourly values must be estimated before calculating hourly FWI by running the `NG_FWI` code. This repository provides methods for this conversion, including specific methods for daily 13:00 Local Daylight Time (LDT) observations as well as daily min/max forecasts:
 - to convert daily min/max values to hourly data run `make_hourly` [.c, .py, .r]
 - to convert daily 13:00 LDT (or noon standard time) values to daily min/max data run `make_minmax` [.c, .py, .r]. Follow this with the `make_hourly` method above to finally get hourly weather data
+
+See the website for a [tutorial on converting daily weather data to hourly](https://cffdrs.github.io/website_en/tutorials/#daily-to-hourly). Check out the [FWI2025 info report](https://ostrnrcan-dostrncan.canada.ca/handle/1845/347500) for more details. 
