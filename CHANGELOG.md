@@ -2,7 +2,6 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
-<<<<<<< dev
 ## 2026-03-18
 
 ### Fixed
@@ -41,8 +40,6 @@ All notable changes to this project will be documented in this file. The format 
 - `generate_daily_summaries()` function's `duration` calculation finds the number of hours between first and last hour of high `smooth_isi` in a pseudo-day
 - `yr`, `mon`, and `day` column outputs for `minmax_to_hourly()` returns integers (*Python*)
 
-=======
->>>>>>> peat
 ## 2025-12-10
 
 ### Added

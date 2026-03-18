@@ -559,7 +559,7 @@ def peatland_moisture_code(
     PET = 100 * alpha * solrad_convert * fPET / (2453.0 * (fPET + gamma))
 
     # calculate actual evapotranspiration
-    C = 0.1
+    C = 0.15
     if pmc0 > 0:
         AET = PET * (1 - (1 - C) / (1 + (pmc0 * exp(-3.743)) ** -3.45))
     else:
