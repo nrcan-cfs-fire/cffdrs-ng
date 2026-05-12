@@ -540,13 +540,17 @@ def peatland_moisture_code(
     time_increment = 1.0
 ):
     # calculate net precipitation for peatlands
-    precPMC = prec_net(prec, prec_cumulative_prev, 1.0, 1.0, 1.0)
+    precPMC = prec_net(prec, prec_cumulative_prev, 1.0, 0.0, 1.0)
+
+    # calculate latent heat of vaporization (or use 2453 J/g)
+    L_vap = 1000 * (2.501 - 2.37e-3 * temp)
 
     # calculate specific yield
     A = 0.8674
     B = 0.0540
     Sy_min = 0.1
-    Sy = max(Sy_min, A * exp(-B * pmc0))
+    Sy_max = 1.0
+    Sy = min(Sy_max, max(Sy_min, A * exp(-B * pmc0)))
 
     # calculate slope of the saturation vapour pressure curve
     fPET = 0.6135 * exp(17.052 * temp / (240.97 + temp)) * (
@@ -556,7 +560,7 @@ def peatland_moisture_code(
     alpha = 1.0
     gamma = 0.063
     solrad_convert = 3.6 * solrad  # [kW/m**2] to [MJ/hr/m**2]
-    PET = 100 * alpha * solrad_convert * fPET / (2453.0 * (fPET + gamma))
+    PET = 100 * alpha * solrad_convert * fPET / (L_vap * (fPET + gamma))
 
     # calculate actual evapotranspiration
     C = 0.15
@@ -576,9 +580,9 @@ def peatland_spread_index(pmc, isi):
 
     return psi
 
-def prec_net(prec, prec_cumulative_prev, intercept, subtract, rate):
-    if prec + prec_cumulative_prev > intercept:
-        if prec_cumulative_prev < intercept:
+def prec_net(prec, prec_cumulative_prev, threshold, subtract, rate):
+    if prec + prec_cumulative_prev > threshold:
+        if prec_cumulative_prev < threshold:
             return (prec_cumulative_prev + prec) * rate - subtract
         else:
             return prec * rate
