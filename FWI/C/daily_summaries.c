@@ -283,11 +283,11 @@ int read_row_daily_summaries(FILE *inp, struct day_vals *by_date,
 /**
  * Calculate Daily Summaries given hourly FWI indices from a pseudo-date
  * 
- * @param    day        day_vals structure for a pseudo-date
- * @return              daily_summary structure of peak FWI conditions
+ * @param     day           day_vals structure for a pseudo-date
+ * @param     bw_threshold  smoothed ISI threshold for active burning
+ * @return                  daily_summary structure of peak FWI conditions
  */
-struct daily_summary generate_daily_summary(struct day_vals day) {
-  const double spread_threshold_isi = 5.0;
+struct daily_summary generate_daily_summary(struct day_vals day, double bw_threshold) {
   struct daily_summary summary;
 
   int i;
@@ -320,7 +320,7 @@ struct daily_summary generate_daily_summary(struct day_vals day) {
       day.hour[i]->smooth_ws, day.hour[i]->ffmc);
 
     // find first and last hours of active burning
-    if (day.hour[i]->smooth_isi >= spread_threshold_isi) {
+    if (day.hour[i]->smooth_isi >= bw_threshold) {
       if (!ab_flag) {
         t_ab0.tm_year = day.hour[i]->year - 1900;
         t_ab0.tm_mon = day.hour[i]->month - 1;
@@ -418,11 +418,12 @@ struct daily_summary generate_daily_summary(struct day_vals day) {
 int main(int argc, char *argv[]) {
   if (argc < 3) {
     printf("\n########\nhelp/usage:\n"
-      "%s input output [reset_hr] [silent]\n\n", argv[0]);
+      "%s input output [reset_hr] [bw_threshold] [silent]\n\n", argv[0]);
     puts("argument descriptions:\n"
       "input          Input csv data file\n"
       "output         Output csv file name and location\n"
       "reset_hr       New boundary to define day to summarize (default 5)\n"
+      "bw_threshold   Smoothed ISI threshold for active burning (default 5)\n"
       "silent         Suppresses informative print statements (default false)\n"
       "########\n\n");
     exit(1);
@@ -443,6 +444,7 @@ int main(int argc, char *argv[]) {
     "ws_smooth,isi_smooth,gsi_smooth";
 
   int reset_hr;
+  double bw_threshold;
   bool silent;
 
   // load optional argument if provided, or set to default
@@ -451,11 +453,16 @@ int main(int argc, char *argv[]) {
   } else {
     reset_hr = 5;
   }
-
   if (argc > 4) {
-    if (strcmp(argv[4], "true") == 0) {
+    bw_threshold = atof(argv[4]);
+  } else {
+    bw_threshold = 5.0;
+  }
+
+  if (argc > 5) {
+    if (strcmp(argv[5], "true") == 0) {
       silent = true;
-    } else if (strcmp(argv[4], "false") == 0) {
+    } else if (strcmp(argv[5], "false") == 0) {
       silent = false;
     } else {
       puts("\n'silent' can only be [true], [false], or blank (default false)");
@@ -464,7 +471,7 @@ int main(int argc, char *argv[]) {
   } else {
     silent = false;
   }
-  if (argc > 5) {
+  if (argc > 6) {
     puts("Warning: too many arguments provided, some unused");
   }
 
@@ -519,7 +526,7 @@ int main(int argc, char *argv[]) {
     
     // run summary function if there are at least 12h in pseudo-date
     if (by_date->hour_slots_filled > 12) {
-      struct daily_summary summary = generate_daily_summary(*by_date);
+      struct daily_summary summary = generate_daily_summary(*by_date, bw_threshold);
       fprintf(out,
         "%d,%d,%d,"
         "%s,%s,"

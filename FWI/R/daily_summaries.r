@@ -96,12 +96,14 @@ pseudo_date <- function(yr, mon, day, hr, reset_hr = 5) {
 #'
 #' @param     hourly_FWI    hourly FWI dataframe (output of hFWI())
 #' @param     reset_hr      new boundary to define day to summarize (default 5)
+#' @param     bw_threshold  smoothed ISI threshold for active burning (default 5)
 #' @param     silent        suppresses informative print statements (default False)
 #' @param     round_out     decimals to truncate output to, NA for none (default 4)
 #' @return                  daily summary of peak FWI conditions
 generate_daily_summaries <- function(
   hourly_FWI,
   reset_hr = 5,
+  bw_threshold = 5,
   silent = FALSE,
   round_out = 4
 ) {
@@ -116,8 +118,6 @@ generate_daily_summaries <- function(
   } else if (!is.data.table(hourly_data)) {
     stop("Input hourly FWI needs to be a data.frame or data.table!")
   }
-
-  Spread_Threshold_ISI <- 5.0
 
   # check for "id" column
   if ("id" %in% names(hourly_data)) {
@@ -175,9 +175,9 @@ generate_daily_summaries <- function(
       ss <- by_date[peak_time, sunset]
 
       # calculate active burning duration
-      if (any(by_date[, isi_smooth] >= Spread_Threshold_ISI)) {
+      if (any(by_date[, isi_smooth] >= bw_threshold)) {
         # find first and last hours of active burning
-        active_burning <- by_date[isi_smooth >= Spread_Threshold_ISI]
+        active_burning <- by_date[isi_smooth >= bw_threshold]
         t_ab0 <- make_datetime(first(active_burning)[, yr],
           first(active_burning)[, mon],
           first(active_burning)[, day],

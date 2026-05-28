@@ -80,12 +80,14 @@ def pseudo_date(yr, mon, day, hr, reset_hr = 5):
 # Calculate Daily Summaries from hourly FWI indices
 # @param    hourly_FWI      hourly FWI dataframe (output of hFWI())
 # @param    reset_hr        new boundary to define day to summarize (default 5)
+# @param    bw_threshold    smoothed ISI threshold for active burning (default 5)
 # @param    silent          suppresses informative print statements (default False)
 # @param    round_out       decimals to truncate output to, None for none (default 4)
 # @return                   daily summary of peak FWI conditions
 def generate_daily_summaries(
   hourly_FWI,
   reset_hr = 5,
+  bw_threshold = 5,
   silent = False,
   round_out = 4
 ):
@@ -93,7 +95,6 @@ def generate_daily_summaries(
     print("\n########\nFWI2025: Daily Summaries (" + util.version() + ")\n")
 
   hourly_data = hourly_FWI.copy()
-  Spread_Threshold_ISI = 5.0
 
   # check for "id" column
   if "id" in hourly_data.columns:
@@ -157,9 +158,9 @@ def generate_daily_summaries(
       # append hour of peak burn and active burning duration
       results["peak_hr"].append(by_date.at[peak_time, "hr"])
       # calculate duration of active burning window
-      if any(by_date["isi_smooth"] >= Spread_Threshold_ISI):
+      if any(by_date["isi_smooth"] >= bw_threshold):
         # find first and last hours of active burning
-        active_burning = by_date[by_date["isi_smooth"] >= Spread_Threshold_ISI]
+        active_burning = by_date[by_date["isi_smooth"] >= bw_threshold]
         t_ab0 = datetime.datetime(active_burning.iloc[0].yr,
           active_burning.iloc[0].mon,
           active_burning.iloc[0].day,
