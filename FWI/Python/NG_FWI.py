@@ -22,10 +22,10 @@ FFMC_DEFAULT = 85.0
 DMC_DEFAULT = 6.0
 DC_DEFAULT = 15.0
 
-# Precipitation intercept
-FFMC_INTERCEPT = 0.5
-DMC_INTERCEPT = 1.5
-DC_INTERCEPT = 2.8
+# Canopy intercept
+PREC_MIN_FFMC = 0.5
+PREC_MIN_DMC = 1.5
+PREC_MIN_DC = 2.8
 
 # Drying variables
 DMC_REGRESSION = 2.22e-4
@@ -92,41 +92,58 @@ def mcdc_to_dc(mcdc):
    return 400 * log(400 / mcdc)
 
 ##
-# Calculate hourly fine fuel moisture content. Needs to be converted to get FFMC
+# Calculate hourly fine fuel moisture content (%)
 #
-# @param lastmc          Previous fine fuel moisture content (%)
-# @param temp            Temperature (Celcius)
-# @param rh              Relative Humidity (percent, 0-100)
-# @param ws              Wind Speed (km/h)
-# @param rain            Rainfall AFTER intercept (mm)
-# @param time_increment  Duration of timestep (hr, default 1.0)
+# @param mc_0            Previous fine fuel moisture content (%)
+# @param temp            Hourly temperature (°C)
+# @param rh              Hourly relative humidity (%)
+# @param ws              Hourly wind speed (km/h)
+# @param prec            Hourly precipitation (mm)
+# @param prec_sum        Cumulative precipitation since start of rain (mm)
+# @param delta_t         Duration of timestep (hr, default 1.0)
 # @return                Hourly fine fuel moisture content (%)
-def hourly_fine_fuel_moisture(lastmc, temp, rh, ws, rain, time_increment = 1.0):
-    rf = 42.5
-    drf = 0.0579
-    # use moisture directly instead of converting to/from ffmc
-    # expects any rain intercept to already be applied
-    mo = lastmc
-    if rain != 0.0:
-        # duplicated in both formulas, so calculate once
-        # lastmc == mo, but use lastmc since mo changes after first equation
-        mo += rf * rain * exp(-100.0 / (251 - lastmc)) * (1.0 - exp(-6.93 / rain))
-        if lastmc > 150:
-            mo += 0.0015 * pow(lastmc - 150, 2) * sqrt(rain)
-        if mo > 250.0: 
-            mo = 250.0
-    # duplicated in both formulas, so calculate once
-    e1 = 0.18 * (21.1 - temp) * (1.0 - (exp(-0.115 * rh)))
-    ed = 0.942 * pow(rh, 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1
-    ew = 0.618 * pow(rh, 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
-    m = ew if (mo < ed) else ed
-    if mo != ed:
-        # these are the same formulas with a different value for a1
-        a1 = (rh / 100.0) if (mo > ed) else ((100.0 - rh) / 100.0)
-        k0_or_k1 = 0.424 * (1 - pow(a1, 1.7)) + (0.0694 * sqrt(ws) * (1 - pow(a1, 8)))
-        kd_or_kw = 2.0 * drf * k0_or_k1 * exp(0.0365 * temp)
-        m += (mo - m) * pow(10, (-kd_or_kw * time_increment))
-    return m
+def fine_fuel_moisture_code(
+    mc_0,
+    temp,
+    rh,
+    ws,
+    prec,
+    prec_sum,
+    delta_t = 1.0
+):
+    ### calculate effective precipitation ###
+    if prec_sum + prec <= PREC_MIN_FFMC:  # not enough rain
+        prec_ffmc = 0.0
+    elif prec_sum > PREC_MIN_FFMC:  # already saturated canopy previously
+        prec_ffmc = prec
+    else:  # canopy just saturated this timestep, apply intercept
+        prec_ffmc = prec_sum + prec - PREC_MIN_FFMC
+    ### calculate moisture content after rain ###
+    if prec_ffmc > 0:
+        mc_r = mc_0 + (
+            42.5 * prec_ffmc * exp(-100/(251-mc_0)) * (1-exp(-6.93/prec_ffmc))
+        )
+        if mc_0 > 150:
+            mc_r += 1.5e-3 * (mc_0-150)**2 * sqrt(prec_ffmc)
+        if mc_r > 250:  # cap fine fuel moisture content at 250%
+            mc_r = 250.0
+    else:
+        mc_r = mc_0
+    ### calculate drying phase (drying or wetting) ###
+    e_1 = 0.18 * (21.1-temp) * (1-exp(-0.115*rh))
+    e_w = 0.618*pow(rh, 0.753) + 10*exp((rh-100)/10) + e_1
+    e_d = 0.942*pow(rh, 0.679) + 11*exp((rh-100)/10) + e_1
+    if mc_r < e_d:  # mc below equilibrium, wet by adsorption
+        eta = (100-rh) / 100
+        k_0 = 0.424*(1-pow(eta, 1.7)) + 0.0694*sqrt(ws)*(1-pow(eta, 8))
+        k = 0.1158 * exp(0.0365*temp) * k_0
+        mc = e_w + (mc_r-e_w)*pow(10, -k*delta_t)
+    else:  # mc above equilibrium, dry by evaporation
+        eta = rh / 100
+        k_0 = 0.424*(1-pow(eta, 1.7)) + 0.0694*sqrt(ws)*(1-pow(eta, 8))
+        k = 0.1158 * exp(0.0365*temp) * k_0
+        mc = e_d + (mc_r-e_d)*pow(10, -k*delta_t)
+    return mc
 
 ##
 # Calculate duff moisture content
@@ -153,8 +170,8 @@ def duff_moisture_code(
     time_increment = 1.0  # duration of timestep, in hours
 ):
     # wetting
-    if prec_cumulative_prev + prec > DMC_INTERCEPT:  # prec_cumulative above threshold
-        if prec_cumulative_prev <= DMC_INTERCEPT:  # just passed threshold
+    if prec_cumulative_prev + prec > PREC_MIN_DMC:  # prec_cumulative above threshold
+        if prec_cumulative_prev <= PREC_MIN_DMC:  # just passed threshold
             rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
         else:  # previously passed threshold
             rw = prec * 0.92
@@ -214,8 +231,8 @@ def drought_code(
     time_increment = 1.0
 ):
     # wetting
-    if prec_cumulative_prev + prec > DC_INTERCEPT:  # prec_cumulative above threshold
-        if prec_cumulative_prev <= DC_INTERCEPT:  # just passed threshold
+    if prec_cumulative_prev + prec > PREC_MIN_DC:  # prec_cumulative above threshold
+        if prec_cumulative_prev <= PREC_MIN_DC:  # just passed threshold
             rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
         else:  # previously passed threshold
             rw = prec * 0.83
@@ -253,7 +270,7 @@ def drought_code(
 def initial_spread_index(ws, ffmc):
     fm = ffmc_to_mcffmc(ffmc)
     fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= ws) else exp(0.05039 * ws)
-    ff = 91.9 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e07)
+    ff = 91.9 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e7)
     isi = 0.208 * fw * ff
     return isi
 
@@ -612,21 +629,17 @@ def _stnHFWI(
             MON_STANDING, DAY_STANDING)
     results = []
     for i in range(len(r)):
+        # update weather variables
         cur = r.iloc[i].to_dict()
         canopy = rain_since_intercept_reset(cur["prec"], canopy)
-        # determine rain for ffmc and whether or not intercept should happen now
-        if canopy["rain_total_prev"] + cur["prec"] <= FFMC_INTERCEPT:  # not enough rain
-            rain_ffmc = 0.0
-        elif canopy["rain_total_prev"] > FFMC_INTERCEPT:  # already saturated canopy
-            rain_ffmc = cur["prec"]
-        else:
-            rain_ffmc = canopy["rain_total_prev"] + cur["prec"] - FFMC_INTERCEPT
-        mcffmc = hourly_fine_fuel_moisture(
+        # calculate new FWI components
+        mcffmc = fine_fuel_moisture_code(
             mcffmc,
             cur["temp"],
             cur["rh"],
             cur["ws"],
-            rain_ffmc
+            cur["prec"],
+            canopy["rain_total_prev"]
         )
         cur["mcffmc"] = mcffmc
         # convert to code for output, but keep using moisture % for precision

@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## To be released
+
+### Changed
+- Renamed the FFMC calculation function and canopy intercept variables
+
+| Old Name                      | New Name                    |
+| ----------------------------- | --------------------------- |
+| `hourly_fine_fuel_moisture()` | `fine_fuel_moisture_code()` |
+| `FFMC_INTERCEPT`              | `PREC_MIN_FFMC`             |
+| `DMC_INTERCEPT`               | `PREC_MIN_DMC`              |
+| `DC_INTERCEPT`                | `PREC_MIN_DC`               |
+
+- Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
+- Reformatted the FFMC calculation function
+
 ## 2026-03-18
 
 ### Fixed

@@ -158,7 +158,7 @@ def get_sunlight(df, get_solrad = False):
     else:
         cols_sun = ["sunrise", "sunset"]
 
-    # don't output intermediate calculations/variables
+    # prepare output, remove intermediate calculations/variables
     cols = list(df.columns) + cols_sun
     df_result = df_all.loc[:, cols]
     df_result["sunlight_hours"] = df_result.apply(

@@ -17,10 +17,10 @@ static const double FFMC_DEFAULT = 85;
 static const double DMC_DEFAULT = 6;
 static const double DC_DEFAULT = 15;
 
-// Precipitation intercept
-static const double FFMC_INTERCEPT = 0.5;
-static const double DMC_INTERCEPT = 1.5;
-static const double DC_INTERCEPT = 2.8;
+// Canopy intercept
+static const double PREC_MIN_FFMC = 0.5;
+static const double PREC_MIN_DMC = 1.5;
+static const double PREC_MIN_DC = 2.8;
 
 // Drying variables
 static const double DMC_REGRESSION = 2.22e-4;
@@ -88,18 +88,19 @@ double dc_to_mcdc(double dc);
 double mcdc_to_dc(double mcdc);
 
 /**
- * Calculate hourly Fine Fuel Moisture (percent) value
+ * Calculate hourly fine fuel moisture content (%)
  *
- * @param lastmc          Previous Fine Fuel Moisture (percent)
- * @param temp            Temperature (Celcius)
- * @param rh              Relative Humidity (percent, 0-100)
- * @param ws              Wind Speed (km/h)
- * @param rain            Rainfall AFTER intercept (mm)
- * @param time_increment  Duration of timestep (hr, mainly 1.0)
+ * @param mc_0            Previous fine fuel moisture content (%)
+ * @param temp            Hourly temperature (°C)
+ * @param rh              Hourly relative humidity (%)
+ * @param ws              Hourly wind speed (km/h)
+ * @param prec            Hourly precipitation (mm)
+ * @param prec_sum        Cumulative precipitation since start of rain (mm)
+ * @param delta_t         Duration of timestep (hr, default 1.0)
  * @return                Hourly fine fuel moisture content (%)
  */
-double hourly_fine_fuel_moisture(double lastmc, double temp, double rh, double ws,
-  double rain, double time_increment);
+double fine_fuel_moisture_code(double mc_0, double temp, double rh, double ws,
+  double prec, double prec_sum, double delta_t);
 
 /**
  * @brief Calculate duff moisture content

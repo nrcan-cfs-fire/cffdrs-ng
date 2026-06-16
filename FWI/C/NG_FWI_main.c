@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
 
   while (err > 0)  // while there is a next row of data in input file
   {
-    /* Only need to calculate sunrise/sunset once per day */
+    // update sr, ss, and canopy (other weather variables updated at bottom)
     if (cur.day != old.day || cur.mon != old.mon)
     {
       double suntime[2];
@@ -254,7 +254,6 @@ int main(int argc, char *argv[])
       cur.sunrise = suntime[0];
       cur.sunset = suntime[1];
     }
-
     rain_since_intercept_reset(
         cur.temp,
         cur.rh,
@@ -266,16 +265,14 @@ int main(int argc, char *argv[])
         cur.sunrise,
         cur.sunset,
         &canopy);
-    /* use lesser of remaining intercept and current hour's rain */
-    rain_ffmc = canopy.rain_total <= FFMC_INTERCEPT ? 0.0 :
-      ((canopy.rain_total - FFMC_INTERCEPT) > cur.rain ? cur.rain :
-      canopy.rain_total - FFMC_INTERCEPT);
-    mcffmc = hourly_fine_fuel_moisture(
+    // calculate new FWI components
+    mcffmc = fine_fuel_moisture_code(
       mcffmc,
       cur.temp,
       cur.rh,
       cur.ws,
-      rain_ffmc,
+      cur.rain,
+      canopy.rain_total_prev,
       1.0);
     ffmc = mcffmc_to_ffmc(mcffmc);
     mcdmc = duff_moisture_code(
@@ -353,6 +350,7 @@ int main(int argc, char *argv[])
       mcgfmc_matted, mcgfmc_standing, gfmc, gsi, gfwi,
       canopy.rain_total, canopy.drying_since_intercept);
     
+    // update weather variables
     old = cur;
     err = read_row_inputs(inp, &cur, &flag_holder,
       DEFAULT_GRASS_FUEL_LOAD, MON_CURING, DAY_CURING);
