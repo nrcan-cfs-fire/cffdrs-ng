@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## To be released
 
+### Added
+- New parameter to daily summaries function that lets users change the default active burning window threshold of ISI equal to 5
+
 ### Changed
 - Renamed the FFMC calculation function and canopy intercept variables
 
@@ -16,6 +19,9 @@ All notable changes to this project will be documented in this file. The format 
 
 - Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
 - Reformatted the FFMC calculation function
+
+### Fixed
+- FFMC drying phase accounts for the case when the moisture content after rain is in between the wetting and drying equilibriums
 
 ## 2026-03-18
 

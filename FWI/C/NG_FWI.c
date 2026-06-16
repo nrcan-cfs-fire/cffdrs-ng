@@ -73,13 +73,16 @@ double fine_fuel_moisture_code(
   e_1 = 0.18 * (21.1-temp) * (1.0-exp(-0.115*rh));
   e_w = 0.618*pow(rh, 0.753) + (10.0*exp((rh-100.0)/10.0)) + e_1;
   e_d = 0.942*pow(rh, 0.679) + (11.0*exp((rh-100.0)/10.0)) + e_1;
-  if (mc_r < e_d) {
+  if (mc_r < e_w) {  // mc below equilibrium, wet by adsorption
     eta = (100.0-rh) / 100.0;
     k0 = 0.424*(1.0-pow(eta, 1.7)) + 0.0694*sqrt(ws)*(1.0-pow(eta, 8.0));
     k = 0.1158 * exp(0.0365*temp) * k0;
     mc = e_w + (mc_r-e_w)*pow(10.0, -k*delta_t);
   }
-  else {
+  else if (mc_r <= e_d) {  // mc at equilibrium, no change after precipitation
+    mc = mc_r;
+  }
+  else {  // mc above equilibrium, dry by evaporation
     eta = rh / 100.0;
     k0 = 0.424*(1.0-pow(eta, 1.7)) + 0.0694*sqrt(ws)*(1.0-pow(eta, 8.0));
     k = 0.1158 * exp(0.0365*temp) * k0;
