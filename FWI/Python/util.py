@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def version():
-    # update this and CHANGELOG.md before merging to main
+    # update this and CHANGELOG.md before merging to GitHub main branch
     return "2026-03-18 + Dev"
 
 ##
@@ -39,40 +39,6 @@ def is_sequential_hours(data):
         datetime.timedelta(hours = 1)
         == (test["timestamp"] - test["timestamp"].shift(1)).iloc[1:]
     )
-
-##
-# Find specific humidity
-#
-# @param temp        Temperature (Celcius)
-# @param rh          Relative humidity (percent, 0-100)
-# @return            Specific humidity (g/kg)
-def find_q(temp, rh):
-    # find absolute humidity
-    svp = 6.108 * exp(17.27 * temp / (temp + 237.3))
-    vp = svp * rh / 100.0
-    q = 217 * vp / (273.17 + temp)
-    return q
-
-##
-# Find relative humidity
-#
-#  @param q           Specific humidity (g/kg)
-#  @param temp        Temperature (Celcius)
-#  @return            Relative humidity (percent, 0-100)
-def find_rh(q, temp):
-    cur_vp = (273.17 + temp) * q / 217
-    rh = 100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3)))
-    return rh
-
-# ##
-# # Find day of year. Does not properly deal with leap years.
-# #
-# # @param mon         Month
-# # @param day         Day of month
-# # @return            Day of year
-# def julian(mon, day):
-#     month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
-#     return month[int(mon) - 1] + int(day)
 
 ##
 # Calculate sunrise, sunset, (solar radiation) for one station (location) for one year

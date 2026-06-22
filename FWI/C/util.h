@@ -79,24 +79,6 @@ double _max(double x, double y);
 double _min(double x, double y);
 
 /**
- * Find specific humidity
- *
- * @param temp        Temperature (Celcius)
- * @param rh          Relative humidity (percent, 0-100)
- * @return            Specific humidity (g/kg)
- */
-double findQ(double temp, double rh);
-
-/**
- * Find relative humidity
- *
- * @param q           Specific humidity (g/kg)
- * @param temp        Temperature (Celcius)
- * @return            Relative humidity (percent, 0-100)
- */
-double findrh(double q, double temp);
-
-/**
 * Set default percent_cured values
 * This is a simple piecewise tabular summary (10day) of DKT's NDVI based
 * cure state analysis (smoothed) of annual variation in Central Boreal Plains region
