@@ -46,7 +46,6 @@ DAY_STANDING = 1
 CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
 
 ### Functions ###
-
 ##
 # Convert to fine fuel moisture content (%)
 # @param ffmc       Fine Fuel Moisture Code (FFMC)
@@ -120,12 +119,12 @@ def fine_fuel_moisture_code(
         prec_ffmc = prec_sum + prec - PREC_MIN_FFMC
     ### calculate moisture content after rain ###
     if prec_ffmc > 0:
-        mc_r = mc_0 + (
-            42.5 * prec_ffmc * exp(-100/(251-mc_0)) * (1-exp(-6.93/prec_ffmc))
-        )
+        var0 = prec_ffmc * exp(-100/(251-mc_0)) * (1-exp(-6.93/prec_ffmc))
+        mc_r = mc_0 + 42.5*var0
         if mc_0 > 150:
             mc_r += 1.5e-3 * (mc_0-150)**2 * sqrt(prec_ffmc)
-        if mc_r > 250:  # cap fine fuel moisture content at 250%
+        # Cap fine fuel moisture content at 250%.
+        if mc_r > 250:
             mc_r = 250.0
     else:
         mc_r = mc_0

@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 - New parameter to daily summaries function that lets users change the default active burning window threshold of ISI equal to 5
+- Header file for **make_minmax.c**
 
 ### Changed
+- Reformatted the FFMC calculation function and **make_minmax**
 - Renamed the FFMC calculation function and canopy intercept variables
 
 | Old Name                      | New Name                    |
@@ -18,7 +20,14 @@ All notable changes to this project will be documented in this file. The format 
 | `DC_INTERCEPT`                | `PREC_MIN_DC`               |
 
 - Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
-- Reformatted the FFMC calculation function
+- Function name changes in **make_minmax.c**:
+
+| Old Function Name     | New Function Name       | Programming Language            |
+| --------------------- | ----------------------- | ------------------------------- |
+| `findQ()`             | `find_q()`              | *C* (to match *Python* and *R*) |
+| `findrh()`            | `find_rh()`             | *C* (to match *Python* and *R*) |
+
+- Moved `find_q()` and `find_rh()` functions from **util** to **make_minmax**
 
 ### Fixed
 - FFMC drying phase accounts for the case when the moisture content after rain is in between the wetting and drying equilibriums

@@ -43,7 +43,7 @@ double fine_fuel_moisture_code(
   double prec_sum,
   double delta_t
 ) {
-  double prec_ffmc, mc_r, e_1, e_w, e_d, eta, k0, k, mc;
+  double prec_ffmc, var0, mc_r, e_1, e_w, e_d, eta, k0, k, mc;
   /*** calculate effective precipitation ***/
   if (prec_sum + prec <= PREC_MIN_FFMC) {  // not enough rain
     prec_ffmc = 0.0;
@@ -56,13 +56,13 @@ double fine_fuel_moisture_code(
   }
   /*** calculate moisture content after rain ***/
   if (prec_ffmc > 0.0) {
-    mc_r = mc_0 + (
-      42.5 * prec_ffmc * exp(-100.0/(251.0-mc_0)) * (1.0-exp(-6.93/prec_ffmc))
-    );
+    var0 = prec_ffmc * exp(-100.0/(251.0-mc_0)) * (1.0-exp(-6.93/prec_ffmc));
+    mc_r = mc_0 + 42.5*var0;
     if (mc_0 > 150.0) {
       mc_r += 1.5e-3 * pow(mc_0-150.0, 2.0) * sqrt(prec_ffmc);
     }
-    if (mc_r > 250.0) {  // cap fine fuel moisture content at 250%
+    // Cap fine fuel moisture content at 250%.
+    if (mc_r > 250.0) {
       mc_r = 250.0;
     }
   }
