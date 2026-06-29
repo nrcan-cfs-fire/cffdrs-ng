@@ -41,6 +41,29 @@ static const int MON_STANDING = 7;
 static const int DAY_STANDING = 1;
 
 ////// Function Declarations and Help
+
+/**
+ * @brief Calculate effective precipitation after applying any canopy intercept
+ * @param prec        Hourly precipitation (mm)
+ * @param prec_sum    Cumulative precipitation since start of rain (mm)
+ * @param threshold   Canopy intercept threshold (mm)
+ * @param subtract    Canopy intercept reduction (mm)
+ * @param rate        Canopy intercept precipitation scaling
+ * @return            Moisture code specific effective precipitation (mm)
+ */
+double prec_effective(double prec, double prec_sum, double threshold,
+                      double subtract, double rate);
+
+/*
+ * Calculate number of drying "units" this hour contributes
+ */
+double drying_units(double temp, double rh, double wind, double rain, double solrad);
+
+/* HACK: use struct so it's closer to how R can return multiple values */
+void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
+  int mon, int hour, double solrad, double sunrise, double sunset,
+  struct rain_intercept *canopy);
+
 /**
  * @brief Convert to fine fuel moisture content (%)
  *
@@ -117,8 +140,8 @@ double fine_fuel_moisture_code(double mc_0, double temp, double rh, double ws,
  * @return                        Hourly duff moisture content (%)
  */
 double duff_moisture_code(double last_mcdmc, int hour, double temp, double rh,
-  double prec, double sunrise, double sunset,
-  double prec_cumulative_prev, double time_increment);
+                          double prec, double sunrise, double sunset,
+                          double prec_sum, double time_increment);
 
 /**
  * @brief Calculate drought code moisture content
@@ -133,8 +156,8 @@ double duff_moisture_code(double last_mcdmc, int hour, double temp, double rh,
  * @return                        Hourly drought code moisture content (%)
  */
 double drought_code(double last_mcdc, int hour, double temp, double prec,
-  double sunrise, double sunset,
-  double prec_cumulative_prev, double time_increment);
+                    double sunrise, double sunset, double prec_sum,
+                    double time_increment);
 
 /**
  * Calculate Initial Spread Index (ISI)
@@ -207,13 +230,3 @@ double grass_spread_index(double ws, double mc, double cur, bool standing);
  * @return                  Grass Fire Weather Index
  */
 double grass_fire_weather_index(double gsi, double load);
-
-/*
- * Calculate number of drying "units" this hour contributes
- */
-double drying_units(double temp, double rh, double wind, double rain, double solrad);
-
-/* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
-  int mon, int hour, double solrad, double sunrise, double sunset,
-  struct rain_intercept *canopy);

@@ -46,6 +46,45 @@ DAY_STANDING = 1
 CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
 
 ### Functions ###
+
+##
+# Calculate effective precipitation after applying any canopy intercept
+#
+# @param prec       Hourly precipitation (mm)
+# @param prec_sum   Cumulative precipitation since start of rain (mm)
+# @param threshold  Canopy intercept threshold (mm)
+# @param subtract   Canopy intercept reduction (mm)
+# @param rate       Canopy intercept precipitation scaling
+# @return           Moisture code specific effective precipitation (mm)
+def prec_effective(prec, prec_sum, threshold, subtract, rate):
+    if prec + prec_sum <= threshold:
+        # Not enough rain to saturate canopy.
+        return 0
+    elif prec_sum > threshold:
+        # Already saturated canopy previously.
+        return prec * rate
+    else:
+        # Canopy just saturated this timestep, apply intercept.
+        return (prec_sum+prec)*rate - subtract
+
+# Calculate number of drying "units" this hour contributes
+def drying_units():  # temp, rh, ws, rain, solrad
+    # for now, just add 1 drying "unit" per hour
+    return 1.0
+
+def rain_since_intercept_reset(rain, canopy):
+    # for now, want 5 "units" of drying (which is 1 per hour to start)
+    TARGET_DRYING_SINCE_INTERCEPT = 5.0
+    if rain > 0 or canopy["rain_total_prev"] == 0:  # if raining, reset drying
+        canopy["drying_since_intercept"] = 0.0
+    else:
+        canopy["drying_since_intercept"] += drying_units()
+        if canopy["drying_since_intercept"] >= TARGET_DRYING_SINCE_INTERCEPT:
+            # reset rain if intercept reset criteria met
+            canopy["rain_total_prev"] = 0.0
+            canopy["drying_since_intercept"] = 0.0
+    return canopy
+
 ##
 # Convert to fine fuel moisture content (%)
 # @param ffmc       Fine Fuel Moisture Code (FFMC)
@@ -111,12 +150,7 @@ def fine_fuel_moisture_code(
     delta_t = 1.0
 ):
     ### calculate effective precipitation ###
-    if prec_sum + prec <= PREC_MIN_FFMC:  # not enough rain
-        prec_ffmc = 0.0
-    elif prec_sum > PREC_MIN_FFMC:  # already saturated canopy previously
-        prec_ffmc = prec
-    else:  # canopy just saturated this timestep, apply intercept
-        prec_ffmc = prec_sum + prec - PREC_MIN_FFMC
+    prec_ffmc = prec_effective(prec, prec_sum, PREC_MIN_FFMC, PREC_MIN_FFMC, 1)
     ### calculate moisture content after rain ###
     if prec_ffmc > 0:
         var0 = prec_ffmc * exp(-100/(251-mc_0)) * (1-exp(-6.93/prec_ffmc))
@@ -167,27 +201,21 @@ def duff_moisture_code(
     prec,
     sunrise,
     sunset,
-    prec_cumulative_prev,
+    prec_sum,
     time_increment = 1.0  # duration of timestep, in hours
 ):
     # wetting
-    if prec_cumulative_prev + prec > PREC_MIN_DMC:  # prec_cumulative above threshold
-        if prec_cumulative_prev <= PREC_MIN_DMC:  # just passed threshold
-            rw = (prec_cumulative_prev + prec) * 0.92 - 1.27
-        else:  # previously passed threshold
-            rw = prec * 0.92
-        
-        last_dmc = mcdmc_to_dmc(last_mcdmc)
-        if last_dmc <= 33:
-            b = 100.0 / (0.3 * last_dmc + 0.5)
-        elif last_dmc <= 65:
-            b = -1.3 * log(last_dmc) + 14.0
-        else:
-            b = 6.2 * log(last_dmc) - 17.2
-        
-        mr = last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
-    else:  # prec_cumulative below threshold
-        mr = last_mcdmc
+    rw = prec_effective(prec, prec_sum, PREC_MIN_DMC, 1.27, 0.92)
+
+    last_dmc = mcdmc_to_dmc(last_mcdmc)
+    if last_dmc <= 33:
+        b = 100.0 / (0.3 * last_dmc + 0.5)
+    elif last_dmc <= 65:
+        b = -1.3 * log(last_dmc) + 14.0
+    else:
+        b = 6.2 * log(last_dmc) - 17.2
+    
+    mr = last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
     
     if mr > 300.0:
         mr = 300.0
@@ -228,18 +256,13 @@ def drought_code(
     prec,
     sunrise,
     sunset,
-    prec_cumulative_prev,
+    prec_sum,
     time_increment = 1.0
 ):
     # wetting
-    if prec_cumulative_prev + prec > PREC_MIN_DC:  # prec_cumulative above threshold
-        if prec_cumulative_prev <= PREC_MIN_DC:  # just passed threshold
-            rw = (prec_cumulative_prev + prec) * 0.83 - 1.27
-        else:  # previously passed threshold
-            rw = prec * 0.83
-        mr = last_mcdc + 3.937 * rw / 2.0
-    else:
-        mr = last_mcdc
+    rw = prec_effective(prec, prec_sum, PREC_MIN_DC, 1.27, 0.83)
+
+    mr = last_mcdc + 3.937 * rw / 2.0
     
     if mr > 400.0:
         mr = 400.0
@@ -547,24 +570,6 @@ def grass_fire_weather_index(gsi, load):
         return(log(Fint / 60.0) / 0.14)
     else:
         return(Fint / 25.0)
-
-# Calculate number of drying "units" this hour contributes
-def drying_units():  # temp, rh, ws, rain, solrad
-    # for now, just add 1 drying "unit" per hour
-    return 1.0
-
-def rain_since_intercept_reset(rain, canopy):
-    # for now, want 5 "units" of drying (which is 1 per hour to start)
-    TARGET_DRYING_SINCE_INTERCEPT = 5.0
-    if rain > 0 or canopy["rain_total_prev"] == 0:  # if raining, reset drying
-        canopy["drying_since_intercept"] = 0.0
-    else:
-        canopy["drying_since_intercept"] += drying_units()
-        if canopy["drying_since_intercept"] >= TARGET_DRYING_SINCE_INTERCEPT:
-            # reset rain if intercept reset criteria met
-            canopy["rain_total_prev"] = 0.0
-            canopy["drying_since_intercept"] = 0.0
-    return canopy
 
 ##
 # Calculate hourly FWI indices from hourly weather stream for a single station

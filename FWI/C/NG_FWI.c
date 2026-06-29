@@ -8,6 +8,58 @@
 
 // see NG_FWI.h for variable definitions and function help
 
+double prec_effective(double prec, double prec_sum, double threshold,
+                      double subtract, double rate)
+{
+  // In C, check against threshold *+ 0.01* due to this rough rounding method.
+  // if ((round(10.0*(prec+prec_sum)) / 10.0) <= threshold + 0.01) {
+  if (prec + prec_sum <= threshold) {
+    // Not enough rain to saturate canopy.
+    return 0.0;
+  }
+  // else if ((round(10.0*prec_sum) / 10.0) > threshold + 0.01) {
+  else if (prec_sum > threshold) {
+    // Already saturated canopy previously.
+    return (prec * rate);
+  }
+  else {
+    // Canopy just saturated this timestep, apply intercept.
+    return ((prec_sum+prec)*rate - subtract);
+  }
+}
+
+double drying_units(double temp, double rh, double wind, double rain, double solrad)
+{
+  /* for now, just add 1 drying "unit" per hour */
+  return 1.0;
+}
+
+/* HACK: use struct so it's closer to how R can return multiple values */
+void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
+  int mon, int hour, double solrad, double sunrise, double sunset,
+  struct rain_intercept *canopy)
+{
+  /* for now, want 5 "units" of drying (which is 1 per hour to start) */
+  static const double TARGET_DRYING_SINCE_INTERCEPT = 5;
+  if (0 < rain)
+  {
+    /* no drying if still raining */
+    canopy->drying_since_intercept = 0.0;
+  }
+  else
+  {
+    canopy->drying_since_intercept += drying_units(temp, rh, ws, rain, solrad);
+    if (canopy->drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
+    {
+      /* reset rain if intercept reset criteria met */
+      canopy->rain_total = 0.0;
+      canopy->drying_since_intercept = 0.0;
+    }
+  }
+  canopy->rain_total_prev = canopy->rain_total;
+  canopy->rain_total += rain;
+}
+
 double ffmc_to_mcffmc(double ffmc) {
   double C_FFMC = 14875.0 / 101.0;
   return C_FFMC * (101.0 - ffmc) / (59.5 + ffmc);
@@ -45,15 +97,7 @@ double fine_fuel_moisture_code(
 ) {
   double prec_ffmc, var0, mc_r, e_1, e_w, e_d, eta, k0, k, mc;
   /*** calculate effective precipitation ***/
-  if (prec_sum + prec <= PREC_MIN_FFMC) {  // not enough rain
-    prec_ffmc = 0.0;
-  }
-  else if (prec_sum > PREC_MIN_FFMC) {  // already saturated canopy before
-    prec_ffmc = prec;
-  }
-  else {  // canopy just saturated this timestep, apply intercept
-    prec_ffmc = prec_sum + prec - PREC_MIN_FFMC;
-  }
+  prec_ffmc = prec_effective(prec, prec_sum, PREC_MIN_FFMC, PREC_MIN_FFMC, 1);
   /*** calculate moisture content after rain ***/
   if (prec_ffmc > 0.0) {
     var0 = prec_ffmc * exp(-100.0/(251.0-mc_0)) * (1.0-exp(-6.93/prec_ffmc));
@@ -93,33 +137,24 @@ double fine_fuel_moisture_code(
 
 double duff_moisture_code(double last_mcdmc, int hour,
   double temp, double rh, double prec, double sunrise, double sunset,
-  double prec_cumulative_prev, double time_increment)
+  double prec_sum, double time_increment)
 {
   double mr, mcdmc;
 
   // wetting
-  if (prec_cumulative_prev + prec > PREC_MIN_DMC) {  // prec_cumulative above threshold
-    double rw, last_dmc, b;
+  double rw, last_dmc, b;
+  rw = prec_effective(prec, prec_sum, PREC_MIN_DMC, 1.27, 0.92);
 
-    if (prec_cumulative_prev <= PREC_MIN_DMC) {  // just passed threshold
-      rw = (prec_cumulative_prev + prec) * 0.92 - 1.27;
-    } else {
-      rw = prec * 0.92;
-    }
-
-    last_dmc = mcdmc_to_dmc(last_mcdmc);
-    if (last_dmc <= 33.0) {
-      b = 100.0 / (0.3 * last_dmc + 0.5);
-    } else if (last_dmc <= 65.0) {
-      b = -1.3 * log(last_dmc) + 14.0;
-    } else {
-      b = 6.2 * log(last_dmc) - 17.2;
-    }
-
-    mr = last_mcdmc + 1e3 * rw / (b * rw + 48.77);
-  } else {  // prec_cumulative below threshold
-    mr = last_mcdmc;
+  last_dmc = mcdmc_to_dmc(last_mcdmc);
+  if (last_dmc <= 33.0) {
+    b = 100.0 / (0.3 * last_dmc + 0.5);
+  } else if (last_dmc <= 65.0) {
+    b = -1.3 * log(last_dmc) + 14.0;
+  } else {
+    b = 6.2 * log(last_dmc) - 17.2;
   }
+
+  mr = last_mcdmc + 1e3 * rw / (b * rw + 48.77);
 
   if (mr > 300.0) {
     mr = 300.0;
@@ -150,23 +185,15 @@ double duff_moisture_code(double last_mcdmc, int hour,
 }
 
 double drought_code(double last_mcdc, int hour, double temp, double prec,
-  double sunrise, double sunset, double prec_cumulative_prev, double time_increment)
+  double sunrise, double sunset, double prec_sum, double time_increment)
 {
   double mr, mcdc;
 
   // wetting
-  if (prec_cumulative_prev + prec > PREC_MIN_DC) {  // prec_cumulative above threshold
-    double rw;
+  double rw;
+  rw = prec_effective(prec, prec_sum, PREC_MIN_DC, 1.27, 0.83);
 
-    if (prec_cumulative_prev <= PREC_MIN_DC) {  // just passed threshold
-      rw = (prec_cumulative_prev + prec) * 0.83 - 1.27;
-    } else {
-      rw = prec * 0.83;
-    }
-    mr = last_mcdc + 3.937 * rw / 2.0;
-  } else {
-    mr = last_mcdc;
-  }
+  mr = last_mcdc + 3.937 * rw / 2.0;
   
   if (mr > 400.0) {
     mr = 400.0;
@@ -526,39 +553,4 @@ double grass_fire_weather_index(double gsi, double load)
   return Fint > 100
              ? log(Fint / 60.0) / 0.14
              : Fint / 25.0;
-}
-
-/*
- * Calculate number of drying "units" this hour contributes
- */
-double drying_units(double temp, double rh, double wind, double rain, double solrad)
-{
-  /* for now, just add 1 drying "unit" per hour */
-  return 1.0;
-}
-
-/* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
-  int mon, int hour, double solrad, double sunrise, double sunset,
-  struct rain_intercept *canopy)
-{
-  /* for now, want 5 "units" of drying (which is 1 per hour to start) */
-  static const double TARGET_DRYING_SINCE_INTERCEPT = 5;
-  if (0 < rain)
-  {
-    /* no drying if still raining */
-    canopy->drying_since_intercept = 0.0;
-  }
-  else
-  {
-    canopy->drying_since_intercept += drying_units(temp, rh, ws, rain, solrad);
-    if (canopy->drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
-    {
-      /* reset rain if intercept reset criteria met */
-      canopy->rain_total = 0.0;
-      canopy->drying_since_intercept = 0.0;
-    }
-  }
-  canopy->rain_total_prev = canopy->rain_total;
-  canopy->rain_total += rain;
 }
