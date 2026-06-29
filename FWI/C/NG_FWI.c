@@ -12,13 +12,11 @@ double prec_effective(double prec, double prec_sum, double threshold,
                       double subtract, double rate)
 {
   // In C, check against threshold *+ 0.01* due to this rough rounding method.
-  // if ((round(10.0*(prec+prec_sum)) / 10.0) <= threshold + 0.01) {
-  if (prec + prec_sum <= threshold) {
+  if ((round(10.0*(prec+prec_sum)) / 10.0) <= threshold + 0.01) {
     // Not enough rain to saturate canopy.
     return 0.0;
   }
-  // else if ((round(10.0*prec_sum) / 10.0) > threshold + 0.01) {
-  else if (prec_sum > threshold) {
+  else if ((round(10.0*prec_sum) / 10.0) > threshold + 0.01) {
     // Already saturated canopy previously.
     return (prec * rate);
   }

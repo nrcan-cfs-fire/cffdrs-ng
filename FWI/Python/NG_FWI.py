@@ -57,10 +57,10 @@ CONTINUOUS_MULTIYEAR = False  # default False, True to not split by year
 # @param rate       Canopy intercept precipitation scaling
 # @return           Moisture code specific effective precipitation (mm)
 def prec_effective(prec, prec_sum, threshold, subtract, rate):
-    if prec + prec_sum <= threshold:
+    if round(prec + prec_sum, 1) <= threshold:
         # Not enough rain to saturate canopy.
         return 0
-    elif prec_sum > threshold:
+    elif round(prec_sum, 1) > threshold:
         # Already saturated canopy previously.
         return prec * rate
     else:

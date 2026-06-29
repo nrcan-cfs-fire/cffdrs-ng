@@ -50,11 +50,11 @@ CONTINUOUS_MULTIYEAR <- FALSE  # default FALSE, TRUE to not split by year
 #' @param rate       Canopy intercept precipitation scaling
 #' @return           Moisture code specific effective precipitation (mm)
 prec_effective <- function(prec, prec_sum, threshold, subtract, rate) {
-  if (prec + prec_sum <= threshold) {
+  if (round(prec + prec_sum, 1) <= threshold) {
     # Not enough rain to saturate canopy.
     return(0)
   }
-  else if (prec_sum > threshold) {
+  else if (round(prec_sum, 1) > threshold) {
     # Already saturated canopy previously.
     return(prec * rate)
   }

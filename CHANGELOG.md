@@ -7,8 +7,10 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - New parameter to daily summaries function that lets users change the default active burning window threshold of ISI equal to 5
 - Header file for **make_minmax.c**
+- `prec_effective()` function to explicitly standardize effective precipitation calculation between moisture codes
 
 ### Changed
+- A rounded precipitation (to 0.1 mm) is now used whenever comparing precipitation to canopy intercept thresholds
 - Reformatted the FFMC calculation function and **make_minmax**
 - Renamed the FFMC calculation function and canopy intercept variables
 
@@ -30,6 +32,7 @@ All notable changes to this project will be documented in this file. The format 
 - Moved `find_q()` and `find_rh()` functions from **util** to **make_minmax**
 
 ### Fixed
+- Floating point precision error when testing equality cases with canopy intercept thresholds
 - FFMC drying phase accounts for the case when the moisture content after rain is in between the wetting and drying equilibriums
 
 ## 2026-03-18
