@@ -26,36 +26,32 @@ double prec_effective(double prec, double prec_sum, double threshold,
   }
 }
 
-double drying_units(double temp, double rh, double wind, double rain, double solrad)
+int drying_units()
 {
   /* for now, just add 1 drying "unit" per hour */
-  return 1.0;
+  return 1;
 }
 
 /* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
-  int mon, int hour, double solrad, double sunrise, double sunset,
-  struct rain_intercept *canopy)
+void rain_since_intercept_reset(double rain, struct rain_intercept *canopy)
 {
   /* for now, want 5 "units" of drying (which is 1 per hour to start) */
-  static const double TARGET_DRYING_SINCE_INTERCEPT = 5;
+  static const int TARGET_DRYING_SINCE_INTERCEPT = 5;
   if ((round(10.0*rain) / 10.0 > 0.0) || canopy->rain_total_prev == 0.0)
   {
     /* no drying if still raining */
-    canopy->drying_since_intercept = 0.0;
+    canopy->drying_since_intercept = 0;
   }
   else
   {
-    canopy->drying_since_intercept += drying_units(temp, rh, ws, rain, solrad);
+    canopy->drying_since_intercept += drying_units();
     if (canopy->drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT)
     {
       /* reset rain if intercept reset criteria met */
-      canopy->rain_total = 0.0;
-      canopy->drying_since_intercept = 0.0;
+      canopy->rain_total_prev = 0.0;
+      canopy->drying_since_intercept = 0;
     }
   }
-  canopy->rain_total_prev = canopy->rain_total;
-  canopy->rain_total += rain;
 }
 
 double ffmc_to_mcffmc(double ffmc) {

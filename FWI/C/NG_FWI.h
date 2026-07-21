@@ -57,12 +57,10 @@ double prec_effective(double prec, double prec_sum, double threshold,
 /*
  * Calculate number of drying "units" this hour contributes
  */
-double drying_units(double temp, double rh, double wind, double rain, double solrad);
+int drying_units();
 
 /* HACK: use struct so it's closer to how R can return multiple values */
-void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
-  int mon, int hour, double solrad, double sunrise, double sunset,
-  struct rain_intercept *canopy);
+void rain_since_intercept_reset(double rain, struct rain_intercept *canopy);
 
 /**
  * @brief Convert to fine fuel moisture content (%)

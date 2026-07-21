@@ -1,3 +1,4 @@
+//
 #ifndef _UTIL_H
 #define _UTIL_H
 #include <math.h>
@@ -62,9 +63,8 @@ struct flags{
 
 struct rain_intercept
 {
-  double rain_total;
   double rain_total_prev;
-  double drying_since_intercept;
+  int drying_since_intercept;
 };
 
 ////// Function Declarations and Help

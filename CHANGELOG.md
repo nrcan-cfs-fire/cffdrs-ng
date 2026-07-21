@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 - Floating point precision error when testing equality cases with canopy intercept thresholds
 - FFMC drying phase accounts for the case when the moisture content after rain is in between the wetting and drying equilibriums
+- `canopy_drying` calculation and output now matches *Python* and *R* versions (*C*)
 
 ## 2026-03-18
 
