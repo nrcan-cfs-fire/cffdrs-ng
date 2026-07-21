@@ -10,8 +10,9 @@ All notable changes to this project will be documented in this file. The format 
 - `prec_effective()` function to explicitly standardize effective precipitation calculation between moisture codes
 
 ### Changed
+- License for all FWI2025 scripts from [GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt) to [MPL-2.0](https://mozilla.org/MPL/2.0/) (starting from this update)
 - A rounded precipitation (to 0.1 mm), temperature (to 0.1°C), and wind speed (to km/h) is now used whenever comparing input weather values to thresholds
-- Reformatted the FFMC calculation function and **make_minmax**
+- Reformatted the FFMC calculation function (`hourly_fine_fuel_moisture()`) and **make_minmax**
 - Renamed the FFMC calculation function and canopy intercept variables
 
 | Old Name                      | New Name                    |
