@@ -75,7 +75,8 @@ def drying_units():  # temp, rh, ws, rain, solrad
 def rain_since_intercept_reset(rain, canopy):
     # for now, want 5 "units" of drying (which is 1 per hour to start)
     TARGET_DRYING_SINCE_INTERCEPT = 5.0
-    if rain > 0 or canopy["rain_total_prev"] == 0:  # if raining, reset drying
+    # if raining, reset drying
+    if round(rain, 1) > 0 or canopy["rain_total_prev"] == 0:
         canopy["drying_since_intercept"] = 0.0
     else:
         canopy["drying_since_intercept"] += drying_units()
@@ -224,7 +225,7 @@ def duff_moisture_code(
     # since sunset can be > 24, check hr + 24 (ignoring change between days)
     if (sunrise <= hr <= sunset or
         (hr < 6 and sunrise <= hr + 24 <= sunset)):  # daytime
-        if temp < 0:
+        if round(temp, 1) < 0:
             temp = 0.0
         rk = DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
         invtau = rk / 43.43
@@ -271,7 +272,7 @@ def drought_code(
     # since sunset can be > 24, check hr + 24 (ignoring change between days)
     if (sunrise <= hr <= sunset or
         (hr < 6 and sunrise <= hr + 24 <= sunset)):  # daytime
-        if temp > 0:
+        if round(temp, 1) > 0:
             pe = DC_REGRESSION * (temp + DC_OFFSET_TEMP) + 3.0 / 16.0
         else:
             pe = 0
@@ -293,7 +294,7 @@ def drought_code(
 # @return                Initial Spread Index
 def initial_spread_index(ws, ffmc):
     fm = ffmc_to_mcffmc(ffmc)
-    fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= ws) else exp(0.05039 * ws)
+    fw = (12 * (1 - exp(-0.0818 * (ws - 28)))) if (40 <= round(ws)) else exp(0.05039 * ws)
     ff = 91.9 * exp(-0.1386 * fm) * (1.0 + fm**5.31 / 4.93e7)
     isi = 0.208 * fw * ff
     return isi
@@ -493,9 +494,9 @@ def matted_grass_spread_ROS(ws, mc, cur):
         if mc < 12
         else (
             0.6838 - 0.0342 * mc
-            if (mc < 20.0 and ws < 10.0)
+            if (mc < 20.0 and round(ws) < 10.0)
             else 0.547 - 0.0228 * mc
-            if (mc < 23.9 and ws >= 10.0)
+            if (mc < 23.9 and round(ws) >= 10.0)
             else 0.0
         )
     )
@@ -520,9 +521,9 @@ def standing_grass_spread_ROS(ws, mc, cur):
         if mc < 12
         else (
             0.6838 - 0.0342 * mc
-            if (mc < 20.0 and ws < 10.0)
+            if (mc < 20.0 and round(ws) < 10.0)
             else 0.547 - 0.0228 * mc
-            if (mc < 23.9 and ws >= 10.0)
+            if (mc < 23.9 and round(ws) >= 10.0)
             else 0.0
         )
     )
@@ -853,7 +854,7 @@ def hFWI(
             "mm and canopy drying =", canopy_drying, "\n")
     
     # loop over every station year if not continuous multiyear data
-    results = None
+    results = pd.DataFrame()
     split = ["id", "yr"]
     if CONTINUOUS_MULTIYEAR:
         split = ["id"]  # if continuous multiyear data, only split by ID

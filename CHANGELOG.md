@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file. The format 
 - `prec_effective()` function to explicitly standardize effective precipitation calculation between moisture codes
 
 ### Changed
-- A rounded precipitation (to 0.1 mm) is now used whenever comparing precipitation to canopy intercept thresholds
+- A rounded precipitation (to 0.1 mm), temperature (to 0.1°C), and wind speed (to km/h) is now used whenever comparing input weather values to thresholds
 - Reformatted the FFMC calculation function and **make_minmax**
 - Renamed the FFMC calculation function and canopy intercept variables
 

@@ -73,7 +73,8 @@ drying_units <- function() {  # temp, rh, ws, rain, solrad
 rain_since_intercept_reset <- function(rain, canopy) {
   # for now, want 5 "units" of drying (which is 1 per hour to start)
   TARGET_DRYING_SINCE_INTERCEPT <- 5.0
-  if (rain > 0 || canopy$rain_total_prev == 0) {  # if raining, reset drying
+  # if raining, reset drying
+  if (round(rain, 1) > 0 || canopy$rain_total_prev == 0) {
     canopy$drying_since_intercept <- 0.0
   } else {
     canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units()
@@ -221,7 +222,7 @@ duff_moisture_code <- function(
   # since sunset can be > 24, check hr + 24 (ignoring change between days)
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && (hr + 24 >= sunrise && hr + 24 <= sunset))) {  # daytime
-    if (temp < 0) {
+    if (round(temp, 1) < 0) {
       temp <- 0.0
     }
     rk <- DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
@@ -272,7 +273,7 @@ drought_code <- function(
   # since sunset can be > 24, check hr + 24 (ignoring change between days)
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && (hr + 24 >= sunrise && hr + 24 <= sunset))) {  # daytime
-    if (temp > 0) {
+    if (round(temp, 1) > 0) {
       pe <- DC_REGRESSION * (temp + DC_OFFSET_TEMP) + 3.0 / 16.0
     } else {
       pe <- 0
@@ -297,7 +298,7 @@ drought_code <- function(
 #' @return                Initial Spread Index
 initial_spread_index <- function(ws, ffmc) {
   fm <- ffmc_to_mcffmc(ffmc)
-  fw <- ifelse(40 <= ws,
+  fw <- ifelse(40 <= round(ws),
     12 * (1 - exp(-0.0818 * (ws - 28))),
     exp(0.05039 * ws)
   )
@@ -530,9 +531,9 @@ matted_grass_spread_ROS <- function(ws, mc, cur) {
   )
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
-    ifelse(mc < 20.0 && ws < 10.0,
+    ifelse(mc < 20.0 && round(ws) < 10.0,
       0.6838 - 0.0342 * mc,
-      ifelse(mc < 23.9 && ws >= 10.0,
+      ifelse(mc < 23.9 && round(ws) >= 10.0,
         0.547 - 0.0228 * mc,
         0.0
       )
@@ -561,9 +562,9 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
   # print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
-    ifelse(mc < 20.0 && ws < 10.0,
+    ifelse(mc < 20.0 && round(ws) < 10.0,
       0.6838 - 0.0342 * mc,
-      ifelse(mc < 23.9 && ws >= 10.0,
+      ifelse(mc < 23.9 && round(ws) >= 10.0,
         0.547 - 0.0228 * mc,
         0.0
       )

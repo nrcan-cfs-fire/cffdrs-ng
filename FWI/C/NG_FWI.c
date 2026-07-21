@@ -39,7 +39,7 @@ void rain_since_intercept_reset(double temp, double rh, double ws, double rain,
 {
   /* for now, want 5 "units" of drying (which is 1 per hour to start) */
   static const double TARGET_DRYING_SINCE_INTERCEPT = 5;
-  if (0 < rain)
+  if ((round(10.0*rain) / 10.0 > 0.0) || canopy->rain_total_prev == 0.0)
   {
     /* no drying if still raining */
     canopy->drying_since_intercept = 0.0;
@@ -165,7 +165,7 @@ double duff_moisture_code(double last_mcdmc, int hour,
     (hr < 6 && hr + 24 >= sunrise && hr + 24 <= sunset)) {  // day
     double rk, invtau;
 
-    if (temp < 0) {
+    if (round(10.0*temp) / 10.0 < 0) {
       temp = 0.0;
     }
     rk = DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh);
@@ -203,7 +203,7 @@ double drought_code(double last_mcdc, int hour, double temp, double prec,
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && hour + 24 >= sunrise && hr + 24 <= sunset)) {
     double pe, invtau;
-    if (temp > 0) {
+    if (round(10.0*temp) / 10.0 > 0) {
       pe = DC_REGRESSION * temp + 3.0 / 16.0;
     } else {
       pe = 0.0;
@@ -225,7 +225,7 @@ double initial_spread_index(double ws, double ffmc)
 {
   double mcffmc, fw, ff, isi;
   mcffmc = ffmc_to_mcffmc(ffmc);
-  fw = (40 <= ws) ? 12 * (1 - exp(-0.0818 * (ws - 28))) : exp(0.05039 * ws);
+  fw = (40 <= round(ws)) ? 12 * (1 - exp(-0.0818 * (ws - 28))) : exp(0.05039 * ws);
   ff = 91.9 * exp(-0.1386 * mcffmc) * (1.0 + pow(mcffmc, 5.31) / 4.93e7);
   isi = 0.208 * fw * ff;
   return isi;
@@ -451,9 +451,9 @@ double matted_grass_spread_ROS(double ws, double mc, double cur)
 
   double fm = mc < 12
                         ? exp(-0.108 * mc)
-                        : (mc < 20.0 && ws < 10.0
+                        : (mc < 20.0 && round(ws) < 10.0
                                ? 0.6838 - 0.0342 * mc
-                               : (mc < 23.9 && ws >= 10.0
+                               : (mc < 23.9 && round(ws) >= 10.0
                                       ? 0.547 - 0.0228 * mc
                                       : 0.0));
 
@@ -487,9 +487,9 @@ double standing_grass_spread_ROS(double ws, double mc, double cur)
 
   double fm = mc < 12
                         ? exp(-0.108 * mc)
-                        : (mc < 20.0 && ws < 10.0
+                        : (mc < 20.0 && round(ws) < 10.0
                                ? 0.6838 - 0.0342 * mc
-                               : (mc < 23.9 && ws >= 10.0
+                               : (mc < 23.9 && round(ws) >= 10.0
                                       ? 0.547 - 0.0228 * mc
                                       : 0.0));
 
