@@ -23,19 +23,25 @@ All notable changes to this project will be documented in this file. The format 
 | `DC_INTERCEPT`                | `PREC_MIN_DC`               |
 
 - Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
-- Function name changes in **make_minmax.c**:
+- Function name changes in **make_minmax.c** and **daily_summaries.c**:
 
-| Old Function Name     | New Function Name       | Programming Language            |
-| --------------------- | ----------------------- | ------------------------------- |
-| `findQ()`             | `find_q()`              | *C* (to match *Python* and *R*) |
-| `findrh()`            | `find_rh()`             | *C* (to match *Python* and *R*) |
+| Old Function Name                | New Function Name       | Programming Language            |
+| -------------------------------- | ----------------------- | ------------------------------- |
+| `smooth_5pt()`                   | `smooth_binomial_5pt()` | *C*, *Python*, and *R*          |
+| `findQ()`                        | `find_q()`              | *C* (to match *Python* and *R*) |
+| `findrh()`                       | `find_rh()`             | *C* (to match *Python* and *R*) |
 
 - Moved `find_q()` and `find_rh()` functions from **util** to **make_minmax**
+- Updated and vectorized operations in `smooth_binomial_5pt()` function (*Python*, *R*)
+
+## Removed
+- `check_header_daily_summaries()` function to use `check_header_match()` function instead
 
 ### Fixed
 - Floating point precision error when testing equality cases with canopy intercept thresholds
-- FFMC drying phase accounts for the case when the moisture content after rain is in between the wetting and drying equilibriums
-- `canopy_drying` calculation and output now matches *Python* and *R* versions (*C*)
+- FFMC drying phase not accounting for the case when the moisture content after rain is in between the wetting and drying equilibriums
+- `canopy_drying` calculation and output not matching *Python* and *R* versions (*C*)
+- Daily summaries sunrise and sunset times taken from date of peak burn hour instead of actual date being summarized
 
 ## 2026-03-18
 

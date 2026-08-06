@@ -1,5 +1,12 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+
 # Compute daily minimum and maximum (minmax) weather from traditional
-# daily values (13:00 Local Daylight Time or 12:00 Local Standard Time)
+# daily values (13:00 Local Daylight Time or 12:00 Local Standard Time).
+# Relationship between minmax and daily values determined statistically from
+# historical Canadian provincial and territorial weather station data.
 
 
 ### Import packages ###########################################################
@@ -105,12 +112,8 @@ daily_to_minmax <- function(df_wx_day, silent = FALSE, round_out = 4) {
         set(df, j = outcols, value = round(df[, ..outcols],
             as.integer(round_out)))
     }
-    if (!wasDT) {
-        setDF(df)
-    }
-    if (!silent) {
-       writeLines("########\n")
-    }
+    if (!wasDT) setDF(df)
+    if (!silent) writeLines("########\n")
     return(df)
 }
 

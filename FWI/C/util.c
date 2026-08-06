@@ -278,7 +278,7 @@ void check_header_match(FILE *input, const char *header)
     /* need a newline at end or else it's not really a match */
     if ((i == n && '\n' != a[0]) || (i < n && a[0] != header[i]))
     {
-      printf("Expected columns to be '%s'\n", header);
+      printf("Expected columns in input CSV file to be:\n'%s'\n", header);
       exit(1);
     }
   }

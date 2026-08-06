@@ -1,18 +1,28 @@
 /*
-Compute daily minimum and maximum (minmax) weather from traditional
-daily values (13:00 Local Daylight Time or 12:00 Local Standard Time)
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
 */
+
+
+/*
+Compute daily minimum and maximum (minmax) weather from traditional
+daily values (13:00 Local Daylight Time or 12:00 Local Standard Time).
+Relationship between minmax and daily values determined statistically from
+historical Canadian provincial and territorial weather station data.
+*/
+
 
 /*** Include guard and import libraries **************************************/
 
 #ifndef MAKE_MINMAX_H
 #define MAKE_MINMAX_H
 
-#include "util.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "util.h"
 
 
 /*** Function declarations ***************************************************/
