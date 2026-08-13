@@ -40,6 +40,7 @@ cffdrs-ng/
         - `daily_summaries.c` (function to generate the daily summary output)
         - `make_hourly.c` (converts daily min/max weather data to hourly data)
         - `make_minmax.c` (converts daily weather data to daily min/max data)
+        - `make_minmax.h`
         - `NG_FWI.c` (functions and equations for generating FWI2025 outputs)
         - `NG_FWI.h`
         - `NG_FWI_main.c` (`main()` function for generating FWI2025 outputs)
@@ -66,7 +67,7 @@ cffdrs-ng/
 - `.gitignore`
 - `CHANGELOG.md`
 - `CONTRIBUTING.md` (guideline on providing feedback and reporting bugs)
-- `LICENSE.txt` (GPL 2.0 license)
+- `LICENSE.txt` (MPL 2.0 license)
 - `README.md`
 - `SECURITY.md`
 

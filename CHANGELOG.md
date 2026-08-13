@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
-## To be released
+## 2026-08-13
 
 ### Added
 - New parameter to daily summaries function that lets users change the default active burning window threshold of ISI equal to 5
@@ -25,11 +25,11 @@ All notable changes to this project will be documented in this file. The format 
 - Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
 - Function name changes in **make_minmax.c** and **daily_summaries.c**:
 
-| Old Function Name                | New Function Name       | Programming Language            |
-| -------------------------------- | ----------------------- | ------------------------------- |
-| `smooth_5pt()`                   | `smooth_binomial_5pt()` | *C*, *Python*, and *R*          |
-| `findQ()`                        | `find_q()`              | *C* (to match *Python* and *R*) |
-| `findrh()`                       | `find_rh()`             | *C* (to match *Python* and *R*) |
+| Old Function Name | New Function Name       | Programming Language            |
+| ----------------- | ----------------------- | ------------------------------- |
+| `smooth_5pt()`    | `smooth_binomial_5pt()` | *C*, *Python*, and *R*          |
+| `findQ()`         | `find_q()`              | *C* (to match *Python* and *R*) |
+| `findrh()`        | `find_rh()`             | *C* (to match *Python* and *R*) |
 
 - Moved `find_q()` and `find_rh()` functions from **util** to **make_minmax**
 - Updated and vectorized operations in `smooth_binomial_5pt()` function (*Python*, *R*)

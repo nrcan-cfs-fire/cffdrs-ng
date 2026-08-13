@@ -12,7 +12,7 @@
 char* version()
 {
   // update this and CHANGELOG.md before merging to GitHub main branch
-  char *version = "2026-03-18 + Dev";
+  char *version = "2026-08-13";
   return version;
 }
 
