@@ -5,7 +5,7 @@ library(lubridate)
 
 version <- function() {
   # update this and CHANGELOG.md before merging to GitHub main branch
-  return("2026-03-18 + Dev")
+  return("2026-08-13")
 }
 
 #' Determine if data is sequential days
