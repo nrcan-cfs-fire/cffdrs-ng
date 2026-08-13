@@ -1,3 +1,4 @@
+//
 #ifndef _UTIL_H
 #define _UTIL_H
 #include <math.h>
@@ -62,9 +63,8 @@ struct flags{
 
 struct rain_intercept
 {
-  double rain_total;
   double rain_total_prev;
-  double drying_since_intercept;
+  int drying_since_intercept;
 };
 
 ////// Function Declarations and Help
@@ -77,24 +77,6 @@ double _max(double x, double y);
 
 /* C90 min() also causing problems */
 double _min(double x, double y);
-
-/**
- * Find specific humidity
- *
- * @param temp        Temperature (Celcius)
- * @param rh          Relative humidity (percent, 0-100)
- * @return            Specific humidity (g/kg)
- */
-double findQ(double temp, double rh);
-
-/**
- * Find relative humidity
- *
- * @param q           Specific humidity (g/kg)
- * @param temp        Temperature (Celcius)
- * @return            Relative humidity (percent, 0-100)
- */
-double findrh(double q, double temp);
 
 /**
 * Set default percent_cured values

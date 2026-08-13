@@ -11,8 +11,8 @@
 
 char* version()
 {
-  // update this and CHANGELOG.md before merging to main
-  char *version = "2026-03-18";
+  // update this and CHANGELOG.md before merging to GitHub main branch
+  char *version = "2026-03-18 + Dev";
   return version;
 }
 
@@ -24,20 +24,6 @@ double _max(double x, double y)
 double _min(double x, double y)
 {
   return (x < y ? x : y);
-}
-
-double findQ(double temp, double rh)
-{
-  /* find absolute humidity */
-  double svp = 6.108 * exp(17.27 * temp / (temp + 237.3));
-  double vp = svp * rh / 100.0;
-  return (217 * vp / (273.17 + temp));
-}
-
-double findrh(double q, double temp)
-{
-  double cur_vp = (273.17 + temp) * q / 217;
-  return (100 * cur_vp / (6.108 * exp(17.27 * temp / (temp + 237.3))));
 }
 
 double seasonal_curing(int yr, int mon, int day, int start_mon, int start_day)
@@ -292,7 +278,7 @@ void check_header_match(FILE *input, const char *header)
     /* need a newline at end or else it's not really a match */
     if ((i == n && '\n' != a[0]) || (i < n && a[0] != header[i]))
     {
-      printf("Expected columns to be '%s'\n", header);
+      printf("Expected columns in input CSV file to be:\n'%s'\n", header);
       exit(1);
     }
   }

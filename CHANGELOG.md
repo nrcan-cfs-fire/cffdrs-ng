@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## To be released
+
+### Added
+- New parameter to daily summaries function that lets users change the default active burning window threshold of ISI equal to 5
+- Header file for **make_minmax.c**
+- `prec_effective()` function to explicitly standardize effective precipitation calculation between moisture codes
+
+### Changed
+- License for all FWI2025 scripts from [GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt) to [MPL-2.0](https://mozilla.org/MPL/2.0/) (starting from this update)
+- A rounded precipitation (to 0.1 mm), temperature (to 0.1°C), and wind speed (to km/h) is now used whenever comparing input weather values to thresholds
+- Reformatted the FFMC calculation function (`hourly_fine_fuel_moisture()`) and **make_minmax**
+- Renamed the FFMC calculation function and canopy intercept variables
+
+| Old Name                      | New Name                    |
+| ----------------------------- | --------------------------- |
+| `hourly_fine_fuel_moisture()` | `fine_fuel_moisture_code()` |
+| `FFMC_INTERCEPT`              | `PREC_MIN_FFMC`             |
+| `DMC_INTERCEPT`               | `PREC_MIN_DMC`              |
+| `DC_INTERCEPT`                | `PREC_MIN_DC`               |
+
+- Moved the calculation of FFMC effective precipitation from the single station hourly FWI function into the FFMC function for consistency
+- Function name changes in **make_minmax.c** and **daily_summaries.c**:
+
+| Old Function Name                | New Function Name       | Programming Language            |
+| -------------------------------- | ----------------------- | ------------------------------- |
+| `smooth_5pt()`                   | `smooth_binomial_5pt()` | *C*, *Python*, and *R*          |
+| `findQ()`                        | `find_q()`              | *C* (to match *Python* and *R*) |
+| `findrh()`                       | `find_rh()`             | *C* (to match *Python* and *R*) |
+
+- Moved `find_q()` and `find_rh()` functions from **util** to **make_minmax**
+- Updated and vectorized operations in `smooth_binomial_5pt()` function (*Python*, *R*)
+
+## Removed
+- `check_header_daily_summaries()` function to use `check_header_match()` function instead
+
+### Fixed
+- Floating point precision error when testing equality cases with canopy intercept thresholds
+- FFMC drying phase not accounting for the case when the moisture content after rain is in between the wetting and drying equilibriums
+- `canopy_drying` calculation and output not matching *Python* and *R* versions (*C*)
+- Daily summaries sunrise and sunset times taken from date of peak burn hour instead of actual date being summarized
+
 ## 2026-03-18
 
 ### Fixed

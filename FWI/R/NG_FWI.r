@@ -16,10 +16,10 @@ FFMC_DEFAULT <- 85.0
 DMC_DEFAULT <- 6.0
 DC_DEFAULT <- 15.0
 
-# Precipitation intercept
-FFMC_INTERCEPT <- 0.5
-DMC_INTERCEPT <- 1.5
-DC_INTERCEPT <- 2.8
+# Canopy intercept
+PREC_MIN_FFMC <- 0.5
+PREC_MIN_DMC <- 1.5
+PREC_MIN_DC <- 2.8
 
 # Drying variables
 DMC_REGRESSION <- 2.22e-4
@@ -40,6 +40,52 @@ DAY_STANDING <- 1
 CONTINUOUS_MULTIYEAR <- FALSE  # default FALSE, TRUE to not split by year
 
 ### Functions ###
+
+#' Calculate effective precipitation after applying any canopy intercept
+#'
+#' @param prec       Hourly precipitation (mm)
+#' @param prec_sum   Cumulative precipitation since start of rain (mm)
+#' @param threshold  Canopy intercept threshold (mm)
+#' @param subtract   Canopy intercept reduction (mm)
+#' @param rate       Canopy intercept precipitation scaling
+#' @return           Moisture code specific effective precipitation (mm)
+prec_effective <- function(prec, prec_sum, threshold, subtract, rate) {
+  if (round(prec + prec_sum, 1) <= threshold) {
+    # Not enough rain to saturate canopy.
+    return(0)
+  }
+  else if (round(prec_sum, 1) > threshold) {
+    # Already saturated canopy previously.
+    return(prec * rate)
+  }
+  else {
+    # Canopy just saturated this timestep, apply intercept.
+    return((prec_sum+prec)*rate - subtract)
+  }
+}
+
+# Calculate number of drying "units" this hour contributes
+drying_units <- function() {  # temp, rh, ws, rain, solrad
+  # for now, just add 1 drying "unit" per hour
+  return(1.0)
+}
+
+rain_since_intercept_reset <- function(rain, canopy) {
+  # for now, want 5 "units" of drying (which is 1 per hour to start)
+  TARGET_DRYING_SINCE_INTERCEPT <- 5.0
+  # if raining, reset drying
+  if (round(rain, 1) > 0 || canopy$rain_total_prev == 0) {
+    canopy$drying_since_intercept <- 0.0
+  } else {
+    canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units()
+    if (canopy$drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT) {
+      # reset rain if intercept reset criteria met
+      canopy$rain_total_prev <- 0.0
+      canopy$drying_since_intercept <- 0.0
+    }
+  }
+  return(canopy)
+}
 
 # Fine Fuel Moisture Code (FFMC) to fine fuel moisture content (%) conversion
 ffmc_to_mcffmc <- function(ffmc) {
@@ -73,52 +119,62 @@ mcdc_to_dc <- function(mcdc) {
   return(400 * log(400 / mcdc))
 }
 
-#' Calculate hourly fine fuel moisture content. Needs to be converted to get FFMC
+#' Calculate hourly fine fuel moisture content (%)
 #'
-#' @param lastmc          Previous fine fuel moisture content (%)
-#' @param temp            Temperature (Celcius)
-#' @param rh              Relative Humidity (percent, 0-100)
-#' @param ws              Wind Speed (km/h)
-#' @param rain            Rainfall (mm)
-#' @param time_increment  Duration of timestep (hr, default 1.0)
+#' @param mc_0            Previous fine fuel moisture content (%)
+#' @param temp            Hourly temperature (°C)
+#' @param rh              Hourly relative humidity (%)
+#' @param ws              Hourly wind speed (km/h)
+#' @param prec            Hourly precipitation (mm)
+#' @param prec_sum        Cumulative precipitation since start of rain (mm)
+#' @param delta_t         Duration of timestep (hr, default 1.0)
 #' @return                Hourly fine fuel moisture content (%)
-hourly_fine_fuel_moisture <- function(
-  lastmc,
+fine_fuel_moisture_code <- function(
+  mc_0,
   temp,
   rh,
   ws,
-  rain,
-  time_increment = 1.0
+  prec,
+  prec_sum,
+  delta_t = 1
 ) {
-  rf <- 42.5
-  drf <- 0.0579
-  # use moisture directly instead of converting to/from ffmc
-  # expects any rain intercept to already be applied
-  mo <- lastmc
-  if (rain != 0.0) {
-    # duplicated in both formulas, so calculate once
-    # lastmc == mo, but use lastmc since mo changes after first equation
-    mo <- mo + rf * rain * exp(-100.0 / (251 - lastmc)) * (1.0 - exp(-6.93 / rain))
-    if (lastmc > 150) {
-      mo <- mo + 0.0015 * ((lastmc - 150)^2) * sqrt(rain)
+  ### calculate effective precipitation ###
+  prec_ffmc <- prec_effective(prec, prec_sum, PREC_MIN_FFMC, PREC_MIN_FFMC, 1)
+  ### calculate moisture content after rain ###
+  if (prec_ffmc > 0) {
+    var0 <- prec_ffmc * exp(-100/(251-mc_0)) * (1-exp(-6.93/prec_ffmc))
+    mc_r <- mc_0 + 42.5*var0
+    if (mc_0 > 150) {
+      mc_r <- mc_r + 1.5e-3*(mc_0-150)^2*sqrt(prec_ffmc)
     }
-    if (mo > 250) {
-      mo <- 250
+    # Cap fine fuel moisture content at 250%.
+    if (mc_r > 250) {
+      mc_r <- 250
     }
   }
-  # duplicated in both formulas, so calculate once
-  e1 <- 0.18 * (21.1 - temp) * (1.0 - (exp(-0.115 * rh)))
-  ed <- 0.942 * (rh ^ 0.679) + (11.0 * exp((rh - 100) / 10.0)) + e1
-  ew <- 0.618 * (rh ^ 0.753) + (10.0 * exp((rh - 100) / 10.0)) + e1
-  m <- ifelse(mo < ed, ew, ed)
-  if (mo != ed) {
-    # these are the same formulas with a different value for a1
-    a1 <- ifelse(mo > ed, rh / 100.0, (100.0 - rh) / 100.0)
-    k0_or_k1 <- 0.424 * (1 - (a1 ^ 1.7)) + (0.0694 * sqrt(ws) * (1 - (a1 ^ 8)))
-    kd_or_kw <- 2.0 * drf * k0_or_k1 * exp(0.0365 * temp)
-    m <- m + (mo - m) * (10 ^ (-kd_or_kw * time_increment))
+  else {
+    mc_r <- mc_0
   }
-  return(m)
+  ### calculate drying phase (drying or wetting) ###
+  e_1 <- 0.18 * (21.1-temp) * (1-(exp(-0.115*rh)))
+  e_w <- 0.618*(rh^0.753) + (10*exp((rh-100)/10)) + e_1
+  e_d <- 0.942*(rh^0.679) + (11*exp((rh-100)/10)) + e_1
+  if (mc_r < e_w) {  # mc below equilibrium, wet by adsorption
+    eta <- (100-rh) / 100
+    k_0 <- 0.424*(1-eta^1.7) + 0.0694*sqrt(ws)*(1-eta^8)
+    k <- 0.1158 * exp(0.0365*temp) * k_0
+    mc <- e_w + (mc_r-e_w)*(10^(-k*delta_t))
+  }
+  else if (mc_r <= e_d) {  # mc at equilibrium, no change after precipitation
+    mc <- mc_r
+  }
+  else {  # mc above equilibrium, dry by evaporation
+    eta <- rh / 100
+    k_0 <- 0.424*(1-eta^1.7) + 0.0694*sqrt(ws)*(1-eta^8)
+    k <- 0.1158 * exp(0.0365*temp) * k_0
+    mc <- e_d + (mc_r-e_d)*(10^(-k*delta_t))
+  }
+  return(mc)
 }
 
 #' Calculate duff moisture content
@@ -141,30 +197,22 @@ duff_moisture_code <- function(
   prec,
   sunrise,
   sunset,
-  prec_cumulative_prev,
+  prec_sum,
   time_increment = 1.0
 ) {
   # wetting
-  if (prec_cumulative_prev + prec > DMC_INTERCEPT) {  # intercept threshold passed
-    if (prec_cumulative_prev <= DMC_INTERCEPT) {  # threshold just passed
-      rw <- (prec_cumulative_prev + prec) * 0.92 - 1.27
-    } else {  # threshold previously passed
-      rw <- prec * 0.92
-    }
+  rw <- prec_effective(prec, prec_sum, PREC_MIN_DMC, 1.27, 0.92)
 
-    last_dmc <- mcdmc_to_dmc(last_mcdmc)
-    if (last_dmc <= 33) {
-      b <- 100.0 / (0.3 * last_dmc + 0.5)
-    } else if (last_dmc <= 65) {
-      b <- -1.3 * log(last_dmc) + 14.0
-    } else {
-      b <- 6.2 * log(last_dmc) - 17.2
-    }
-
-    mr <- last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
+  last_dmc <- mcdmc_to_dmc(last_mcdmc)
+  if (last_dmc <= 33) {
+    b <- 100.0 / (0.3 * last_dmc + 0.5)
+  } else if (last_dmc <= 65) {
+    b <- -1.3 * log(last_dmc) + 14.0
   } else {
-    mr <- last_mcdmc
+    b <- 6.2 * log(last_dmc) - 17.2
   }
+
+  mr <- last_mcdmc + (1e3 * rw) / (b * rw + 48.77)
 
   if (mr > 300.0) {
     mr <- 300.0
@@ -174,7 +222,7 @@ duff_moisture_code <- function(
   # since sunset can be > 24, check hr + 24 (ignoring change between days)
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && (hr + 24 >= sunrise && hr + 24 <= sunset))) {  # daytime
-    if (temp < 0) {
+    if (round(temp, 1) < 0) {
       temp <- 0.0
     }
     rk <- DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
@@ -209,20 +257,13 @@ drought_code <- function(
   prec,
   sunrise,
   sunset,
-  prec_cumulative_prev,
+  prec_sum,
   time_increment = 1.0
 ) {
   # wetting
-  if (prec_cumulative_prev + prec > DC_INTERCEPT) {  # intercept threshold passed
-    if (prec_cumulative_prev <= DC_INTERCEPT) {  # threshold just passed
-      rw <- (prec_cumulative_prev + prec) * 0.83 - 1.27
-    } else {  # threshold previously passed
-      rw <- prec * 0.83
-    }
-    mr <- last_mcdc + 3.937 * rw / 2.0
-  } else {
-    mr <- last_mcdc
-  }
+  rw <- prec_effective(prec, prec_sum, PREC_MIN_DC, 1.27, 0.83)
+
+  mr <- last_mcdc + 3.937 * rw / 2.0
 
   if (mr > 400.0) {
     mr <- 400.0
@@ -232,7 +273,7 @@ drought_code <- function(
   # since sunset can be > 24, check hr + 24 (ignoring change between days)
   if ((hr >= sunrise && hr <= sunset) ||
     (hr < 6 && (hr + 24 >= sunrise && hr + 24 <= sunset))) {  # daytime
-    if (temp > 0) {
+    if (round(temp, 1) > 0) {
       pe <- DC_REGRESSION * (temp + DC_OFFSET_TEMP) + 3.0 / 16.0
     } else {
       pe <- 0
@@ -257,7 +298,7 @@ drought_code <- function(
 #' @return                Initial Spread Index
 initial_spread_index <- function(ws, ffmc) {
   fm <- ffmc_to_mcffmc(ffmc)
-  fw <- ifelse(40 <= ws,
+  fw <- ifelse(40 <= round(ws),
     12 * (1 - exp(-0.0818 * (ws - 28))),
     exp(0.05039 * ws)
   )
@@ -490,9 +531,9 @@ matted_grass_spread_ROS <- function(ws, mc, cur) {
   )
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
-    ifelse(mc < 20.0 && ws < 10.0,
+    ifelse(mc < 20.0 && round(ws) < 10.0,
       0.6838 - 0.0342 * mc,
-      ifelse(mc < 23.9 && ws >= 10.0,
+      ifelse(mc < 23.9 && round(ws) >= 10.0,
         0.547 - 0.0228 * mc,
         0.0
       )
@@ -521,9 +562,9 @@ standing_grass_spread_ROS <- function(ws, mc, cur) {
   # print(print_out)
   fm <- ifelse(mc < 12,
     exp(-0.108 * mc),
-    ifelse(mc < 20.0 && ws < 10.0,
+    ifelse(mc < 20.0 && round(ws) < 10.0,
       0.6838 - 0.0342 * mc,
-      ifelse(mc < 23.9 && ws >= 10.0,
+      ifelse(mc < 23.9 && round(ws) >= 10.0,
         0.547 - 0.0228 * mc,
         0.0
       )
@@ -578,28 +619,6 @@ grass_fire_weather_index <- Vectorize(function(gsi, load) {
     return(Fint / 25.0)
   }
 })
-
-# Calculate number of drying "units" this hour contributes
-drying_units <- function() {  # temp, rh, ws, rain, solrad
-  # for now, just add 1 drying "unit" per hour
-  return(1.0)
-}
-
-rain_since_intercept_reset <- function(rain, canopy) {
-  # for now, want 5 "units" of drying (which is 1 per hour to start)
-  TARGET_DRYING_SINCE_INTERCEPT <- 5.0
-  if (rain > 0 || canopy$rain_total_prev == 0) {  # if raining, reset drying
-    canopy$drying_since_intercept <- 0.0
-  } else {
-    canopy$drying_since_intercept <- canopy$drying_since_intercept + drying_units()
-    if (canopy$drying_since_intercept >= TARGET_DRYING_SINCE_INTERCEPT) {
-      # reset rain if intercept reset criteria met
-      canopy$rain_total_prev <- 0.0
-      canopy$drying_since_intercept <- 0.0
-    }
-  }
-  return(canopy)
-}
 
 #' Calculate hourly FWI indices from hourly weather stream for a single station.
 #'
@@ -677,18 +696,18 @@ rain_since_intercept_reset <- function(rain, canopy) {
   results <- NULL
   N <- nrow(r)
   for (i in 1:N) {
+    # update weather variables
     cur <- copy(r[i])
     canopy <- rain_since_intercept_reset(cur$prec, canopy)
-    # determine rain for ffmc and whether or not intercept should happen now
-    if (canopy$rain_total_prev + cur$prec <= FFMC_INTERCEPT) {  # not enough rain
-      rain_ffmc <- 0.0
-    } else if (canopy$rain_total_prev > FFMC_INTERCEPT) {  # already saturated canopy
-      rain_ffmc <- cur$prec
-    } else {
-      rain_ffmc <- canopy$rain_total_prev + cur$prec - FFMC_INTERCEPT
-    }
-
-    mcffmc <- hourly_fine_fuel_moisture(mcffmc, cur$temp, cur$rh, cur$ws, rain_ffmc)
+    # calculate new FWI components
+    mcffmc <- fine_fuel_moisture_code(
+      mcffmc,
+      cur$temp,
+      cur$rh,
+      cur$ws,
+      cur$prec,
+      canopy$rain_total_prev
+    )
     cur$mcffmc <- mcffmc
     # convert to code for output, but keep using moisture % for precision
     cur$ffmc <- mcffmc_to_ffmc(mcffmc)
