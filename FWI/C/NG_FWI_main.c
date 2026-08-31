@@ -189,9 +189,9 @@ int main(int argc, char *argv[])
   mcgfmc_matted = mcgfmc_matted_old;
 
   // initialize input header and data
-  struct flags flag_holder = 
-    {false, false, false}; // {grass_fuel_load, percent_cured, solrad};
-  struct row cur, old;
+  // {need_grass_fuel_load, need_percent_cured, need_solrad}
+  struct need_optionals flag_holder = {false, false, false};
+  struct wx_hr cur, old;
   struct rain_intercept canopy = {prec_cumulative, canopy_drying};
   int err;
   bool standing;
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
     if (ffmc_old < 0) {
       printf("FFMC = n and mcffmc = %.1f %%\n", mcffmc_old);
     } else if (mcffmc_old < 0) {
-      printf("FFMC = %.1f %% and mcffmc = n \n", ffmc_old);
+      printf("FFMC = %.1f and mcffmc = n %%\n", ffmc_old);
     }
     printf("DMC = %.1f and DC = %.1f\n", dmc_old, dc_old);
     printf("mcgfmc matted = %.4f %% and standing = %.4f %%\n",
@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
     if (cur.day != old.day || cur.mon != old.mon)
     {
       double suntime[2];
-      sunrise_sunset(cur.lat, cur.lon, cur.timezone, cur.timestamp, suntime);
+      sun_times(cur.lat, cur.lon, cur.timezone, cur.timestamp, suntime);
       cur.sunrise = suntime[0];
       cur.sunset = suntime[1];
     }

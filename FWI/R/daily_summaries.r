@@ -17,6 +17,7 @@ source("util.r")
 ### Functions #################################################################
 
 #' Calculate a smoothed vector weighted by binomial coefficients
+#'
 #' @param    ser    Vector of values
 #' @return          Vector of smoothed values
 smooth_binomial_5pt <- function(vec) {

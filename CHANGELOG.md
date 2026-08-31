@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes under "to be released" are intended for the next update. Programming languages affected are specified when applicable and omitted when changes affect the GitHub repository or all three languages at once (*C*, *Python*, and *R*).
 
+## To be released
+### Changed
+- Reformatted **util**
+- Renamed functions (old names added as aliases for backwards compatibility)
+
+| Old Name                        | New Name           | Programming Language   |
+| ------------------------------- | ------------------ | ---------------------- |
+| seasonal_curing()               | grassland_curing() | *C*, *Python*, and *R* |
+| get_sunlight()                  | sun_times()        | *Python*, and *R*      |
+| sunrise_sunset()                | sun_times()        | *C*                    |
+| single_hour_solrad_estimation() | solar_radiation()  | *C*                    |
+
+- Renamed structures (*C*)
+
+| Old Name       | New Name       |
+| -------------- | -------------- |
+| row            | wx_hr          |
+| row_daily      | wx_day         |
+| row_minmax     | wx_minmax      |
+| flags          | need_optionals |
+
+### Fixed
+- Swapped units for FFMC [ ] and mcffmc [%] in default print statements (*C*, *Python*)
+
 ## 2026-08-13
 
 ### Added
@@ -12,7 +36,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Changed
 - License for all FWI2025 scripts from [GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt) to [MPL-2.0](https://mozilla.org/MPL/2.0/) (starting from this update)
 - A rounded precipitation (to 0.1 mm), temperature (to 0.1°C), and wind speed (to km/h) is now used whenever comparing input weather values to thresholds
-- Reformatted the FFMC calculation function (`hourly_fine_fuel_moisture()`) and **make_minmax**
+- Reformatted the FFMC calculation function (`hourly_fine_fuel_moisture()`), **make_minmax**, and **daily_summaries**
 - Renamed the FFMC calculation function and canopy intercept variables
 
 | Old Name                      | New Name                    |

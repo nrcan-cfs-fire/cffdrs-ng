@@ -875,9 +875,9 @@ hFWI <- function(
     wx[, percent_cured := Vectorize(seasonal_curing)(yr, mon, day)]
   }
   if (!"solrad" %in% og_names) {
-    needs_solrad <- TRUE
+    need_solrad <- TRUE
   } else {
-    needs_solrad <- FALSE
+    need_solrad <- FALSE
   }
   # check for unnecessary columns
   cols_extra_solar <- intersect(names(wx), c("sunrise", "sunset", "sunlight_hours"))
@@ -950,7 +950,7 @@ hFWI <- function(
       } else if (!silent && CONTINUOUS_MULTIYEAR) {
         writeLines(paste0("Running station ", stn))
       }
-      w <- get_sunlight(by_y, get_solrad = needs_solrad)
+      w <- get_sunlight(by_y, get_solrad = need_solrad)
       r <- .stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
         mcgfmc_matted_old, mcgfmc_standing_old,
         prec_cumulative, canopy_drying)

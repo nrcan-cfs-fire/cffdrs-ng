@@ -12,13 +12,13 @@ Summarize hourly FWI outputs into daily peak burn metrics.
 
 /*** Import packages *********************************************************/
 
+#include "NG_FWI.h"
+#include "util.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "NG_FWI.h"
-#include "util.h"
 
 
 /*** Structures **************************************************************/
@@ -58,11 +58,11 @@ struct day_values {
 /*** Functions ***************************************************************/
 
 /**
-* Calculate a smoothed vector weighted by binomial coefficients
-* @param    source      Pointer to a double array of values
-* @param    n           Length of source array
-* @param    smoothed    Pointer to a new double array
-*/
+ * Calculate a smoothed vector weighted by binomial coefficients
+ * @param    source      Pointer to a double array of values
+ * @param    n           Length of source array
+ * @param    smoothed    Pointer to a new double array
+ */
 void smooth_binomial_5pt(double *source, int n, double *smoothed){
     int i, j;
     bool flag;

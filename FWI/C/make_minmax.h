@@ -18,14 +18,14 @@ historical Canadian provincial and territorial weather station data.
 #ifndef MAKE_MINMAX_H
 #define MAKE_MINMAX_H
 
+#include "util.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "util.h"
 
 
-/*** Function declarations ***************************************************/
+/*** Forward declarations ****************************************************/
 
 /**
  * Convert daily temperature at 13:00 LDT or 12:00 LST to daily minmax

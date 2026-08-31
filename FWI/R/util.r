@@ -1,184 +1,182 @@
-#' Various utility functions used by the other files
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+
+# Utility functions for FWI2025.
+
+
+### Import packages ###########################################################
+
 library(data.table)
 library(lubridate)
 
 
+### Functions #################################################################
+
+#' FWI2025 version (date) following changelog defined for print statements
+#'
+#' @return       String of date (YYYY-MM-DD)
 version <- function() {
-  # update this and CHANGELOG.md before merging to GitHub main branch
-  return("2026-08-13")
+    # update this and CHANGELOG.md before merging to GitHub main branch
+    return("2026-08-13 + DEV")
 }
 
-#' Determine if data is sequential days
+#' Determine if datatable rows are sequential in days
 #'
-#' @param df            data to check (requires timestamp column)
-#' @return              whether each entry is 1 day from the next entry
-is_sequential_days <- function(df) {
-  data <- copy(df)
-  colnames(data) <- tolower(colnames(data))
-  if (!"timestamp" %in% names(data)) {
-    stop("timestamp column (using make_datetime()) required to check sequential days")
-  }
-  l <- nrow(data)
-  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
-  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "days")))
+#' @param    dt    Datatable to check (requires timestamp column)
+#' @return         Whether each row is 1 day from the next row
+is_sequential_days <- function(dt) {
+    cols <- tolower(colnames(dt))
+    if ("timestamp" %in% cols) {
+        ts <- dt[[which(cols == "timestamp")[1]]]
+    }
+    else {
+        stop("'timestamp' column required for is_sequential_days()")
+    }
+    return((length(ts) == 1) || (
+        all((ts - shift(ts) == as.difftime(1, units = "days"))[2:length(ts)])
+    ))
 }
 
-#' Determine if data is sequential hours
+#' Determine if datatable rows are sequential in hours
 #'
-#' @param df            data to check (requires timestamp column)
-#' @return              whether each entry is 1 hour from the next entry
-is_sequential_hours <- function(df) {
-  data <- copy(df)
-  colnames(data) <- tolower(colnames(data))
-  if (!"timestamp" %in% names(data)) {
-    stop("timestamp column (using make_datetime()) required to check sequential hours")
-  }
-  l <- nrow(data)
-  diff <- data$timestamp[2:l] - data$timestamp[1:l - 1]
-  return(l == 1 || (all(diff == 1) && all(attr(diff, "units") == "hours")))
+#' @param    dt    Datatable to check (requires timestamp column)
+#' @return         Whether each rpw is 1 hour from the next row
+is_sequential_hours <- function(dt) {
+    cols <- tolower(colnames(dt))
+    if ("timestamp" %in% cols) {
+        ts <- dt[[which(cols == "timestamp")[1]]]
+    }
+    else {
+        stop("'timestamp' column required for is_sequential_hours()")
+    }
+    return((length(ts) == 1) || (
+        all((ts - shift(ts) == as.difftime(1, units = "hours"))[2:length(ts)])
+    ))
 }
 
-# #' Find day of year. Does not properly deal with leap years.
-# #'
-# #' @param mon         Month
-# #' @param day         Day of month
-# #' @return            Day of year
-# julian <- function(mon, day) {
-#   month <- c(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365)
-#   return(month[mon] + day)
-# }
-
-#' Calculate sunrise, sunset, (solar radiation) for one station (location) for one year
-#' (does not take leap years into account)
+#' Calculate start and end times of the drying day based on location and date.
+#' Can also calculate hourly solar radiation using vapour pressure deficit
 #'
-#' @param dt                data.table to add columns to
-#' @param get_solrad        Whether to calculate solar radiation
-#' @return                  Sunrise, sunset, sunlight hours, and solar radiation (kW/m^2)
-get_sunlight <- function(dt, get_solrad = FALSE) {
-  colnames(dt) <- tolower(colnames(dt))
-  # columns to split along unique days
-  cols_day <- c("lat", "long", "timezone", "date")
-  # required columns
-  cols_req <- c("lat", "long", "timezone", "timestamp")
-  if (get_solrad) {
-    cols_req <- c(cols_req, "temp", "rh")
-  }
-  for (n in cols_req) {
-    stopifnot(n %in% colnames(dt))
-  }
-  df_copy <- copy(dt)
-  if (!"date" %in% colnames(df_copy)) {
-    df_copy[, date := as_date(timestamp)]
-  }
-
-  # calculate sunrise and sunset
-  # drop duplicate days
-  df_stn_dates <- unique(df_copy[, ..cols_day])
-  df_dates <- unique(df_stn_dates[, list(date)])
-  df_dates[, jd := yday(date)]
-  # calculate fraction of the year
-  dechour <- 12.0
-  df_dates[, fracyear := 2.0 * pi * (jd - 1.0 + (dechour - 12.0) / 24.0)]
-  df_dates[, fracyear := ifelse(leap_year(year(date)),
-    fracyear / 366.0, fracyear / 365.0)]
-  df_dates[, eqtime := 229.18 * (0.000075 +
-    0.001868 * cos(fracyear) - 0.032077 * sin(fracyear) -
-    0.014615 * cos(2.0 * fracyear) - 0.040849 * sin(2.0 * fracyear))]
-  df_dates[, decl := 0.006918 -
-    0.399912 * cos(fracyear) + 0.070257 * sin(fracyear) -
-    0.006758 * cos(fracyear * 2.0) + 0.000907 * sin(2.0 * fracyear) -
-    0.002697 * cos(3.0 * fracyear) + 0.00148 * sin(3.0 * fracyear)]
-  df_dates[, zenith := 90.833 * pi / 180.0]
-  # at this point we actually need the LAT/LONG/TIMEZONE
-  df_dates <- merge(df_stn_dates, df_dates, by = c("date"))
-  df_dates[, timeoffset := eqtime + 4 * long - 60 * timezone]
-  df_dates[, x_tmp := cos(zenith) / (cos(lat * pi / 180.0) * cos(decl)) -
-    tan(lat * pi / 180.0) * tan(decl)]
-  # keep in range
-  df_dates[, x_tmp := pmax(-1, pmin(1, x_tmp))]
-  df_dates[, halfday := 180.0 / pi * acos(x_tmp)]
-  df_dates[, sunrise := (720.0 - 4.0 * (long + halfday) - eqtime) / 60 + timezone]
-  df_dates[, sunset := (720.0 - 4.0 * (long - halfday) - eqtime) / 60 + timezone]
-  df_all <- merge(df_copy, df_dates, by = cols_day)
-
-  # calculate solar radiation
-  if (get_solrad) {
-    df_all[, hr := hour(timestamp)]
-    df_all[, tst := as.numeric(hr) * 60.0 + timeoffset]
-    df_all[, hourangle := tst / 4 - 180]
-    df_all[, zenith := acos(sin(lat * pi / 180) * sin(decl) +
-      cos(lat * pi / 180) * cos(decl) * cos(hourangle * pi / 180))]
-    df_all[, zenith := pmin(pi / 2, zenith)]
-    df_all[, cos_zenith := cos(zenith)]
-    df_all[, vpd := 6.11 * (1.0 - rh / 100.0) * exp(17.29 * temp / (temp + 237.3))]
-    df_all[, solrad := cos_zenith * 0.92 * (1.0 - exp(-0.22 * vpd))]
-    df_all[solrad < 1e-4, solrad := 0.0]  # always set low values to 0
-
-    cols_sun <- c("solrad", "sunrise", "sunset")
-  } else {
-    cols_sun <- c("sunrise", "sunset")
-  }
-
-  # don't output intermediate calculations/variables
-  cols <- c(names(dt), cols_sun)
-  df_result <- df_all[, ..cols]
-  df_result[, sunlight_hours := sunset - sunrise]
-  return(df_result)
- }
-
-#' Set default percent_cured values based off annual variation in Boreal Plains region
-#'
-#' @param yr             Year
-#' @param mon            Month of year
-#' @param day            Day of month
-#' @param start_mon      Month of grassland fuel green up start (Boreal Plains Mar 12)
-#' @param start_day      Day of grassland fuel green up start (Boreal Plains Mar 12)
-#' @return               percent_cured [%], percent of grassland fuel that is cured
-
-seasonal_curing <- function(yr, mon, day, start_mon = 3, start_day = 12) {
-  # store default values of percent_cured every 10 days of the year
-  PERCENT_CURED <- c(
-    96.0,  # "winter" cured value
-    95.0,
-    93.0,
-    92.0,
-    90.5,
-    88.4,
-    84.4,
-    78.1,
-    68.7,
-    50.3,
-    32.9,
-    23.0,
-    22.0,
-    21.0,
-    20.0,
-    25.7,
-    35.0,
-    43.0,
-    49.8,
-    60.0,
-    68.0,
-    72.0,
-    75.0,
-    78.9,
-    86.0,
-    96.0  # "winter" cured value for rest of year
-  )
-  # find previous green up start date (year - 1 or year)
-  shift <- make_date(yr, mon, day) - make_date(yr, start_mon, start_day)
-  if (shift < 0) {
-    shift <- make_date(yr, mon, day) - make_date(yr - 1, start_mon, start_day)
-  }
-  days_in <- as.integer(shift) + 1  # green up start date is first value (not 0th)
-  # check if date is in green phase or winter (cured) phase
-  if (days_in < (length(PERCENT_CURED) - 1) * 10) {
-    # linear interpolation between every 10-day value
-    per_cur0 <- PERCENT_CURED[days_in %/% 10 + 1]
-    per_cur1 <- PERCENT_CURED[days_in %/% 10 + 2]
-    period_frac <- (days_in %% 10) / 10.0
-    return(per_cur0 + (per_cur1 - per_cur0) * period_frac)
-  } else {
-    return(PERCENT_CURED[length(PERCENT_CURED)])
-  }
+#' @param    dt            Datatable of weather data to add columns to
+#' @param    get_solrad    Whether to calculate solar radiation (default FALSE)
+#' @return                 Original datatable with new columns:
+#'                             sunrise, sunset, sunlight_hours, [solrad]
+sun_times <- function(dt, get_solrad = FALSE) {
+    dt2 <- copy(dt)
+    cols <- tolower(colnames(dt2))
+    colnames(dt2) <- cols
+    # Columns that define unique locations and days to split along.
+    cols_day <- c("lat", "long", "timezone", "date")
+    ### Check for required columns ###
+    cols_req <- c("lat", "long", "timezone", "timestamp")
+    if (get_solrad) {
+        cols_req <- c(cols_req, "temp", "rh")
+    }
+    for (c in cols_req) {
+        stopifnot(c %in% cols)
+    }
+    if (!"date" %in% cols) {
+        dt2[, date := as_date(timestamp)]
+    }
+    ### Calculate drying day start and end times ###
+    # Based on generalized solar position equations.
+    dt_loc_dt <- unique(dt2[, ..cols_day])
+    dt_dt <- unique(dt_loc_dt[, "date"])
+    # t_od is the ordinal date (julian day).
+    dt_dt[, t_od := yday(date)]
+    # t_yr is the day of the year as a fraction, in radians. Accounts for leap
+    # years.
+    dt_dt[, t_yr := ifelse(
+        leap_year(year(date)),
+        2 * pi * (t_od-1) / 366,
+        2 * pi * (t_od-1) / 365
+    )]
+    # eot is the equation of time correction, in minutes.
+    dt_dt[, eot := 229.18 * (7.5e-5+1.868e-3*cos(t_yr)-3.2077e-2*sin(t_yr)
+                             -1.4615e-2*cos(2*t_yr)-4.0849e-2*sin(2*t_yr))]
+    # decl is the solar declination angle, in radians.
+    dt_dt[, decl := (6.918e-3 - 0.399912*cos(t_yr) + 7.0257e-2*sin(t_yr)
+                     - 6.758e-3*cos(2*t_yr) + 9.07e-4*sin(2*t_yr)
+                     - 2.697e-3*cos(3*t_yr) + 1.48e-3*sin(3*t_yr))]
+    # z_max is the solar zenith angle at the start and end of the drying day,
+    # in radians (90.833° for standard sunrise and sunset).
+    z_max <- 90.833 * pi / 180
+    dt_dt <- merge(dt_loc_dt, dt_dt, by = c("date"))
+    # cos_ha_z is the cosine of the solar hour angle at z_max.
+    dt_dt[, cos_ha_z := (cos(z_max)/(cos(pi*lat/180)*cos(decl))
+                         - tan(pi*lat/180)*tan(decl))]
+    # Keep cos_ha_z between -1 and 1.
+    dt_dt[, cos_ha_z := pmax(-1, pmin(1, cos_ha_z))]
+    # ha_z is the solar hour angle at z_max, in DD.
+    dt_dt[, ha_z := 180 * acos(cos_ha_z) / pi]
+    dt_dt[, sunrise := (720-4*(long+ha_z)-eot)/60 + timezone]
+    dt_dt[, sunset := (720-4*(long-ha_z)-eot)/60 + timezone]
+    dt_all <- merge(dt2, dt_dt, by = cols_day)
+    ### Calculate solar radiation ###
+    if (get_solrad) {
+        # ha is the solar hour angle, in radians.
+        dt_all[, ha := pi/180*(15*(hour(timestamp)-timezone)+long+eot/4) - pi]
+        # cos_z is the cosine of the solar zenith angle.
+        dt_all[, cos_z := (sin(pi*lat/180)*sin(decl)
+                           + cos(pi*lat/180)*cos(decl)*cos(ha))]
+        # vpd is vapour pressure deficit.
+        dt_all[, vpd := 6.11 * (1-rh/100) * exp(17.29*temp/(temp+237.3))]
+        # Coefficients for cos_z and vpd from a regression analysis using data
+        # from the 2007 season at the Petawawa Research Forest.
+        dt_all[, solrad := 0.92 * cos_z * (1-exp(-0.22*vpd))]
+        # Set negative and really small solar radiation values to 0.
+        dt_all[solrad < 1e-4, solrad := 0]
+        # Columns to keep in output dataframe.
+        cols_sun <- c("solrad", "sunrise", "sunset")
+    } else {
+        cols_sun <- c("sunrise", "sunset")
+    }
+    ### Prepare for output ###
+    df_result <- dt_all  # cbind(dt, dt_all[, ..cols_sun])
+    df_result[, sunlight_hours := sunset - sunrise]
+    return(df_result)
 }
+
+# Alias for sun_times().
+get_sunlight <- sun_times
+
+#' Calculate default grassland curing values. Based on typical daily variations
+#' of grassland curing in the Boreal Plains region.
+#'
+#' @param    yr           Year
+#' @param    mon          Month of year
+#' @param    day          Day of month
+#' @param    start_mon    Start month of grassland fuel green-up (Default 3)
+#' @param    start_day    Start day of grassland fuel green-up (Default 12)
+#' @return                Grassland curing percentage [%]
+grassland_curing <- function(yr, mon, day, start_mon = 3, start_day = 12) {
+    # Default grassland curing values for every 10 days in a growing season.
+    # Start and end with identical "winter" cured value.
+    PERCENT_CURED <- c(96.0, 95.0, 93.0, 92.0, 90.5, 88.4, 84.4, 78.1, 68.7,
+                       50.3, 32.9, 23.0, 22.0, 21.0, 20.0, 25.7, 35.0, 43.0,
+                       49.8, 60.0, 68.0, 72.0, 75.0, 78.9, 86.0, 96.0)
+    # Find previous green-up start date (either current or prior year).
+    delta_t <- make_date(yr, mon, day) - make_date(yr, start_mon, start_day)
+    if (delta_t < 0) {
+        delta_t <- (make_date(yr, mon, day)
+                    - make_date(yr - 1, start_mon, start_day))
+    }
+    # Green-up start date is the first non-winter value (not 0th).
+    t_days <- as.integer(delta_t) + 1
+    # Check if date is in growing season or winter (cured) season.
+    if (t_days < (length(PERCENT_CURED) - 1) * 10) {
+        # Linearly interpolate between every 10-day value.
+        pc_0 <- PERCENT_CURED[t_days%/%10 + 1]
+        pc_1 <- PERCENT_CURED[t_days%/%10 + 2]
+        t_10day <- (t_days%%10) / 10
+        return(pc_0 + (pc_1-pc_0)*t_10day)
+    } else {
+        return(PERCENT_CURED[length(PERCENT_CURED)])
+    }
+}
+
+# Aliases for grassland_curing().
+seasonal_curing <- grassland_curing
+grass_curing <- grassland_curing

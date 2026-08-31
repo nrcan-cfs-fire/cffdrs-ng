@@ -801,9 +801,9 @@ def hFWI(
         wx["percent_cured"] = wx.apply(lambda row:
             util.seasonal_curing(row["yr"], row["mon"], row["day"]), axis = 1)
     if not "solrad" in wx.columns:
-        needs_solrad = True
+        need_solrad = True
     else:
-        needs_solrad = False
+        need_solrad = False
     # check for values outside valid ranges
     if any(isinstance(tz, str) for tz in wx["timezone"]):
         raise ValueError("UTC offset (timezone) should be a number, not a string")
@@ -815,7 +815,7 @@ def hFWI(
         raise ValueError("All precipitation (prec) must be >= 0")
     if not (all(wx["mon"] >= 1) and all(wx["mon"] <= 12)):
         raise ValueError("All months (mon) must be between 1-12")
-    if (not needs_solrad) and (not all(wx["solrad"] >= 0)):
+    if (not need_solrad) and (not all(wx["solrad"] >= 0)):
         raise ValueError("All solar radiation (solrad) must be >= 0")
     if ("percent_cured" in og_names) and (not (
         all(wx["percent_cured"] >= 0) and all(wx["percent_cured"] <= 100))):
@@ -846,7 +846,7 @@ def hFWI(
         if ffmc_old == None:
             print("FFMC = None and mcffmc =", mcffmc_old, "%")
         elif mcffmc_old == None:
-            print("FFMC =", ffmc_old, "% and mcffmc = None")
+            print("FFMC =", ffmc_old, "and mcffmc = None %")
         print("DMC =", dmc_old, "and DC =", dc_old)
         print(f"mcgfmc matted = {mcgfmc_matted_old:.4f} % " +
             f"and standing = {mcgfmc_standing_old:.4f} %")
@@ -866,7 +866,7 @@ def hFWI(
             print("Running station " + str(idx[0]))
         logger.debug(f"Running for {idx}")
         w = by_year.reset_index(drop = True)
-        w = util.get_sunlight(w, get_solrad = needs_solrad)
+        w = util.get_sunlight(w, get_solrad = need_solrad)
         r = _stnHFWI(w, ffmc_old, mcffmc_old, dmc_old, dc_old,
             mcgfmc_matted_old, mcgfmc_standing_old,
             prec_cumulative, canopy_drying)

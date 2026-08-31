@@ -15,12 +15,12 @@ historical Canadian provincial and territorial weather station data.
 
 /*** Import packages *********************************************************/
 
+#include "make_minmax.h"
+#include "util.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "make_minmax.h"
-#include "util.h"
 
 
 /*** Functions ***************************************************************/
@@ -67,12 +67,13 @@ int main(int argc, char *argv[])
     /*** Parse arguments ***/
     if (argc < 3) {
         printf("\n########\nhelp/usage:\n"
-          "%s input output [silent]\n\n", argv[0]);
+               "%s input output [silent]\n\n", argv[0]);
         printf("argument descriptions:\n"
-          "input     Input csv data file\n"
-          "output    Output csv file name and location\n"
-          "silent    Suppresses informative print statements (default false)\n"
-          "########\n\n");
+               "input     Input csv data file\n"
+               "output    Output csv file name and location\n"
+               "silent    Suppresses informative print statements"
+                             "(default false)\n"
+               "########\n\n");
         exit(1);
     }
     bool silent;
@@ -121,7 +122,7 @@ int main(int argc, char *argv[])
     }
     fprintf(out, "%s\n", header_out);
     /*** Start calculation ***/
-    struct row_daily cur;
+    struct wx_day cur;
     double temp_min, temp_max, q, rh_min, rh_max, ws_min, ws_max;
     if (!silent) {
         puts("Predicting daily min/max weather");
@@ -137,8 +138,8 @@ int main(int argc, char *argv[])
         rh_min = fmin(100.0, find_rh(q, temp_max));
         rh_max = fmin(100.0, find_rh(q, temp_min));
         /*** Calculate minmax wind speed ***/
-        ws_min = 0.15 * cur.wind;
-        ws_max = 1.25 * cur.wind;
+        ws_min = 0.15 * cur.ws;
+        ws_max = 1.25 * cur.ws;
         save_csv(out, "%.4f,%.4f,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%f\n",
                  cur.lat, cur.lon, cur.year, cur.mon, cur.day,
                  temp_min, temp_max, rh_min, rh_max, ws_min, ws_max, cur.rain);

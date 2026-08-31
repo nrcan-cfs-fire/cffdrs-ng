@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
     puts("Predicting hourly weather");
   }
 
-  struct row_minmax yest, cur, tom;
+  struct wx_minmax yest, cur, tom;
   err = read_row_minmax(inp, &cur);
   if (!(err > 0))
   {
@@ -150,14 +150,14 @@ int main(int argc, char *argv[])
 
     // calculate sunrise and sunset for current day and tomorrow
     double suntime[2];
-    sunrise_sunset(cur.lat, cur.lon, cur.timezone, cur.date, suntime);
+    sun_times(cur.lat, cur.lon, cur.timezone, cur.date, suntime);
     cur.sunrise = suntime[0];
     cur.sunset = suntime[1];
     double solarnoon = (cur.sunset - cur.sunrise) / 2.0 + cur.sunrise;
 
     tom.date.tm_mday++;  // increase day by one (mktime handles month transitions)
     mktime(&tom.date);  // update tm structure
-    sunrise_sunset(tom.lat, tom.lon, tom.timezone, tom.date, suntime);
+    sun_times(tom.lat, tom.lon, tom.timezone, tom.date, suntime);
     tom.sunrise = suntime[0];
     tom.sunset = suntime[1];
 

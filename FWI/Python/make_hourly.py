@@ -1,3 +1,11 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+
+# Compute hourly weather from daily minimum and maximum (minmax) values.
+
+
 import datetime
 import argparse
 from math import exp, pi, sin, ceil
@@ -282,7 +290,8 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     r["DAY"] = r["TIMESTAMP"].apply(lambda x: x.day)
     r["HR"] = r["TIMESTAMP"].apply(lambda x: x.hour)
     r = util.get_sunlight(r, get_solrad = False)
-    r.columns = map(str.upper, r.columns)  # get_sunlight outputs lowercase columns
+    # get_sunlight outputs lowercase columns
+    r.columns = [c.upper() for c in r.columns]
     # approximate solar noon as midpoint between sunrise and sunset
     r["SOLARNOON"] = r.apply(
         lambda row: (row["SUNSET"] - row["SUNRISE"]) / 2 + row["SUNRISE"], axis = 1
@@ -291,7 +300,7 @@ def minmax_to_hourly_single(w, prec_hr, skip_invalid = False, verbose = False):
     r["RH_OPP_MAX"] = 1 - r["RH_MIN"] / 100
     r["DATE"] = r["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
     df = do_prediction(r, C_TEMP, C_RH, C_WIND, prec_hr, verbose)
-    df.columns = map(str.lower, df.columns)
+    df.columns = [c.upper() for c in df.columns]
     df = pd.merge(orig_dates, df, on = ["date"])
     df["yr"] = df["yr"].apply(int)
     df["mon"] = df["mon"].apply(int)
