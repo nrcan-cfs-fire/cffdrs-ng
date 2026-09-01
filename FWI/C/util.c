@@ -212,7 +212,7 @@ int read_row_inputs(FILE *inp, struct wx_hr *r, struct need_optionals *f,
         .tm_mon = r->mon - 1,  // 0-indexed month (i.e. Jan = 0).
         .tm_mday = r->day,
         .tm_hour = r->hour,
-        .tm_isdst = 0
+        .tm_isdst = -1
     };
     mktime(&ts);
     r->timestamp = ts;
@@ -225,8 +225,8 @@ int read_row_inputs(FILE *inp, struct wx_hr *r, struct need_optionals *f,
         r->grass_fuel_load = atof(strtok(NULL, ","));
     }
     if (f->need_percent_cured) {
-        r->percent_cured = seasonal_curing(r->year, r->mon, r->day,
-                                           def_mon_curing, def_day_curing);
+        r->percent_cured = grassland_curing(r->year, r->mon, r->day,
+                                            def_mon_curing, def_day_curing);
     }
     else {
         r->percent_cured = atof(strtok(NULL, ","));
@@ -281,7 +281,7 @@ int read_row_minmax(FILE *inp, struct wx_minmax *r)
         .tm_year = r->year - 1900,  // Years since 1900.
         .tm_mon = r->mon - 1,  // 0-indexed month (i.e. Jan = 0).
         .tm_mday = r->day,
-        .tm_isdst = 0
+        .tm_isdst = -1
     };
     mktime(&date);
     r->date = date;
@@ -329,8 +329,8 @@ double solar_radiation(struct wx_hr *wx)
     // t_yr is the day of the year as a fraction, in radians. Accounts for leap
     // years. tm_yday is already 0-indexed (i.e. Jan 1st = 0).
     double t_yr = (is_leap(wx->timestamp.tm_year + 1900) ?
-                   2.0 * M_PI * wx->timestamp.tm_yday / 366.0 :
-                   2.0 * M_PI * wx->timestamp.tm_yday / 365.0);
+                   2.0 * M_PI * (double)wx->timestamp.tm_yday / 366.0 :
+                   2.0 * M_PI * (double)wx->timestamp.tm_yday / 365.0);
     // eot is the equation of time correction, in minutes.
     double eot = 229.18 * (
         7.5e-5 + 1.868e-3*cos(t_yr) - 3.2077e-2*sin(t_yr)
@@ -342,7 +342,7 @@ double solar_radiation(struct wx_hr *wx)
                    - 2.697e-3*cos(3.0*t_yr) + 1.48e-3*sin(3.0*t_yr));
     // ha is the solar hour angle, in radians.
     double ha = M_PI/180.0*(
-        15*((double)wx->hour-wx->timezone) + wx->lon + eot/4
+        15.0*((double)wx->hour-wx->timezone) + wx->lon + eot/4.0
     ) - M_PI;
     // cos_z is the cosine of the solar zenith angle.
     double cos_z = (sin(M_PI*wx->lat/180.0)*sin(decl)
@@ -403,16 +403,24 @@ double grassland_curing(int yr, int mon, int day, int start_mon, int start_day)
     struct tm date = {.tm_year = yr - 1900,
                       .tm_mon = mon - 1,
                       .tm_mday = day,
-                      .tm_isdst = 0};
+                      .tm_isdst = -1};
+    mktime(&date);
     struct tm greenup = {.tm_year = yr - 1900,
                          .tm_mon = start_mon - 1,
                          .tm_mday = start_day,
-                         .tm_isdst = 0};
-    // difftime() outputs difference in seconds, so divide by 86400s/day.
-    int delta_t = difftime(mktime(&date), mktime(&greenup)) / 86400;
+                         .tm_isdst = -1};
+    mktime(&greenup);
+    // difftime() affected by .tm_isdst = -1, using ordinal date instead.
+    int delta_t = date.tm_yday - greenup.tm_yday;
     if (delta_t < 0) {
         greenup.tm_year = yr - 1 - 1900;
-        delta_t = difftime(mktime(&date), mktime(&greenup)) / 86400;
+        mktime(&greenup);
+        if (isleap(yr - 1)) {
+            delta_t = date.tm_yday - greenup.tm_yday + 366;
+        }
+        else {
+            delta_t = date.tm_yday - greenup.tm_yday + 365;
+        }
     }
     // Green-up start date is the first non-winter value (not 0th).
     int t_days = delta_t + 1;

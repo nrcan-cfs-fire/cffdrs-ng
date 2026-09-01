@@ -7,23 +7,24 @@ All notable changes to this project will be documented in this file. The format 
 - Reformatted **util**
 - Renamed functions (old names added as aliases for backwards compatibility)
 
-| Old Name                        | New Name           | Programming Language   |
-| ------------------------------- | ------------------ | ---------------------- |
-| seasonal_curing()               | grassland_curing() | *C*, *Python*, and *R* |
-| get_sunlight()                  | sun_times()        | *Python*, and *R*      |
-| sunrise_sunset()                | sun_times()        | *C*                    |
-| single_hour_solrad_estimation() | solar_radiation()  | *C*                    |
+| Old Name                          | New Name             | Programming Language   |
+| --------------------------------- | -------------------- | ---------------------- |
+| `seasonal_curing()`               | `grassland_curing()` | *C*, *Python*, and *R* |
+| `get_sunlight()`                  | `sun_times()`        | *Python*, and *R*      |
+| `sunrise_sunset()`                | `sun_times()`        | *C*                    |
+| `single_hour_solrad_estimation()` | `solar_radiation()`  | *C*                    |
 
 - Renamed structures (*C*)
 
-| Old Name       | New Name       |
-| -------------- | -------------- |
-| row            | wx_hr          |
-| row_daily      | wx_day         |
-| row_minmax     | wx_minmax      |
-| flags          | need_optionals |
+| Old Name         | New Name         |
+| ---------------- | ---------------- |
+| `row`            | `wx_hr`          |
+| `row_daily`      | `wx_day`         |
+| `row_minmax`     | `wx_minmax`      |
+| `flags`          | `need_optionals` |
 
 ### Fixed
+- Minor difference in default solar radiation calculation in *C* version (*C*)
 - Swapped units for FFMC [ ] and mcffmc [%] in default print statements (*C*, *Python*)
 
 ## 2026-08-13

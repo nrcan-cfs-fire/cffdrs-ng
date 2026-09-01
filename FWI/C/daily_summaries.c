@@ -325,7 +325,7 @@ struct daily_summary generate_daily_summary(
         .tm_mon = day.hour[0]->month - 1,
         .tm_mday = day.hour[0]->day,
         .tm_hour = day.hour[0]->hour,
-        .tm_isdst = 0
+        .tm_isdst = -1
     };
     struct tm t_ab1 = t_ab0;
     double *ws_pt = (double*)malloc(sizeof(double) * day.n_hrs);
@@ -394,13 +394,13 @@ struct daily_summary generate_daily_summary(
         .tm_mon = day.hour[peak_time]->month - 1,  // 0-indexed month.
         .tm_mday = day.hour[peak_time]->day,
         .tm_hour = 0,
-        .tm_isdst = 0
+        .tm_isdst = -1
     };
     struct tm DATE_GRASS_STANDING = {
         .tm_year = day.hour[peak_time]->year - 1900,
         .tm_mon = MON_STANDING - 1,
         .tm_mday = DAY_STANDING,
-        .tm_isdst = 0
+        .tm_isdst = -1
     };
     if (GRASS_TRANSITION &&
             difftime(mktime(&ts), mktime(&DATE_GRASS_STANDING)) < 0) {

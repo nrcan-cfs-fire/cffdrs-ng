@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
     .tm_year = cur.year - 1900,
     .tm_mon = MON_STANDING - 1,
     .tm_mday = DAY_STANDING,
-    .tm_isdst = 0};
+    .tm_isdst = -1};
   
   // open output file
   if (strcmp(argv[1], argv[2]) == 0) {
