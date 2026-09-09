@@ -552,22 +552,26 @@ def peatland_moisture_code(
     Sy_max = 1.0
     Sy = min(Sy_max, max(Sy_min, A * exp(-B * pmc0)))
 
-    # calculate slope of the saturation vapour pressure curve
-    fPET = 0.6135 * exp(17.052 * temp / (240.97 + temp)) * (
-        17.502 / (240.97 + temp) - 17.502 * temp / (240.97 + temp) ** 2)
-
-    # calculate potential evapotranspiration
-    alpha = 1.0
-    gamma = 0.063
-    solrad_convert = 3.6 * solrad  # [kW/m**2] to [MJ/hr/m**2]
-    PET = 100 * alpha * solrad_convert * fPET / (L_vap * (fPET + gamma))
-
-    # calculate actual evapotranspiration
-    C = 0.15
-    if pmc0 > 0:
-        AET = PET * (1 - (1 - C) / (1 + (pmc0 * exp(-3.743)) ** -3.45))
+    # assume no drying (evapotranspiration) when temperature is freezing
+    if temp <= 0:
+        AET = 0
     else:
-        AET = PET
+        # calculate slope of the saturation vapour pressure curve
+        fPET = 0.6135 * exp(17.052 * temp / (240.97 + temp)) * (
+            17.502 / (240.97 + temp) - 17.502 * temp / (240.97 + temp) ** 2)
+
+        # calculate potential evapotranspiration
+        alpha = 1.0
+        gamma = 0.063
+        solrad_convert = 3.6 * solrad  # [kW/m**2] to [MJ/hr/m**2]
+        PET = 100 * alpha * solrad_convert * fPET / (L_vap * (fPET + gamma))
+
+        # calculate actual evapotranspiration
+        C = 0.15
+        if pmc0 > 0:
+            AET = PET * (1 - (1 - C) / (1 + (pmc0 * exp(-3.743)) ** -3.45))
+        else:
+            AET = PET
 
     # calculate Peatland Moisture Code
     pmc = max(-10, pmc0 + (AET - 0.1 * precPMC) / Sy)
