@@ -236,7 +236,8 @@ def dmc_wetting(dmc_r0, prec_dmc):
         b = 6.2*log(dmc_r0) - 17.2
     # Apply wetting to Duff moisture content
     mcdmc_r = dmc_to_mcdmc(dmc_r0) + (1e3*prec_dmc)/(b*prec_dmc+48.77)
-    return mcdmc_to_dmc(mcdmc_r)
+    # return mcdmc_to_dmc(mcdmc_r)
+    return mcdmc_r  # Return Duff moisture content
 
 ##
 # Calculate duff moisture content
@@ -288,16 +289,23 @@ def duff_moisture_code(
         delta_dmc = 0
     elif round(prec_sum, 1) <= PREC_MIN_DMC: # Just passed canopy threshold.
         prec_dmc = (prec_sum+prec)*0.92 - 1.27
-        dmc_r1 = dmc_r0
-        dmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
-        delta_dmc = dmc_r2 - dmc_r1
+        # dmc_r1 = dmc_r0
+        # dmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
+        # delta_dmc = dmc_r2 - dmc_r1
+        mcdmc_r1 = dmc_to_mcdmc(dmc_r0)
+        mcdmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
+        delta_dmc = mcdmc_r2 - mcdmc_r1
     else:  # Already applied intercept. prec_dmc is reset by update_dmc_hr().
-        dmc_r1 = dmc_wetting(dmc_r0, prec_dmc)
+        # dmc_r1 = dmc_wetting(dmc_r0, prec_dmc)
+        mcdmc_r1 = dmc_wetting(dmc_r0, prec_dmc)
         prec_dmc += 0.92 * prec
-        dmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
-        delta_dmc = dmc_r2 - dmc_r1
+        # dmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
+        # delta_dmc = dmc_r2 - dmc_r1
+        mcdmc_r2 = dmc_wetting(dmc_r0, prec_dmc)
+        delta_dmc = mcdmc_r2 - mcdmc_r1
     # Apply wetting as a DMC difference to previous hour's DMC.
-    dmc_r = max(0, mcdmc_to_dmc(last_mcdmc) + delta_dmc)
+    # mcdmc_r = dmc_to_mcdmc(max(0, mcdmc_to_dmc(last_mcdmc) + delta_dmc))
+    mcdmc_r = min(300, last_mcdmc + delta_dmc)
 
     # drying
     # since sunset can be > 24, check hr + 24 (ignoring change between days)
@@ -307,9 +315,9 @@ def duff_moisture_code(
             temp = 0.0
         rk = DMC_REGRESSION * (temp + DMC_OFFSET_TEMP) * (100.0 - rh)
         invtau = rk / 43.43
-        mcdmc = (dmc_to_mcdmc(dmc_r)-20.0)*exp(-time_increment*invtau) + 20.0
+        mcdmc = (mcdmc_r-20.0)*exp(-time_increment*invtau) + 20.0
     else:  # nighttime
-        mcdmc = dmc_to_mcdmc(dmc_r)
+        mcdmc = mcdmc_r
     
     if mcdmc > 300.0:
         mcdmc = 300.0
